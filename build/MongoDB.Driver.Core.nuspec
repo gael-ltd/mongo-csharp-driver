@@ -16,7 +16,7 @@
       <group targetFramework=".NETFramework4.5">
         <dependency id="System.Runtime.InteropServices.RuntimeInformation" version="[4.0.0, )" />
         <dependency id="DnsClient" version="[1.0.7, )" />
-        <dependency id="MongoDB.Bson" version="[@driverPackageVersion@, )" />
+        <dependency id="Ideagen.MongoDB.Bson" version="[@driverPackageVersion@, )" />
       </group>
       <group targetFramework=".NETStandard1.5">
         <dependency id="NETStandard.Library" version="[1.6.1, )" />
