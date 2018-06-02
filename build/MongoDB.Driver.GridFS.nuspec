@@ -1,14 +1,14 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <package>
   <metadata>
-    <id>MongoDB.Driver.GridFS</id>
+    <id>Ideagen.MongoDB.Driver.GridFS</id>
     <version>@driverPackageVersion@</version>
-    <authors>MongoDB, Inc.</authors>
+    <authors>Ideagen</authors>
     <owners>rstam, craiggwilson</owners>
     <iconUrl>http://jobs.mongodb.org/files/logos/889002/889002.png</iconUrl>
     <requireLicenseAcceptance>true</requireLicenseAcceptance>
-    <description>GridFS Component of the Official MongoDB .NET Driver.</description>
-    <projectUrl>http://www.mongodb.org/display/DOCS/CSharp+Language+Center</projectUrl>
+    <description>Ideagen Fork of GridFS Component of the Official MongoDB .NET Driver.</description>
+    <projectUrl>https://github.com/gael-ltd/mongo-driver</projectUrl>
     <licenseUrl>http://www.apache.org/licenses/LICENSE-2.0</licenseUrl>
     <tags>mongodb mongo nosql gridfs</tags>
     <language>en-US</language>
