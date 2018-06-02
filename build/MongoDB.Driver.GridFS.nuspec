@@ -14,15 +14,15 @@
     <language>en-US</language>
     <dependencies>
       <group targetFramework=".NETFramework4.5">
-        <dependency id="MongoDB.Bson" version="[@driverPackageVersion@, )" />
-        <dependency id="MongoDB.Driver.Core" version="[@driverPackageVersion@, )" />
-        <dependency id="MongoDB.Driver" version="[@driverPackageVersion@, )" />
+        <dependency id="Ideagen.MongoDB.Bson" version="[@driverPackageVersion@, )" />
+        <dependency id="Ideagen.MongoDB.Driver.Core" version="[@driverPackageVersion@, )" />
+        <dependency id="Ideagen.MongoDB.Driver" version="[@driverPackageVersion@, )" />
       </group>
       <group targetFramework=".NETStandard1.5">
         <dependency id="NETStandard.Library" version="[1.6.1, )" />
-        <dependency id="MongoDB.Bson" version="[@driverPackageVersion@, )" />
-        <dependency id="MongoDB.Driver.Core" version="[@driverPackageVersion@, )" />
-        <dependency id="MongoDB.Driver" version="[@driverPackageVersion@, )" />
+        <dependency id="Ideagen.MongoDB.Bson" version="[@driverPackageVersion@, )" />
+        <dependency id="Ideagen.MongoDB.Driver.Core" version="[@driverPackageVersion@, )" />
+        <dependency id="Ideagen.MongoDB.Driver" version="[@driverPackageVersion@, )" />
       </group>
     </dependencies>
   </metadata>
