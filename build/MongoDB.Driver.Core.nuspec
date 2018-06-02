@@ -26,7 +26,7 @@
         <dependency id="System.Net.Security" version="[4.0.0, )" />
         <dependency id="System.Security.SecureString" version="[4.0.0, )" />
         <dependency id="DnsClient" version="[1.0.7, )" />
-        <dependency id="MongoDB.Bson" version="[@driverPackageVersion@, )" />
+        <dependency id="Ideagen.MongoDB.Bson" version="[@driverPackageVersion@, )" />
       </group>
     </dependencies>
   </metadata>
