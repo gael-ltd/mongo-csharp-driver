@@ -18,14 +18,27 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
-using MongoDB.Driver.Linq.Utils;
 
 namespace MongoDB.Driver.Linq
 {
     /// <summary>
+    /// 
+    /// </summary>
+    public interface ILegacyQueryProvider : IQueryProvider
+    {
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="query"></param>
+        /// <typeparam name="T"></typeparam>
+        /// <returns></returns>
+        IMongoQuery BuildMongoQuery<T>(MongoQueryable<T> query);
+    }
+
+    /// <summary>
     /// An implementation of IQueryProvider for querying a MongoDB collection.
     /// </summary>
-    public class MongoQueryProvider : IQueryProvider
+    public class MongoQueryProvider : ILegacyQueryProvider
     {
         // private fields
         private MongoCollection _collection;
@@ -60,7 +73,7 @@ namespace MongoDB.Driver.Linq
         /// <typeparam name="T">The type of the documents being queried.</typeparam>
         /// <param name="query">The LINQ query.</param>
         /// <returns>The MongoDB query.</returns>
-        public IMongoQuery BuildMongoQuery<T>(MongoQueryable<T> query)
+        public virtual IMongoQuery BuildMongoQuery<T>(MongoQueryable<T> query)
         {
             var translatedQuery = MongoQueryTranslator.Translate(this, ((IQueryable)query).Expression);
             return ((SelectQuery)translatedQuery).BuildQuery();
@@ -72,7 +85,7 @@ namespace MongoDB.Driver.Linq
         /// <typeparam name="T">The type of the returned elements.</typeparam>
         /// <param name="expression">The query expression.</param>
         /// <returns>A new instance of MongoQueryable{{T}}.</returns>
-        public IQueryable<T> CreateQuery<T>(Expression expression)
+        public virtual IQueryable<T> CreateQuery<T>(Expression expression)
         {
             if (expression == null)
             {
@@ -91,7 +104,7 @@ namespace MongoDB.Driver.Linq
         /// </summary>
         /// <param name="expression">The query expression.</param>
         /// <returns>A new instance of MongoQueryable{{T}}.</returns>
-        public IQueryable CreateQuery(Expression expression)
+        public virtual IQueryable CreateQuery(Expression expression)
         {
             if (expression == null)
             {
@@ -115,7 +128,7 @@ namespace MongoDB.Driver.Linq
         /// <typeparam name="TResult">The type of the result.</typeparam>
         /// <param name="expression">The query expression.</param>
         /// <returns>The result of the query.</returns>
-        public TResult Execute<TResult>(Expression expression)
+        public virtual TResult Execute<TResult>(Expression expression)
         {
             if (expression == null)
             {
@@ -142,7 +155,7 @@ namespace MongoDB.Driver.Linq
         /// </summary>
         /// <param name="expression">The query expression.</param>
         /// <returns>The result of the query.</returns>
-        public object Execute(Expression expression)
+        public virtual object Execute(Expression expression)
         {
             if (expression == null)
             {

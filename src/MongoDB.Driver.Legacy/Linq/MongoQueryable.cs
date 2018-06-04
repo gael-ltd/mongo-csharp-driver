@@ -30,7 +30,7 @@ namespace MongoDB.Driver.Linq
     public class MongoQueryable<T> : IOrderedQueryable<T>
     {
         // private fields
-        private MongoQueryProvider _provider;
+        private ILegacyQueryProvider _provider;
         private Expression _expression;
 
         // constructors
@@ -38,7 +38,7 @@ namespace MongoDB.Driver.Linq
         /// Initializes a new instance of the MongoQueryable class.
         /// </summary>
         /// <param name="provider">The query provider.</param>
-        public MongoQueryable(MongoQueryProvider provider)
+        public MongoQueryable(ILegacyQueryProvider provider)
         {
             if (provider == null)
             {
