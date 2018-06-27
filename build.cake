@@ -152,32 +152,6 @@ Task("PackageNugetPackages")
         }
     });
 
-Task("PushToMyget")
-    .Does(() =>
-    {
-        var mygetApiKey = EnvironmentVariable("MYGETAPIKEY");
-        if (mygetApiKey == null)
-        {
-            throw new Exception("MYGETAPIKEY environment variable missing");
-        }
-
-        var packageFiles = new List<FilePath>();
-
-        var nuspecFiles = GetFiles("./artifacts/packages/*.nuspec");
-        foreach (var nuspecFile in nuspecFiles)
-        {
-            var packageFileName = nuspecFile.GetFilenameWithoutExtension() + ".nupkg";
-            var packageFile = artifactsPackagesDirectory.CombineWithFilePath(packageFileName);
-            packageFiles.Add(packageFile);
-        }
-
-        NuGetPush(packageFiles, new NuGetPushSettings
-        {
-            ApiKey = mygetApiKey,
-            Source = "https://www.myget.org/F/mongodb/api/v2/package"
-        });
-    });
-
 Task("DumpGitVersion")
     .Does(() =>
     {
