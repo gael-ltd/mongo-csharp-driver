@@ -13,7 +13,8 @@
     <tags>mongodb mongo nosql bson</tags>
     <language>en-US</language>
     <dependencies>
-      <group targetFramework=".NETFramework4.5" />
+      <group targetFramework=".NETFramework4.5">
+	  </group>
       <group targetFramework=".NETStandard1.5">
         <dependency id="NETStandard.Library" version="[1.6.1, )" />
         <dependency id="System.Collections.NonGeneric" version="[4.0.1, )" />
