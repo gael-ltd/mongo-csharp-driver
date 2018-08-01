@@ -46,7 +46,6 @@ namespace MongoDB.Driver
         /// <returns>
         /// A MongoServer.
         /// </returns>
-        [Obsolete("Use the new API instead.")]
         public static MongoServer GetServer(this MongoClient client)
         {
             var serverSettings = MongoServerSettings.FromClientSettings(client.Settings);
@@ -92,7 +91,6 @@ namespace MongoDB.Driver
         /// of the constructor to create instances of this class.
         /// </summary>
         /// <param name="settings">The settings for this instance of MongoServer.</param>
-        [Obsolete("Use client.GetServer instead.")]
         public MongoServer(MongoServerSettings settings)
             : this(settings, new DefaultLegacyOperationExecutor())
         {
