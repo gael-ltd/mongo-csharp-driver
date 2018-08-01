@@ -75,7 +75,7 @@ namespace MongoDB.Driver.Linq
         /// <returns>The MongoDB query.</returns>
         public virtual IMongoQuery BuildMongoQuery<T>(MongoQueryable<T> query)
         {
-            var translatedQuery = MongoQueryTranslator.Translate(this, ((IQueryable)query).Expression);
+            var translatedQuery = Translate(((IQueryable)query).Expression);
             return ((SelectQuery)translatedQuery).BuildQuery();
         }
 
@@ -162,8 +162,17 @@ namespace MongoDB.Driver.Linq
                 throw new ArgumentNullException("expression");
             }
 
-            var translatedQuery = MongoQueryTranslator.Translate(this, expression);
-            return translatedQuery.Execute();
+            return Translate(expression).Execute();
+        }
+
+        /// <summary>
+        /// Translate override
+        /// </summary>
+        /// <param name="expression"></param>
+        /// <returns></returns>
+        protected virtual TranslatedQuery Translate(Expression expression)
+        {
+            return MongoQueryTranslator.Translate(this, expression);
         }
 
         private static Type GetElementType(Type seqType)
