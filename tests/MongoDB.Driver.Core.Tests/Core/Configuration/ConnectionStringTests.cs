@@ -21,9 +21,9 @@ using System.Net.Sockets;
 using System.Threading.Tasks;
 using FluentAssertions;
 using MongoDB.Bson;
+using MongoDB.Bson.TestHelpers;
 using MongoDB.Driver.Core.Clusters;
-using MongoDB.Driver.Core.Configuration;
-using MongoDB.Driver.Core.Operations;
+using MongoDB.Driver.Core.Compression;
 using Xunit;
 
 namespace MongoDB.Driver.Core.Configuration
@@ -31,6 +31,129 @@ namespace MongoDB.Driver.Core.Configuration
     [Trait("Category", "ConnectionString")]
     public class ConnectionStringTests
     {
+        [Theory]
+        [InlineData("mongodb://localhost", true)]
+        [InlineData("mongodb+srv://localhost", false)]
+        public void constructor_should_initialize_isResolved(string connectionString, bool expectedIsResolved)
+        {
+            var subject = new ConnectionString(connectionString);
+
+            subject.IsResolved.Should().Be(expectedIsResolved);
+        }
+
+        [Theory]
+        [InlineData("mongodb://localhost", true)]
+        [InlineData("mongodb+srv://localhost", false)]
+        [InlineData("mongodb+srv://localhost", true)]
+        public void constructor_with_isResolved_should_initialize_isResolved(string connectionString, bool isResolved)
+        {
+            var subject = new ConnectionString(connectionString, isResolved);
+
+            subject.IsResolved.Should().Be(isResolved);
+        }
+
+        [Fact]
+        public void constructor_should_throw_when_isResolved_is_invalid()
+        {
+            var exception = Record.Exception(() => new ConnectionString("mongodb://localhost", false));
+
+            var e = exception.Should().BeOfType<ArgumentException>().Subject;
+            e.ParamName.Should().Be("isResolved");
+        }
+
+        [Theory]
+        [InlineData("mongodb://test5.test.build.10gen.cc", "mongodb://test5.test.build.10gen.cc", false)]
+        [InlineData("mongodb://test5.test.build.10gen.cc", "mongodb://test5.test.build.10gen.cc", true)]
+        [InlineData("mongodb+srv://test5.test.build.10gen.cc", "mongodb://localhost.test.build.10gen.cc:27017/?replicaSet=repl0&authSource=thisDB&tls=true", false)]
+        [InlineData("mongodb+srv://test5.test.build.10gen.cc", "mongodb://localhost.test.build.10gen.cc:27017/?replicaSet=repl0&authSource=thisDB&tls=true", true)]
+        public void Resolve_should_return_expected_result(string connectionString, string expectedResult, bool async)
+        {
+            var subject = new ConnectionString(connectionString);
+
+            ConnectionString result;
+            if (async)
+            {
+                result = subject.Resolve();
+            }
+            else
+            {
+                result = subject.ResolveAsync().GetAwaiter().GetResult();
+            }
+
+            result.IsResolved.Should().BeTrue();
+            result.ToString().Should().Be(expectedResult);
+        }
+
+        [Theory]
+        [InlineData("mongodb://test5.test.build.10gen.cc", false, "mongodb://test5.test.build.10gen.cc", false)]
+        [InlineData("mongodb://test5.test.build.10gen.cc", false, "mongodb://test5.test.build.10gen.cc", true)]
+        [InlineData("mongodb://test5.test.build.10gen.cc", true, "mongodb://test5.test.build.10gen.cc", false)]
+        [InlineData("mongodb://test5.test.build.10gen.cc", true, "mongodb://test5.test.build.10gen.cc", true)]
+        [InlineData("mongodb+srv://test5.test.build.10gen.cc", false, "mongodb+srv://test5.test.build.10gen.cc/?replicaSet=repl0&authSource=thisDB&tls=true", false)]
+        [InlineData("mongodb+srv://test5.test.build.10gen.cc", false, "mongodb+srv://test5.test.build.10gen.cc/?replicaSet=repl0&authSource=thisDB&tls=true", true)]
+        [InlineData("mongodb+srv://test5.test.build.10gen.cc", true, "mongodb://localhost.test.build.10gen.cc:27017/?replicaSet=repl0&authSource=thisDB&tls=true", false)]
+        [InlineData("mongodb+srv://test5.test.build.10gen.cc", true, "mongodb://localhost.test.build.10gen.cc:27017/?replicaSet=repl0&authSource=thisDB&tls=true", true)]
+        public void Resolve_with_resolveHosts_should_return_expected_result(string connectionString, bool resolveHosts, string expectedResult, bool async)
+        {
+            var subject = new ConnectionString(connectionString);
+
+            ConnectionString result;
+            if (async)
+            {
+                result = subject.Resolve(resolveHosts);
+            }
+            else
+            {
+                result = subject.ResolveAsync(resolveHosts).GetAwaiter().GetResult();
+            }
+
+            result.IsResolved.Should().BeTrue();
+            result.ToString().Should().Be(expectedResult);
+        }
+
+        [Theory]
+        [InlineData("mongodb://test5.test.build.10gen.cc?tlsInsecure=true&tlsInsecure=false", true)]
+        [InlineData("mongodb://test5.test.build.10gen.cc?tlsInsecure=false&tlsInsecure=true", true)]
+        [InlineData("mongodb://test5.test.build.10gen.cc?tlsInsecure=true&tlsInsecure=true", false)]
+        public void With_more_then_one_tlsInsecure(string connectionString, bool shouldThrow)
+        {
+            var exception = Record.Exception(() => { var _ = new ConnectionString(connectionString); });
+
+            if (shouldThrow)
+            {
+                var e = exception.Should().BeOfType<MongoConfigurationException>().Subject;
+                e.Message.Should().Be("tlsInsecure has already been configured with a different value.");
+            }
+            else
+            {
+                exception.Should().BeNull();
+            }
+        }
+
+        [Theory]
+        [InlineData("mongodb://test5.test.build.10gen.cc?tls=true&tls=false", true)]
+        [InlineData("mongodb://test5.test.build.10gen.cc?ssl=false&ssl=true", true)]
+        [InlineData("mongodb://test5.test.build.10gen.cc?ssl=false&tls=true", true)]
+        [InlineData("mongodb://test5.test.build.10gen.cc?tls=false&ssl=true", true)]
+        [InlineData("mongodb://test5.test.build.10gen.cc?ssl=false&ssl=false", false)]
+        [InlineData("mongodb://test5.test.build.10gen.cc?tls=false&tls=false", false)]
+        [InlineData("mongodb://test5.test.build.10gen.cc?ssl=true&ssl=true", false)]
+        [InlineData("mongodb://test5.test.build.10gen.cc?tls=true&tls=true", false)]
+        public void With_more_then_one_tls_or_ssl(string connectionString, bool shouldThrow)
+        {
+            var exception = Record.Exception(() => { var _ = new ConnectionString(connectionString); });
+
+            if (shouldThrow)
+            {
+                var e = exception.Should().BeOfType<MongoConfigurationException>().Subject;
+                e.Message.Should().Be("tls has already been configured with a different value.");
+            }
+            else
+            {
+                exception.Should().BeNull();
+            }
+        }
+
         [Fact]
         public void With_one_host_and_no_port()
         {
@@ -146,6 +269,7 @@ namespace MongoDB.Driver.Core.Configuration
             subject.ApplicationName.Should().BeNull();
             subject.AuthMechanism.Should().BeNull();
             subject.AuthSource.Should().BeNull();
+            subject.Compressors.Should().BeEmpty();
             subject.Connect.Should().Be(ClusterConnectionMode.Automatic);
             subject.ConnectTimeout.Should().Be(null);
             subject.DatabaseName.Should().BeNull();
@@ -165,12 +289,18 @@ namespace MongoDB.Driver.Core.Configuration
             subject.ReplicaSet.Should().BeNull();
             subject.LocalThreshold.Should().Be(null);
             subject.SocketTimeout.Should().Be(null);
+#pragma warning disable 618
             subject.Ssl.Should().Be(null);
             subject.SslVerifyCertificate.Should().Be(null);
+#pragma warning restore 618
+            subject.Tls.Should().Be(null);
+            subject.TlsInsecure.Should().Be(null);
             subject.Username.Should().BeNull();
             subject.UuidRepresentation.Should().BeNull();
+#pragma warning disable 618
             subject.WaitQueueMultiple.Should().Be(null);
             subject.WaitQueueSize.Should().Be(null);
+#pragma warning restore 618
             subject.WaitQueueTimeout.Should().Be(null);
             subject.W.Should().BeNull();
             subject.WTimeout.Should().Be(null);
@@ -184,6 +314,8 @@ namespace MongoDB.Driver.Core.Configuration
                 "authMechanism=GSSAPI;" +
                 "authMechanismProperties=CANONICALIZE_HOST_NAME:true;" +
                 "authSource=admin;" +
+                "compressors=snappy,zlib;" +
+                "zlibCompressionLevel=4;" +
                 "connect=replicaSet;" +
                 "connectTimeout=15ms;" +
                 "fsync=true;" +
@@ -199,6 +331,7 @@ namespace MongoDB.Driver.Core.Configuration
                 "readPreference=primary;" +
                 "readPreferenceTags=dc:1;" +
                 "replicaSet=funny;" +
+                "retryReads=false;" +
                 "retryWrites=true;" +
                 "localThreshold=50ms;" +
                 "socketTimeout=40ms;" +
@@ -218,6 +351,9 @@ namespace MongoDB.Driver.Core.Configuration
             subject.AuthMechanismProperties.Count.Should().Be(1);
             subject.AuthMechanismProperties["canonicalize_host_name"].Should().Be("true");
             subject.AuthSource.Should().Be("admin");
+            var expectedCompressorTypes = new[] { CompressorType.Snappy, CompressorType.Zlib };
+            subject.Compressors.Select(x => x.Type).Should().Equal(expectedCompressorTypes);
+            subject.Compressors.Single(x => x.Type == CompressorType.Zlib).Properties["Level"].Should().Be(4);
             subject.Connect.Should().Be(ClusterConnectionMode.ReplicaSet);
             subject.ConnectTimeout.Should().Be(TimeSpan.FromMilliseconds(15));
             subject.DatabaseName.Should().Be("test");
@@ -235,15 +371,22 @@ namespace MongoDB.Driver.Core.Configuration
             subject.ReadPreference.Should().Be(ReadPreferenceMode.Primary);
             subject.ReadPreferenceTags.Single().Should().Be(new TagSet(new[] { new Tag("dc", "1") }));
             subject.ReplicaSet.Should().Be("funny");
+            subject.RetryReads.Should().BeFalse();
             subject.RetryWrites.Should().BeTrue();
             subject.LocalThreshold.Should().Be(TimeSpan.FromMilliseconds(50));
             subject.SocketTimeout.Should().Be(TimeSpan.FromMilliseconds(40));
+#pragma warning disable 618
             subject.Ssl.Should().BeFalse();
             subject.SslVerifyCertificate.Should().Be(true);
+#pragma warning restore 618
+            subject.Tls.Should().BeFalse();
+            subject.TlsInsecure.Should().Be(false);
             subject.Username.Should().Be("user");
             subject.UuidRepresentation.Should().Be(GuidRepresentation.Standard);
+#pragma warning disable 618
             subject.WaitQueueMultiple.Should().Be(10);
             subject.WaitQueueSize.Should().Be(30);
+#pragma warning restore 618
             subject.WaitQueueTimeout.Should().Be(TimeSpan.FromMilliseconds(60));
             subject.W.Should().Be(WriteConcern.WValue.Parse("4"));
             subject.WTimeout.Should().Be(TimeSpan.FromMilliseconds(20));
@@ -303,6 +446,38 @@ namespace MongoDB.Driver.Core.Configuration
         }
 
         [Theory]
+        [InlineData("mongodb://localhost?compressors=zlib", CompressorType.Zlib)]
+        public void When_compressor_is_specified(string connectionString, CompressorType compressor)
+        {
+            var subject = new ConnectionString(connectionString);
+
+            subject.Compressors.Should().Contain(x => x.Type == compressor);
+        }
+
+        [Theory]
+        [InlineData("mongodb://localhost?compressors=unsupported")]
+        public void When_compressor_is_specified_with_unsupported_value_the_value_should_be_ignored(string connectionString)
+        {
+            var subject = new ConnectionString(connectionString);
+
+            subject.Compressors.Should().BeEmpty();
+        }
+
+        [Theory]
+        [InlineData("mongodb://nam!@#$%^&*())e:password@localhost", "mongodb://<hidden>@localhost")]
+        [InlineData("://nam!@#$%^&*())e:password@loc", "://<hidden>@loc")]
+        [InlineData("://nam!@#$%^&*())e@loc", "://<hidden>@loc")]
+        [InlineData("mongodb://nameloc@", "mongodb://<hidden>@")]
+        [InlineData("mongodb+srv://nameloc@", "mongodb+srv://<hidden>@")]
+        [InlineData("ongodb://username:password@localhost/?replicaSet=@x", "ongodb://<hidden>@localhost/?replicaSet=@x")]
+        public void When_connectionstring_invalid_security_data_should_be_protected(string connectionString, string protectedConnectionString)
+        {
+            var exception = Record.Exception(() => new ConnectionString(connectionString));
+            var e = exception.Should().BeOfType<MongoConfigurationException>().Subject;
+            e.Message.Should().StartWith($"The connection string '{protectedConnectionString}'");
+        }
+
+        [Theory]
         [InlineData("mongodb://localhost?connect=automatic", ClusterConnectionMode.Automatic)]
         [InlineData("mongodb://localhost?connect=direct", ClusterConnectionMode.Direct)]
         [InlineData("mongodb://localhost?connect=replicaSet", ClusterConnectionMode.ReplicaSet)]
@@ -338,6 +513,57 @@ namespace MongoDB.Driver.Core.Configuration
             var subject = new ConnectionString(connectionString);
 
             subject.DatabaseName.Should().Be(db);
+        }
+
+        [Theory]
+        [InlineData("mongodb://localhost/?directConnection=true&replicaSet=yeah", true, ClusterConnectionMode.Direct)]
+        [InlineData("mongodb://localhost/?directConnection=true", true, ClusterConnectionMode.Direct)]
+        [InlineData("mongodb://localhost/?directConnection=false&replicaSet=yeah", false, ClusterConnectionMode.ReplicaSet)]
+        [InlineData("mongodb://localhost/?directConnection=false", false, ClusterConnectionMode.Automatic)]
+        public void When_a_directConenction_is_specified(string connectionString, bool directConnection, ClusterConnectionMode connect)
+        {
+            var subject = new ConnectionString(connectionString);
+
+            subject.Connect.Should().Be(connect);
+            subject._directConnection().Should().Be(directConnection);
+        }
+
+        [Theory]
+        [InlineData("mongodb+srv://localhost/?directConnection=false", false)]
+        [InlineData("mongodb+srv://localhost/?directConnection=true", true)]
+        public void When_a_directConnection_is_specified_with_a_srv_scheme(string connectionString, bool shouldThrow)
+        {
+            ConnectionString subject = null;
+            var exception = Record.Exception(() => subject = new ConnectionString(connectionString));
+
+            if (shouldThrow)
+            {
+                exception.Should().BeOfType<MongoConfigurationException>();
+            }
+            else
+            {
+                exception.Should().BeNull();
+                subject._directConnection().Should().BeFalse();
+            }
+        }
+
+        [Theory]
+        [InlineData("mongodb://localhost1,localhost2/?directConnection=false", false)]
+        [InlineData("mongodb://localhost1,localhost2/?directConnection=true", true)]
+        public void When_a_directConnection_is_specified_with_multiple_hosts(string connectionString, bool shouldThrow)
+        {
+            ConnectionString subject = null;
+            var exception = Record.Exception(() => subject = new ConnectionString(connectionString));
+
+            if (shouldThrow)
+            {
+                exception.Should().BeOfType<MongoConfigurationException>();
+            }
+            else
+            {
+                exception.Should().BeNull();
+                subject._directConnection().Should().BeFalse();
+            }
         }
 
         [Theory]
@@ -506,8 +732,11 @@ namespace MongoDB.Driver.Core.Configuration
         }
 
         [Theory]
+        [InlineData("mongodb://localhost?readConcernLevel=available", ReadConcernLevel.Available)]
+        [InlineData("mongodb://localhost?readConcernLevel=linearizable", ReadConcernLevel.Linearizable)]
         [InlineData("mongodb://localhost?readConcernLevel=local", ReadConcernLevel.Local)]
         [InlineData("mongodb://localhost?readConcernLevel=majority", ReadConcernLevel.Majority)]
+        [InlineData("mongodb://localhost?readConcernLevel=snapshot", ReadConcernLevel.Snapshot)]
         public void When_readConcernLevel_is_specified(string connectionString, ReadConcernLevel readConcernLevel)
         {
             var subject = new ConnectionString(connectionString);
@@ -575,13 +804,25 @@ namespace MongoDB.Driver.Core.Configuration
         }
 
         [Theory]
-        [InlineData("mongodb://localhost?retryWrites=true", true)]
-        [InlineData("mongodb://localhost?retryWrites=false", false)]
-        public void When_retryWrites_is_specified(string connectionString, bool ssl)
+        [InlineData("mongodb://localhost", null)]
+        [InlineData("mongodb://localhost?retryReads=true", true)]
+        [InlineData("mongodb://localhost?retryReads=false", false)]
+        public void When_retryReads_is_specified(string connectionString, bool? retryReads)
         {
             var subject = new ConnectionString(connectionString);
 
-            subject.RetryWrites.Should().Be(ssl);
+            subject.RetryReads.Should().Be(retryReads);
+        }
+
+        [Theory]
+        [InlineData("mongodb://localhost", null)]
+        [InlineData("mongodb://localhost?retryWrites=true", true)]
+        [InlineData("mongodb://localhost?retryWrites=false", false)]
+        public void When_retryWrites_is_specified(string connectionString, bool? retryWrites)
+        {
+            var subject = new ConnectionString(connectionString);
+
+            subject.RetryWrites.Should().Be(retryWrites);
         }
 
         [Theory]
@@ -664,7 +905,9 @@ namespace MongoDB.Driver.Core.Configuration
         {
             var subject = new ConnectionString(connectionString);
 
+#pragma warning disable 618
             subject.Ssl.Should().Be(ssl);
+#pragma warning restore 618
         }
 
         [Theory]
@@ -674,7 +917,29 @@ namespace MongoDB.Driver.Core.Configuration
         {
             var subject = new ConnectionString(connectionString);
 
+#pragma warning disable 618
             subject.SslVerifyCertificate.Should().Be(sslVerifyCertificate);
+#pragma warning restore 618
+        }
+
+        [Theory]
+        [InlineData("mongodb://localhost?tls=true", true)]
+        [InlineData("mongodb://localhost?tls=false", false)]
+        public void When_tls_is_specified(string connectionString, bool tls)
+        {
+            var subject = new ConnectionString(connectionString);
+
+            subject.Tls.Should().Be(tls);
+        }
+
+        [Theory]
+        [InlineData("mongodb://localhost?tlsInsecure=true", true)]
+        [InlineData("mongodb://localhost?tlsInsecure=false", false)]
+        public void When_tlsInsecure_is_specified(string connectionString, bool tlsInsecure)
+        {
+            var subject = new ConnectionString(connectionString);
+
+            subject.TlsInsecure.Should().Be(tlsInsecure);
         }
 
         [Theory]
@@ -739,7 +1004,9 @@ namespace MongoDB.Driver.Core.Configuration
         {
             var subject = new ConnectionString(connectionString);
 
+#pragma warning disable 618
             subject.WaitQueueMultiple.Should().Be(waitQueueMultiple);
+#pragma warning restore 618
         }
 
         [Theory]
@@ -751,7 +1018,9 @@ namespace MongoDB.Driver.Core.Configuration
         {
             var subject = new ConnectionString(connectionString);
 
+#pragma warning disable 618
             subject.WaitQueueSize.Should().Be(waitQueueSize);
+#pragma warning restore 618
         }
 
         [Theory]
@@ -811,7 +1080,7 @@ namespace MongoDB.Driver.Core.Configuration
 
             var resolved = subject.Resolve();
 
-            resolved.ToString().Should().Be("mongodb://user%40GSSAPI.COM:password@localhost.test.build.10gen.cc:27017/funny/?authSource=thisDB&ssl=true&replicaSet=rs0");
+            resolved.ToString().Should().Be("mongodb://user%40GSSAPI.COM:password@localhost.test.build.10gen.cc:27017/funny/?authSource=thisDB&replicaSet=rs0&tls=true");
         }
 
         [Fact]
@@ -825,7 +1094,7 @@ namespace MongoDB.Driver.Core.Configuration
 
             var resolved = await subject.ResolveAsync();
 
-            resolved.ToString().Should().Be("mongodb://user%40GSSAPI.COM:password@localhost.test.build.10gen.cc:27017/funny/?authSource=thisDB&ssl=true&replicaSet=rs0");
+            resolved.ToString().Should().Be("mongodb://user%40GSSAPI.COM:password@localhost.test.build.10gen.cc:27017/funny/?authSource=thisDB&replicaSet=rs0&tls=true");
         }
 
         [Fact]
@@ -839,5 +1108,10 @@ namespace MongoDB.Driver.Core.Configuration
 
             resolved.Should().BeSameAs(subject);
         }
+    }
+
+    public static class ConnectionStringReflector
+    {
+        public static bool _directConnection(this ConnectionString obj) => (bool)Reflector.GetFieldValue(obj, nameof(_directConnection));
     }
 }

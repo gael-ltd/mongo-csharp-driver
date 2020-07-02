@@ -13,6 +13,7 @@
 * limitations under the License.
 */
 
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MongoDB.Bson;
@@ -26,6 +27,7 @@ namespace MongoDB.Driver.Core.Operations
     /// <summary>
     /// Represents a reindex operation.
     /// </summary>
+    [Obsolete("This class will be removed in a later version of the driver.")]
     public class ReIndexOperation : IWriteOperation<BsonDocument>
     {
         // fields
@@ -94,9 +96,7 @@ namespace MongoDB.Driver.Core.Operations
             using (var channelBinding = new ChannelReadWriteBinding(channelSource.Server, channel, binding.Session.Fork()))
             {
                 var operation = CreateOperation(channel.ConnectionDescription.ServerVersion);
-                var result = operation.Execute(channelBinding, cancellationToken);
-                WriteConcernErrorHelper.ThrowIfHasWriteConcernError(channel.ConnectionDescription.ConnectionId, result);
-                return result;
+                return operation.Execute(channelBinding, cancellationToken);
             }
         }
 
@@ -110,9 +110,7 @@ namespace MongoDB.Driver.Core.Operations
             using (var channelBinding = new ChannelReadWriteBinding(channelSource.Server, channel, binding.Session.Fork()))
             {
                 var operation = CreateOperation(channel.ConnectionDescription.ServerVersion);
-                var result = await operation.ExecuteAsync(channelBinding, cancellationToken).ConfigureAwait(false);
-                WriteConcernErrorHelper.ThrowIfHasWriteConcernError(channel.ConnectionDescription.ConnectionId, result);
-                return result;
+                return await operation.ExecuteAsync(channelBinding, cancellationToken).ConfigureAwait(false);
             }
         }
 

@@ -35,6 +35,7 @@ namespace MongoDB.Driver.Core.Configuration
         // fields
         private readonly string _applicationName;
         private readonly IReadOnlyList<IAuthenticator> _authenticators;
+        private readonly IReadOnlyList<CompressorConfiguration> _compressors;
         private readonly TimeSpan _maxIdleTime;
         private readonly TimeSpan _maxLifeTime;
 
@@ -43,16 +44,19 @@ namespace MongoDB.Driver.Core.Configuration
         /// Initializes a new instance of the <see cref="ConnectionSettings" /> class.
         /// </summary>
         /// <param name="authenticators">The authenticators.</param>
+        /// <param name="compressors">The compressors.</param>
         /// <param name="maxIdleTime">The maximum idle time.</param>
         /// <param name="maxLifeTime">The maximum life time.</param>
         /// <param name="applicationName">The application name.</param>
         public ConnectionSettings(
             Optional<IEnumerable<IAuthenticator>> authenticators = default(Optional<IEnumerable<IAuthenticator>>),
+            Optional<IEnumerable<CompressorConfiguration>> compressors = default(Optional<IEnumerable<CompressorConfiguration>>),
             Optional<TimeSpan> maxIdleTime = default(Optional<TimeSpan>),
             Optional<TimeSpan> maxLifeTime = default(Optional<TimeSpan>),
             Optional<string> applicationName = default(Optional<string>))
         {
             _authenticators = Ensure.IsNotNull(authenticators.WithDefault(__noAuthenticators), "authenticators").ToList();
+            _compressors = Ensure.IsNotNull(compressors.WithDefault(Enumerable.Empty<CompressorConfiguration>()), nameof(compressors)).ToList();
             _maxIdleTime = Ensure.IsGreaterThanZero(maxIdleTime.WithDefault(TimeSpan.FromMinutes(10)), "maxIdleTime");
             _maxLifeTime = Ensure.IsGreaterThanZero(maxLifeTime.WithDefault(TimeSpan.FromMinutes(30)), "maxLifeTime");
             _applicationName = ApplicationNameHelper.EnsureApplicationNameIsValid(applicationName.WithDefault(null), nameof(applicationName));
@@ -82,6 +86,17 @@ namespace MongoDB.Driver.Core.Configuration
         }
 
         /// <summary>
+        /// Gets the compressors.
+        /// </summary>
+        /// <value>
+        /// The compressors.
+        /// </value>
+        public IReadOnlyList<CompressorConfiguration> Compressors
+        {
+            get { return _compressors; }
+        }
+
+        /// <summary>
         /// Gets the maximum idle time.
         /// </summary>
         /// <value>
@@ -108,18 +123,21 @@ namespace MongoDB.Driver.Core.Configuration
         /// Returns a new ConnectionSettings instance with some settings changed.
         /// </summary>
         /// <param name="authenticators">The authenticators.</param>
+        /// <param name="compressors">The compressors.</param>
         /// <param name="maxIdleTime">The maximum idle time.</param>
         /// <param name="maxLifeTime">The maximum life time.</param>
         /// <param name="applicationName">The application name.</param>
         /// <returns>A new ConnectionSettings instance.</returns>
         public ConnectionSettings With(
             Optional<IEnumerable<IAuthenticator>> authenticators = default(Optional<IEnumerable<IAuthenticator>>),
+            Optional<IEnumerable<CompressorConfiguration>> compressors = default(Optional<IEnumerable<CompressorConfiguration>>),
             Optional<TimeSpan> maxIdleTime = default(Optional<TimeSpan>),
             Optional<TimeSpan> maxLifeTime = default(Optional<TimeSpan>),
             Optional<string> applicationName = default(Optional<string>))
         {
             return new ConnectionSettings(
                 authenticators: Optional.Enumerable(authenticators.WithDefault(_authenticators)),
+                compressors: Optional.Enumerable(compressors.WithDefault(_compressors)),
                 maxIdleTime: maxIdleTime.WithDefault(_maxIdleTime),
                 maxLifeTime: maxLifeTime.WithDefault(_maxLifeTime),
                 applicationName: applicationName.WithDefault(_applicationName));

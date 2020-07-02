@@ -72,7 +72,9 @@ namespace MongoDB.Driver.Core.Operations
             subject.Collation.Should().BeNull();
             subject.Filter.Should().BeNull();
             subject.FinalizeFunction.Should().BeNull();
+#pragma warning disable 618
             subject.JavaScriptMode.Should().NotHaveValue();
+#pragma warning restore 618
             subject.Limit.Should().NotHaveValue();
             subject.MaxTime.Should().NotHaveValue();
             subject.Scope.Should().BeNull();
@@ -101,7 +103,7 @@ namespace MongoDB.Driver.Core.Operations
         [Fact]
         public void constructor_should_throw_when_messageEncoderSettings_is_null()
         {
-            var exception = Record.Exception(() => new FakeMapReduceOperation(_collectionNamespace, _mapFunction, _reduceFunction,  null));
+            var exception = Record.Exception(() => new FakeMapReduceOperation(_collectionNamespace, _mapFunction, _reduceFunction, null));
 
             var argumentNullException = exception.Should().BeOfType<ArgumentNullException>().Subject;
             argumentNullException.ParamName.Should().Be("messageEncoderSettings");
@@ -127,7 +129,7 @@ namespace MongoDB.Driver.Core.Operations
 
             var expectedResult = new BsonDocument
             {
-                { "mapreduce", _collectionNamespace.CollectionName },
+                { "mapReduce", _collectionNamespace.CollectionName },
                 { "map", _mapFunction },
                 { "reduce", _reduceFunction },
                 { "out", new BsonDocument("fake", 1) }
@@ -154,7 +156,7 @@ namespace MongoDB.Driver.Core.Operations
 
             var expectedResult = new BsonDocument
             {
-                { "mapreduce", _collectionNamespace.CollectionName },
+                { "mapReduce", _collectionNamespace.CollectionName },
                 { "map", _mapFunction },
                 { "reduce", _reduceFunction },
                 { "out", new BsonDocument("fake", 1) },
@@ -196,7 +198,7 @@ namespace MongoDB.Driver.Core.Operations
 
             var expectedResult = new BsonDocument
             {
-                { "mapreduce", _collectionNamespace.CollectionName },
+                { "mapReduce", _collectionNamespace.CollectionName },
                 { "map", _mapFunction },
                 { "reduce", _reduceFunction },
                 { "out", new BsonDocument("fake", 1) },
@@ -223,7 +225,7 @@ namespace MongoDB.Driver.Core.Operations
 
             var expectedResult = new BsonDocument
             {
-                { "mapreduce", _collectionNamespace.CollectionName },
+                { "mapReduce", _collectionNamespace.CollectionName },
                 { "map", _mapFunction },
                 { "reduce", _reduceFunction },
                 { "out", new BsonDocument("fake", 1) },
@@ -240,7 +242,9 @@ namespace MongoDB.Driver.Core.Operations
         {
             var subject = new FakeMapReduceOperation(_collectionNamespace, _mapFunction, _reduceFunction, _messageEncoderSettings)
             {
+#pragma warning disable 618
                 JavaScriptMode = javaScriptMode
+#pragma warning restore 618
             };
             var session = OperationTestHelper.CreateSession();
             var connectionDescription = OperationTestHelper.CreateConnectionDescription();
@@ -249,7 +253,7 @@ namespace MongoDB.Driver.Core.Operations
 
             var expectedResult = new BsonDocument
             {
-                { "mapreduce", _collectionNamespace.CollectionName },
+                { "mapReduce", _collectionNamespace.CollectionName },
                 { "map", _mapFunction },
                 { "reduce", _reduceFunction },
                 { "out", new BsonDocument("fake", 1) },
@@ -275,7 +279,7 @@ namespace MongoDB.Driver.Core.Operations
 
             var expectedResult = new BsonDocument
             {
-                { "mapreduce", _collectionNamespace.CollectionName },
+                { "mapReduce", _collectionNamespace.CollectionName },
                 { "map", _mapFunction },
                 { "reduce", _reduceFunction },
                 { "out", new BsonDocument("fake", 1) },
@@ -304,7 +308,7 @@ namespace MongoDB.Driver.Core.Operations
 
             var expectedResult = new BsonDocument
             {
-                { "mapreduce", _collectionNamespace.CollectionName },
+                { "mapReduce", _collectionNamespace.CollectionName },
                 { "map", _mapFunction },
                 { "reduce", _reduceFunction },
                 { "out", new BsonDocument("fake", 1) },
@@ -332,7 +336,7 @@ namespace MongoDB.Driver.Core.Operations
 
             var expectedResult = new BsonDocument
             {
-                { "mapreduce", _collectionNamespace.CollectionName },
+                { "mapReduce", _collectionNamespace.CollectionName },
                 { "map", _mapFunction },
                 { "reduce", _reduceFunction },
                 { "out", new BsonDocument("fake", 1) },
@@ -359,7 +363,7 @@ namespace MongoDB.Driver.Core.Operations
 
             var expectedResult = new BsonDocument
             {
-                { "mapreduce", _collectionNamespace.CollectionName },
+                { "mapReduce", _collectionNamespace.CollectionName },
                 { "map", _mapFunction },
                 { "reduce", _reduceFunction },
                 { "out", new BsonDocument("fake", 1) },
@@ -385,7 +389,7 @@ namespace MongoDB.Driver.Core.Operations
 
             var expectedResult = new BsonDocument
             {
-                { "mapreduce", _collectionNamespace.CollectionName },
+                { "mapReduce", _collectionNamespace.CollectionName },
                 { "map", _mapFunction },
                 { "reduce", _reduceFunction },
                 { "out", new BsonDocument("fake", 1) },
@@ -416,7 +420,7 @@ namespace MongoDB.Driver.Core.Operations
             string code)
         {
             var subject = new FakeMapReduceOperation(_collectionNamespace, _mapFunction, _reduceFunction, _messageEncoderSettings);
-            var value = code == null ? null : new BsonJavaScript(code );
+            var value = code == null ? null : new BsonJavaScript(code);
 
             subject.FinalizeFunction = value;
             var result = subject.FinalizeFunction;
@@ -432,8 +436,10 @@ namespace MongoDB.Driver.Core.Operations
         {
             var subject = new FakeMapReduceOperation(_collectionNamespace, _mapFunction, _reduceFunction, _messageEncoderSettings);
 
+#pragma warning disable 618
             subject.JavaScriptMode = value;
             var result = subject.JavaScriptMode;
+#pragma warning restore 618
 
             result.Should().Be(value);
         }

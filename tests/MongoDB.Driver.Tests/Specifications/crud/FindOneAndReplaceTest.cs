@@ -15,7 +15,6 @@
 
 using System;
 using System.Linq;
-using System.Threading.Tasks;
 using FluentAssertions;
 using MongoDB.Bson;
 using MongoDB.Driver.Core.Misc;
@@ -53,6 +52,9 @@ namespace MongoDB.Driver.Tests.Specifications.crud
                 case "collation":
                     _options.Collation = Collation.FromBsonDocument(value.AsBsonDocument);
                     return true;
+                case "hint":
+                    _options.Hint = value;
+                    return true;
             }
 
             return false;
@@ -68,7 +70,7 @@ namespace MongoDB.Driver.Tests.Specifications.crud
             return (BsonDocument)expectedResult;
         }
 
-        protected override BsonDocument ExecuteAndGetResult(IMongoCollection<BsonDocument> collection, bool async)
+        protected override BsonDocument ExecuteAndGetResult(IMongoDatabase database, IMongoCollection<BsonDocument> collection, bool async)
         {
             if (async)
             {
@@ -91,12 +93,12 @@ namespace MongoDB.Driver.Tests.Specifications.crud
 
             if (ClusterDescription.Servers[0].Version < new SemanticVersion(2, 6, 0) && _options.IsUpsert)
             {
-                foreach(var doc in data)
+                foreach (var doc in data)
                 {
                     doc.Remove("_id");
                 }
 
-                foreach(var doc in expectedData.Cast<BsonDocument>())
+                foreach (var doc in expectedData.Cast<BsonDocument>())
                 {
                     doc.Remove("_id");
                 }

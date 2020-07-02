@@ -57,7 +57,7 @@ namespace MongoDB.Driver.Core.Operations
         public InsertOpcodeOperation(CollectionNamespace collectionNamespace, IEnumerable<TDocument> documents, IBsonSerializer<TDocument> serializer, MessageEncoderSettings messageEncoderSettings)
         {
             _collectionNamespace = Ensure.IsNotNull(collectionNamespace, nameof(collectionNamespace));
-            _documents =  Ensure.IsNotNull(documents, nameof(documents)).ToList();
+            _documents = Ensure.IsNotNull(documents, nameof(documents)).ToList();
             _serializer = Ensure.IsNotNull(serializer, nameof(serializer));
             _messageEncoderSettings = Ensure.IsNotNull(messageEncoderSettings, nameof(messageEncoderSettings));
             _writeConcern = WriteConcern.Acknowledged;
@@ -231,7 +231,7 @@ namespace MongoDB.Driver.Core.Operations
             using (EventContext.BeginOperation())
             using (var context = RetryableWriteContext.Create(binding, false, cancellationToken))
             {
-                if (Feature.WriteCommands.IsSupported(context.Channel.ConnectionDescription.ServerVersion) && _writeConcern.IsAcknowledged)
+                if (_writeConcern.IsAcknowledged)
                 {
                     var emulator = CreateEmulator();
                     var result = emulator.Execute(context, cancellationToken);
@@ -252,7 +252,7 @@ namespace MongoDB.Driver.Core.Operations
             using (EventContext.BeginOperation())
             using (var context = await RetryableWriteContext.CreateAsync(binding, false, cancellationToken).ConfigureAwait(false))
             {
-                if (Feature.WriteCommands.IsSupported(context.Channel.ConnectionDescription.ServerVersion) && _writeConcern.IsAcknowledged)
+                if (_writeConcern.IsAcknowledged)
                 {
                     var emulator = CreateEmulator();
                     var result = await emulator.ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
@@ -386,7 +386,7 @@ namespace MongoDB.Driver.Core.Operations
             public IEnumerable<Batch> GetBatches()
             {
                 while (_documentSource.Count > 0)
-                {			
+                {
                     var writeConcern = _writeConcern;
                     Func<bool> shouldSendGetLastError = null;
                     if (!writeConcern.IsAcknowledged && !_continueOnError)

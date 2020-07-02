@@ -18,10 +18,12 @@ namespace MongoDB.Driver
     internal enum ServerErrorCode
     {
         // this is not a complete list, more will be added as needed
+        // see: https://github.com/mongodb/mongo/blob/master/src/mongo/base/error_codes.yml
         CappedPositionLost = 136,
         CursorKilled = 237,
         ElectionInProgress = 216,
-        ExceededTimeLimit = 50,
+        ExceededTimeLimit = 262,
+        FailedToSatisfyReadPreference = 133,
         HostNotFound = 7,
         HostUnreachable = 6,
         Interrupted = 11601,
@@ -35,6 +37,12 @@ namespace MongoDB.Driver
         RetryChangeStream = 234,
         ShutdownInProgress = 91,
         SocketException = 9001,
-        WriteConcernFailed = 64
+        StaleConfig = 13388,
+        StaleEpoch = 150,
+        StaleShardVersion = 63,
+        UnknownReplWriteConcern = 79,
+        UnsatisfiableWriteConcern = 100,
+        WriteConcernFailed = 64,
+        MaxTimeMSExpired = 50
     }
 }

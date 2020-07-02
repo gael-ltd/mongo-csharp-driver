@@ -63,6 +63,7 @@ namespace MongoDB.Driver.Builders
         /// </summary>
         /// <param name="value">The bucket size.</param>
         /// <returns>The builder (so method calls can be chained).</returns>
+        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public static IndexOptionsBuilder SetBucketSize(double value)
         {
             return new IndexOptionsBuilder().SetBucketSize(value);
@@ -181,12 +182,25 @@ namespace MongoDB.Driver.Builders
         {
             return new IndexOptionsBuilder().SetWeight(name, value);
         }
+
+        /// <summary>
+        /// Sets the wildcardProjection for the index.
+        /// </summary>
+        /// <param name="name">The field name.</param>
+        /// <param name="included">The flag determines whether the field should be included or excluded from wildcard projecting.</param>
+        /// <returns>
+        /// The builder (so method calls can be chained).
+        /// </returns>
+        public static IndexOptionsBuilder SetWildcardProjection(string name, bool included)
+        {
+            return new IndexOptionsBuilder().SetWildcardProjection(name, included);
+        }
     }
 
     /// <summary>
     /// A builder for the options used when creating an index.
     /// </summary>
-#if NET45
+#if NET452
     [Serializable]
 #endif
     [BsonSerializer(typeof(IndexOptionsBuilder.Serializer))]
@@ -232,6 +246,7 @@ namespace MongoDB.Driver.Builders
         /// </summary>
         /// <param name="value">The bucket size.</param>
         /// <returns>The builder (so method calls can be chained).</returns>
+        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public IndexOptionsBuilder SetBucketSize(double value)
         {
             _document["bucketSize"] = value;
@@ -370,6 +385,26 @@ namespace MongoDB.Driver.Builders
             return this;
         }
 
+        ///  <summary>
+        ///  Sets the wildcardProjection for the index.
+        ///  </summary>
+        ///  <param name="name">The field name.</param>
+        ///  <param name="included">The flag determines whether the field should be included or excluded from wildcard projecting.</param>
+        ///  <returns>
+        /// The builder (so method calls can be chained).
+        ///  </returns>
+        public IndexOptionsBuilder SetWildcardProjection(string name, bool included)
+        {
+            if (!_document.TryGetValue("wildcardProjection", out var wildcardProjection))
+            {
+                wildcardProjection = new BsonDocument();
+                _document.Add("wildcardProjection", wildcardProjection);
+            }
+
+            wildcardProjection[name] = included ? 1 : 0;
+            return this;
+        }
+
         /// <summary>
         /// Returns the result of the builder as a BsonDocument.
         /// </summary>
@@ -430,6 +465,7 @@ namespace MongoDB.Driver.Builders
         /// </summary>
         /// <param name="value">The bucket size.</param>
         /// <returns>The builder (so method calls can be chained).</returns>
+        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public static IndexOptionsBuilder<TDocument> SetBucketSize(double value)
         {
             return new IndexOptionsBuilder<TDocument>().SetBucketSize(value);
@@ -551,13 +587,27 @@ namespace MongoDB.Driver.Builders
         {
             return new IndexOptionsBuilder<TDocument>().SetWeight(memberExpression, value);
         }
+
+        /// <summary>
+        /// Sets the wildcardProjection for the index.
+        /// </summary>
+        /// <typeparam name="TMember">The type of the member.</typeparam>
+        /// <param name="memberExpression">The member expression representing the wildcard projection field name.</param>
+        /// <param name="included">The flag determines whether the field should be included or excluded from wildcard projecting.</param>
+        /// <returns>
+        /// The builder (so method calls can be chained).
+        /// </returns>
+        public static IndexOptionsBuilder<TDocument> SetWildcardProjection<TMember>(Expression<Func<TDocument, TMember>> memberExpression, bool included)
+        {
+            return new IndexOptionsBuilder<TDocument>().SetWildcardProjection(memberExpression, included);
+        }
     }
 
     /// <summary>
     /// A builder for the options used when creating an index.
     /// </summary>
     /// <typeparam name="TDocument">The type of the document.</typeparam>
-#if NET45
+#if NET452
     [Serializable]
 #endif
     [BsonSerializer(typeof(IndexOptionsBuilder<>.Serializer))]
@@ -605,6 +655,7 @@ namespace MongoDB.Driver.Builders
         /// </summary>
         /// <param name="value">The bucket size.</param>
         /// <returns>The builder (so method calls can be chained).</returns>
+        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public IndexOptionsBuilder<TDocument> SetBucketSize(double value)
         {
             _indexOptionsBuilder.SetBucketSize(value);
@@ -738,6 +789,22 @@ namespace MongoDB.Driver.Builders
         {
             var serializationInfo = _serializationInfoHelper.GetSerializationInfo(memberExpression);
             _indexOptionsBuilder = _indexOptionsBuilder.SetWeight(serializationInfo.ElementName, value);
+            return this;
+        }
+
+        ///  <summary>
+        ///  Sets the wildcardProjection for the index.
+        ///  </summary>
+        ///  <typeparam name="TMember">The type of the member.</typeparam>
+        ///  <param name="memberExpression">The member expression representing the wildcard projection field name.</param>
+        ///  <param name="included">The flag determines whether the field should be included or excluded from wildcard projecting.</param>
+        ///  <returns>
+        /// The builder (so method calls can be chained).
+        ///  </returns>
+        public IndexOptionsBuilder<TDocument> SetWildcardProjection<TMember>(Expression<Func<TDocument, TMember>> memberExpression, bool included)
+        {
+            var serializationInfo = _serializationInfoHelper.GetSerializationInfo(memberExpression);
+            _indexOptionsBuilder = _indexOptionsBuilder.SetWildcardProjection(serializationInfo.ElementName, included);
             return this;
         }
 

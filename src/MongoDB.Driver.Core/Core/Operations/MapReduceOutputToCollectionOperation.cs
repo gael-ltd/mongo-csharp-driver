@@ -82,6 +82,7 @@ namespace MongoDB.Driver.Core.Operations
         /// <value>
         ///   <c>true</c> if the server should not lock the database for merge and reduce output modes; otherwise, <c>false</c>.
         /// </value>
+        [Obsolete("NonAtomicOutput is rejected by server versions 4.4.0 and newer.")]
         public bool? NonAtomicOutput
         {
             get { return _nonAtomicOutput; }
@@ -117,6 +118,7 @@ namespace MongoDB.Driver.Core.Operations
         /// <value>
         ///   <c>true</c> if the output collection should be sharded; otherwise, <c>false</c>.
         /// </value>
+        [Obsolete("ShardedOutput is rejected by server versions 4.4.0 and newer.")]
         public bool? ShardedOutput
         {
             get { return _shardedOutput; }
@@ -177,9 +179,7 @@ namespace MongoDB.Driver.Core.Operations
             using (var channelBinding = new ChannelReadWriteBinding(channelSource.Server, channel, binding.Session.Fork()))
             {
                 var operation = CreateOperation(channelBinding.Session, channel.ConnectionDescription);
-                var result = operation.Execute(channelBinding, cancellationToken);
-                WriteConcernErrorHelper.ThrowIfHasWriteConcernError(channel.ConnectionDescription.ConnectionId, result);
-                return result;
+                return operation.Execute(channelBinding, cancellationToken);
             }
         }
 
@@ -193,9 +193,7 @@ namespace MongoDB.Driver.Core.Operations
             using (var channelBinding = new ChannelReadWriteBinding(channelSource.Server, channel, binding.Session.Fork()))
             {
                 var operation = CreateOperation(channelBinding.Session, channel.ConnectionDescription);
-                var result = await operation.ExecuteAsync(channelBinding, cancellationToken).ConfigureAwait(false);
-                WriteConcernErrorHelper.ThrowIfHasWriteConcernError(channel.ConnectionDescription.ConnectionId, result);
-                return result;
+                return await operation.ExecuteAsync(channelBinding, cancellationToken).ConfigureAwait(false);
             }
         }
 

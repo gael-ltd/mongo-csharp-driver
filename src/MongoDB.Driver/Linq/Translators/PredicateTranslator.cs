@@ -16,7 +16,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -24,7 +23,6 @@ using System.Text.RegularExpressions;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Options;
-using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver.Linq.Expressions;
 using MongoDB.Driver.Linq.Expressions.ResultOperators;
 using MongoDB.Driver.Linq.Processors;
@@ -177,7 +175,13 @@ namespace MongoDB.Driver.Linq.Translators
                 case ExpressionType.LessThan:
                 case ExpressionType.LessThanOrEqual:
                 case ExpressionType.NotEqual:
-                    return true;
+                    // the SERVER processes a $ne operator in a different way with
+                    // other comparison operators (see CSHARP-2012).
+                    // So, a NotEqual operator should be handled only by a "$elemMatch".
+                    // To simplify the logic and do not take responsibility for analysis
+                    // an expression here, other comparison operators are processed in the
+                    // same way as $ne.
+                    return false;
                 case ExpressionType.Call:
                     var callNode = (MethodCallExpression)node;
                     switch (callNode.Method.Name)
@@ -198,6 +202,11 @@ namespace MongoDB.Driver.Linq.Translators
                     var pipelineExpression = node as PipelineExpression;
                     if (pipelineExpression != null)
                     {
+                        if (pipelineExpression.ResultOperator is ContainsResultOperator)
+                        {
+                            return false;
+                        }
+
                         var source = pipelineExpression.Source as ISerializationExpression;
                         return source == null;
                     }
@@ -205,6 +214,44 @@ namespace MongoDB.Driver.Linq.Translators
                     return false;
                 default:
                     return false;
+            }
+        }
+
+        private FilterDefinition<BsonDocument> ConvertElemMatchFilterToScalarElementMatchIfNeeded(FilterDefinition<BsonDocument> filter, IFieldExpression fieldExpression, Expression wherePredicate)
+        {
+            if ((!(fieldExpression.Serializer is IBsonDocumentSerializer)) || DoesExpressionUseDocumentItself(wherePredicate))
+            {
+                return new ScalarElementMatchFilterDefinition<BsonDocument>(filter);
+            }
+            else
+            {
+                return filter;
+            }
+        }
+
+        private bool DoesExpressionUseDocumentItself(Expression node)
+        {
+            // if a left operand is DocumentExpression, we need to generate a "$elemMatch" in a short form,
+            // otherwise we will have $elemMatch queries with gaps similar to : "{ $elemMatch : { ' ' : {"
+            if (node is BinaryExpression binaryExpression)
+            {
+                if (binaryExpression.Left is DocumentExpression)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private string PrepareFieldName(IFieldExpression fieldExpression)
+        {
+            if (fieldExpression.Document is IFieldExpression documentFieldExpression)
+            {
+                return $"{documentFieldExpression.FieldName}{fieldExpression.FieldName}";
+            }
+            else
+            {
+                return fieldExpression.FieldName;
             }
         }
 
@@ -912,22 +959,24 @@ namespace MongoDB.Driver.Linq.Translators
                 return null;
             }
 
+            ValidatePipelineExpressionThrowIfNotValid(whereExpression);
+
             FilterDefinition<BsonDocument> filter;
             var renderWithoutElemMatch = CanAnyBeRenderedWithoutElemMatch(whereExpression.Predicate);
 
+            var fieldName = PrepareFieldName(fieldExpression);
             if (renderWithoutElemMatch)
             {
-                var predicate = FieldNamePrefixer.Prefix(whereExpression.Predicate, fieldExpression.FieldName);
+                var predicate = FieldNamePrefixer.Prefix(whereExpression.Predicate, fieldName);
                 filter = Translate(predicate);
             }
             else
             {
                 var predicate = DocumentToFieldConverter.Convert(whereExpression.Predicate);
-                filter = __builder.ElemMatch(fieldExpression.FieldName, Translate(predicate));
-                if (!(fieldExpression.Serializer is IBsonDocumentSerializer))
-                {
-                    filter = new ScalarElementMatchFilterDefinition<BsonDocument>(filter);
-                }
+
+                filter = __builder.ElemMatch(fieldName, Translate(predicate));
+
+                filter = ConvertElemMatchFilterToScalarElementMatchIfNeeded(filter, fieldExpression, whereExpression.Predicate);
             }
 
             return filter;
@@ -979,22 +1028,27 @@ namespace MongoDB.Driver.Linq.Translators
         {
             var value = ((ContainsResultOperator)node.ResultOperator).Value;
             var constantExpression = node.Source as ConstantExpression;
-            IFieldExpression field;
             if (constantExpression != null)
             {
-                field = value as IFieldExpression;
-                if (field != null)
+                if (TryGetFieldNameAndSerializationExpression(value, out var fieldName, out var serializationExpression))
                 {
-                    var ienumerableInterfaceType = constantExpression.Type.FindIEnumerable();
-                    var itemType = ienumerableInterfaceType.GetTypeInfo().GetGenericArguments()[0];
-                    var serializedValues = field.SerializeValues(itemType, (IEnumerable)constantExpression.Value);
-                    return __builder.In(field.FieldName, serializedValues);
+                    var iEnumerableInterfaceType = constantExpression.Type.FindIEnumerable();
+                    var itemType = iEnumerableInterfaceType.GetTypeInfo().GetGenericArguments()[0];
+                    var serializedValues = serializationExpression.SerializeValues(itemType, (IEnumerable)constantExpression.Value);
+                    if (string.IsNullOrEmpty(fieldName))
+                    {
+                        return new BsonDocument("$in", serializedValues);
+                    }
+                    else
+                    {
+                        return __builder.In(fieldName, serializedValues);
+                    }
                 }
             }
             else
             {
                 constantExpression = value as ConstantExpression;
-                field = node.Source as IFieldExpression;
+                var field = node.Source as IFieldExpression;
                 if (constantExpression != null && field != null)
                 {
                     var arraySerializer = field.Serializer as IBsonArraySerializer;
@@ -1008,6 +1062,29 @@ namespace MongoDB.Driver.Linq.Translators
             }
 
             return null;
+
+            bool TryGetFieldNameAndSerializationExpression(Expression containsResultOperatorValue, out string fieldName, out ISerializationExpression serializationExpression)
+            {
+                fieldName = null;
+                serializationExpression = containsResultOperatorValue as ISerializationExpression;
+                switch (serializationExpression)
+                {
+                    case IFieldExpression fieldExpression:
+                        fieldName = fieldExpression.FieldName;
+                        break;
+                    case DocumentExpression _:
+                        fieldName = string.Empty;
+                        break;
+                }
+
+                var success = serializationExpression != null && fieldName != null;
+                if (!success)
+                {
+                    serializationExpression = null;
+                }
+
+                return success;
+            }
         }
 
         private FilterDefinition<BsonDocument> TranslateStringIndexOfQuery(Expression variableExpression, ExpressionType operatorType, ConstantExpression constantExpression)
@@ -1449,11 +1526,11 @@ namespace MongoDB.Driver.Linq.Translators
             }
 
             pattern = "^" + pattern + "$";
-            if (pattern.StartsWith("^.*"))
+            if (pattern.StartsWith("^.*", StringComparison.Ordinal))
             {
                 pattern = pattern.Substring(3);
             }
-            if (pattern.EndsWith(".*$"))
+            if (pattern.EndsWith(".*$", StringComparison.Ordinal))
             {
                 pattern = pattern.Substring(0, pattern.Length - 3);
             }
@@ -1637,7 +1714,18 @@ namespace MongoDB.Driver.Linq.Translators
             return fieldExpression;
         }
 
+        private void ValidatePipelineExpressionThrowIfNotValid(WhereExpression whereExpression)
+        {
+            var outOfCurrentScopePrefixCollection = OutOfCurrentScopePrefixCollector.Collect(whereExpression)?.ToList();
+            var unsupportedField = outOfCurrentScopePrefixCollection?.FirstOrDefault();
+            if (unsupportedField != null)
+            {
+                throw new NotSupportedException($"The LINQ expression: {whereExpression} has the member \"{unsupportedField}\" which can not be used to build a correct MongoDB query.");
+            }
+        }
+
         // nested types
+        // This converter replaces all DocumentExpression nodes on FieldExpression at the current nesting level
         private class DocumentToFieldConverter : ExtensionExpressionVisitor
         {
             public static Expression Convert(Expression node)

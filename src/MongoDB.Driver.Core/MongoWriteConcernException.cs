@@ -13,26 +13,38 @@
 * limitations under the License.
 */
 
+#if NET452
 using System;
-#if NET45
 using System.Runtime.Serialization;
 #endif
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization;
 using MongoDB.Driver.Core.Connections;
 using MongoDB.Driver.Core.Misc;
-using MongoDB.Driver.Core.Operations;
 
 namespace MongoDB.Driver
 {
     /// <summary>
     /// Represents a MongoDB write concern exception.
     /// </summary>
-#if NET45
+#if NET452
     [Serializable]
 #endif
     public class MongoWriteConcernException : MongoCommandException
     {
+        #region static
+        private static void AddErrorLabelsFromWriteConcernResult(MongoWriteConcernException exception, WriteConcernResult writeConcernResult)
+        {
+            // note: make a best effort to extract the error labels from the writeConcernResult, but never throw an exception
+            if (writeConcernResult != null && writeConcernResult.Response != null)
+            {
+                if (writeConcernResult.Response.TryGetValue("writeConcernError", out var writeConcernError) &&
+                    writeConcernError.IsBsonDocument)
+                {
+                    AddErrorLabelsFromCommandResult(exception, writeConcernError.AsBsonDocument);
+                }
+            }
+        }
+        #endregion
+
         // fields
         private readonly WriteConcernResult _writeConcernResult;
 
@@ -47,9 +59,11 @@ namespace MongoDB.Driver
             : base(connectionId, message, null, writeConcernResult.Response)
         {
             _writeConcernResult = Ensure.IsNotNull(writeConcernResult, nameof(writeConcernResult));
+
+            AddErrorLabelsFromWriteConcernResult(this, _writeConcernResult);
         }
 
-#if NET45
+#if NET452
         /// <summary>
         /// Initializes a new instance of the <see cref="MongoWriteConcernException"/> class.
         /// </summary>
@@ -59,6 +73,8 @@ namespace MongoDB.Driver
             : base(info, context)
         {
             _writeConcernResult = (WriteConcernResult)info.GetValue("_writeConcernResult", typeof(WriteConcernResult));
+
+            AddErrorLabelsFromWriteConcernResult(this, _writeConcernResult);
         }
 #endif
 
@@ -75,7 +91,7 @@ namespace MongoDB.Driver
         }
 
         // methods
-#if NET45
+#if NET452
         /// <inheritdoc/>
         public override void GetObjectData(SerializationInfo info, StreamingContext context)
         {
@@ -83,5 +99,16 @@ namespace MongoDB.Driver
             info.AddValue("_writeConcernResult", _writeConcernResult);
         }
 #endif
+
+        /// <summary>
+        /// Determines whether the exception is due to a write concern error only.
+        /// </summary>
+        /// <returns>
+        ///   <c>true</c> if the exception is due to a write concern error only; otherwise, <c>false</c>.
+        /// </returns>
+        public bool IsWriteConcernErrorOnly()
+        {
+            return Result != null && Result.Contains("ok") && Result["ok"].ToBoolean() && Result.Contains("writeConcernError");
+        }
     }
 }

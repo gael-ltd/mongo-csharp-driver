@@ -50,15 +50,19 @@ namespace MongoDB.Driver.Tests.Specifications.crud
             return expectedResult.ToInt64();
         }
 
-        protected override long ExecuteAndGetResult(IMongoCollection<BsonDocument> collection, bool async)
+        protected override long ExecuteAndGetResult(IMongoDatabase database, IMongoCollection<BsonDocument> collection, bool async)
         {
             if (async)
             {
+#pragma warning disable 618
                 return collection.CountAsync(_filter, _options).GetAwaiter().GetResult();
+#pragma warning restore
             }
             else
             {
+#pragma warning disable 618
                 return collection.Count(_filter, _options);
+#pragma warning restore
             }
         }
 

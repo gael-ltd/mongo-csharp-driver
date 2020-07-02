@@ -41,6 +41,7 @@ namespace MongoDB.Driver.Builders
         /// </summary>
         /// <param name="value">Whether to automatically create an index on the _id element.</param>
         /// <returns>The builder (so method calls can be chained).</returns>
+        [Obsolete("AutoIndexId has been deprecated since server version 3.2.")]
         public static CollectionOptionsBuilder SetAutoIndexId(bool value)
         {
             return new CollectionOptionsBuilder().SetAutoIndexId(value);
@@ -139,7 +140,7 @@ namespace MongoDB.Driver.Builders
     /// <summary>
     /// A builder for the options used when creating a collection.
     /// </summary>
-#if NET45
+#if NET452
     [Serializable]
 #endif
     [BsonSerializer(typeof(CollectionOptionsBuilder.Serializer))]
@@ -163,6 +164,7 @@ namespace MongoDB.Driver.Builders
         /// </summary>
         /// <param name="value">Whether to automatically create an index on the _id element.</param>
         /// <returns>The builder (so method calls can be chained).</returns>
+        [Obsolete("AutoIndexId has been deprecated since server version 3.2.")]
         public CollectionOptionsBuilder SetAutoIndexId(bool value)
         {
             _document["autoIndexId"] = value;

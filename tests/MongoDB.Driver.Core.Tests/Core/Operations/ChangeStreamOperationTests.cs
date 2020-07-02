@@ -27,10 +27,8 @@ using Moq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
+using MongoDB.Bson.TestHelpers;
 using Xunit;
 
 namespace MongoDB.Driver.Core.Operations
@@ -38,7 +36,93 @@ namespace MongoDB.Driver.Core.Operations
     public class ChangeStreamOperationTests : OperationTestBase
     {
         [Fact]
-        public void constructor_should_initialize_instance()
+        public void constructor_with_database_should_initialize_instance()
+        {
+            var databaseNamespace = new DatabaseNamespace("foo");
+            var pipeline = new List<BsonDocument> { BsonDocument.Parse("{ $match : { operationType : \"insert\" } }") };
+            var resultSerializer = BsonDocumentSerializer.Instance;
+            var messageEncoderSettings = new MessageEncoderSettings();
+
+            var subject = new ChangeStreamOperation<BsonDocument>(databaseNamespace, pipeline, resultSerializer, messageEncoderSettings);
+
+            subject.BatchSize.Should().NotHaveValue();
+            subject.Collation.Should().BeNull();
+            subject.CollectionNamespace.Should().BeNull();
+            subject.DatabaseNamespace.Should().Be(databaseNamespace);
+            subject.FullDocument.Should().Be(ChangeStreamFullDocumentOption.Default);
+            subject.MaxAwaitTime.Should().NotHaveValue();
+            subject.MessageEncoderSettings.Should().BeSameAs(messageEncoderSettings);
+            subject.Pipeline.Should().Equal(pipeline);
+            subject.ReadConcern.Should().Be(ReadConcern.Default);
+            subject.ResultSerializer.Should().BeSameAs(resultSerializer);
+            subject.ResumeAfter.Should().BeNull();
+            subject.RetryRequested.Should().BeFalse();
+            subject.StartAfter.Should().BeNull();
+            subject.StartAtOperationTime.Should().BeNull();
+        }
+
+        [Fact]
+        public void constructor_with_database_should_throw_when_databaseNamespace_is_null()
+        {
+            DatabaseNamespace databaseNamespace = null;
+            var pipeline = new List<BsonDocument> { BsonDocument.Parse("{ $match : { operationType : \"insert\" } }") };
+            var resultSerializer = BsonDocumentSerializer.Instance;
+            var messageEncoderSettings = new MessageEncoderSettings();
+
+
+            var exception = Record.Exception(() => new ChangeStreamOperation<BsonDocument>(databaseNamespace, pipeline, resultSerializer, messageEncoderSettings));
+
+            var argumentNullException = exception.Should().BeOfType<ArgumentNullException>().Subject;
+            argumentNullException.ParamName.Should().Be("databaseNamespace");
+        }
+
+        [Fact]
+        public void constructor_with_database_should_throw_when_pipeline_is_null()
+        {
+            var databaseNamespace = new DatabaseNamespace("foo");
+            var pipeline = new List<BsonDocument> { BsonDocument.Parse("{ $match : { operationType : \"insert\" } }") };
+            IBsonSerializer<BsonDocument> resultSerializer = null;
+            var messageEncoderSettings = new MessageEncoderSettings();
+
+
+            var exception = Record.Exception(() => new ChangeStreamOperation<BsonDocument>(databaseNamespace, pipeline, resultSerializer, messageEncoderSettings));
+
+            var argumentNullException = exception.Should().BeOfType<ArgumentNullException>().Subject;
+            argumentNullException.ParamName.Should().Be("resultSerializer");
+        }
+
+        [Fact]
+        public void constructor_with_database_should_throw_when_messageEncoderSettings_is_null()
+        {
+            var databaseNamespace = new DatabaseNamespace("foo");
+            var pipeline = new List<BsonDocument> { BsonDocument.Parse("{ $match : { operationType : \"insert\" } }") };
+            var resultSerializer = BsonDocumentSerializer.Instance;
+            MessageEncoderSettings messageEncoderSettings = null;
+
+
+            var exception = Record.Exception(() => new ChangeStreamOperation<BsonDocument>(databaseNamespace, pipeline, resultSerializer, messageEncoderSettings));
+
+            var argumentNullException = exception.Should().BeOfType<ArgumentNullException>().Subject;
+            argumentNullException.ParamName.Should().Be("messageEncoderSettings");
+        }
+
+        [Fact]
+        public void constructor_with_database_should_throw_when_resultSerializer_is_null()
+        {
+            var databaseNamespace = new DatabaseNamespace("foo");
+            List<BsonDocument> pipeline = null;
+            var resultSerializer = BsonDocumentSerializer.Instance;
+            var messageEncoderSettings = new MessageEncoderSettings();
+
+
+            var exception = Record.Exception(() => new ChangeStreamOperation<BsonDocument>(databaseNamespace, pipeline, resultSerializer, messageEncoderSettings));
+
+            var argumentNullException = exception.Should().BeOfType<ArgumentNullException>().Subject;
+            argumentNullException.ParamName.Should().Be("pipeline");
+        }
+
+        [Fact]
+        public void constructor_with_collection_should_initialize_instance()
         {
             var collectionNamespace = new CollectionNamespace(new DatabaseNamespace("foo"), "bar");
             var pipeline = new List<BsonDocument> { BsonDocument.Parse("{ $match : { operationType : \"insert\" } }") };
@@ -50,6 +134,7 @@ namespace MongoDB.Driver.Core.Operations
             subject.BatchSize.Should().NotHaveValue();
             subject.Collation.Should().BeNull();
             subject.CollectionNamespace.Should().BeSameAs(collectionNamespace);
+            subject.DatabaseNamespace.Should().BeNull();
             subject.FullDocument.Should().Be(ChangeStreamFullDocumentOption.Default);
             subject.MaxAwaitTime.Should().NotHaveValue();
             subject.MessageEncoderSettings.Should().BeSameAs(messageEncoderSettings);
@@ -57,10 +142,13 @@ namespace MongoDB.Driver.Core.Operations
             subject.ReadConcern.Should().Be(ReadConcern.Default);
             subject.ResultSerializer.Should().BeSameAs(resultSerializer);
             subject.ResumeAfter.Should().BeNull();
+            subject.RetryRequested.Should().BeFalse();
+            subject.StartAfter.Should().BeNull();
+            subject.StartAtOperationTime.Should().BeNull();
         }
 
         [Fact]
-        public void constructor_should_throw_when_collectionNamespace_is_null()
+        public void constructor_with_collection_should_throw_when_collectionNamespace_is_null()
         {
             CollectionNamespace collectionNamespace = null;
             var pipeline = new List<BsonDocument> { BsonDocument.Parse("{ $match : { operationType : \"insert\" } }") };
@@ -75,7 +163,7 @@ namespace MongoDB.Driver.Core.Operations
         }
 
         [Fact]
-        public void constructor_should_throw_when_pipeline_is_null()
+        public void constructor_with_collection_should_throw_when_pipeline_is_null()
         {
             var collectionNamespace = new CollectionNamespace(new DatabaseNamespace("foo"), "bar");
             var pipeline = new List<BsonDocument> { BsonDocument.Parse("{ $match : { operationType : \"insert\" } }") };
@@ -90,7 +178,7 @@ namespace MongoDB.Driver.Core.Operations
         }
 
         [Fact]
-        public void constructor_should_throw_when_messageEncoderSettings_is_null()
+        public void constructor_with_collection_should_throw_when_messageEncoderSettings_is_null()
         {
             var collectionNamespace = new CollectionNamespace(new DatabaseNamespace("foo"), "bar");
             var pipeline = new List<BsonDocument> { BsonDocument.Parse("{ $match : { operationType : \"insert\" } }") };
@@ -105,7 +193,7 @@ namespace MongoDB.Driver.Core.Operations
         }
 
         [Fact]
-        public void constructor_should_throw_when_resultSerializer_is_null()
+        public void constructor_with_collection_should_throw_when_resultSerializer_is_null()
         {
             var collectionNamespace = new CollectionNamespace(new DatabaseNamespace("foo"), "bar");
             List<BsonDocument> pipeline = null;
@@ -259,6 +347,46 @@ namespace MongoDB.Driver.Core.Operations
             result.Should().Be(value);
         }
 
+        [Theory]
+        [ParameterAttributeData]
+        public void RetryRequested_get_and_set_should_work(
+            [Values(false, true)] bool value)
+        {
+            var subject = CreateSubject();
+
+            subject.RetryRequested = value;
+            var result = subject.RetryRequested;
+
+            result.Should().Be(value);
+        }
+
+        [SkippableTheory]
+        [InlineData(null)]
+        [InlineData("{ '_data' : 'testValue' }")]
+        public void StartAfter_get_and_set_should_work(string startAfter)
+        {
+            var subject = CreateSubject();
+
+            subject.StartAfter = startAfter != null ? BsonDocument.Parse(startAfter) : null;
+            var result = subject.StartAfter;
+
+            result.Should().Be(startAfter);
+        }
+
+        [Theory]
+        [InlineData(null, null)]
+        [InlineData(1, 2)]
+        public void StartAtOperationTime_get_and_set_should_work(int? t, int? i)
+        {
+            var subject = CreateSubject();
+            var value = t.HasValue ? new BsonTimestamp(t.Value, i.Value) : null;
+
+            subject.StartAtOperationTime = value;
+            var result = subject.StartAtOperationTime;
+
+            result.Should().Be(value);
+        }
+
         [SkippableTheory]
         [ParameterAttributeData]
         public void Execute_should_return_expected_results_for_drop_collection(
@@ -284,6 +412,7 @@ namespace MongoDB.Driver.Core.Operations
                 change.CollectionNamespace.Should().BeNull();
                 change.DocumentKey.Should().BeNull();
                 change.FullDocument.Should().BeNull();
+                change.RenameTo.Should().BeNull();
                 change.ResumeToken.Should().NotBeNull();
                 change.UpdateDescription.Should().BeNull();
             }
@@ -314,6 +443,7 @@ namespace MongoDB.Driver.Core.Operations
                 change.CollectionNamespace.Should().Be(_collectionNamespace);
                 change.DocumentKey.Should().Be("{ _id : 1 }");
                 change.FullDocument.Should().BeNull();
+                change.RenameTo.Should().BeNull();
                 change.ResumeToken.Should().NotBeNull();
                 change.UpdateDescription.Should().BeNull();
             }
@@ -345,6 +475,7 @@ namespace MongoDB.Driver.Core.Operations
                 change.CollectionNamespace.Should().Be(_collectionNamespace);
                 change.DocumentKey.Should().Be("{ _id : 2 }");
                 change.FullDocument.Should().Be("{ _id : 2, x : 2 }");
+                change.RenameTo.Should().BeNull();
                 change.ResumeToken.Should().NotBeNull();
                 change.UpdateDescription.Should().BeNull();
             }
@@ -422,6 +553,7 @@ namespace MongoDB.Driver.Core.Operations
                 change.CollectionNamespace.Should().Be(_collectionNamespace);
                 change.DocumentKey.Should().Be("{ _id : 1 }");
                 change.FullDocument.Should().Be(fullDocument == ChangeStreamFullDocumentOption.Default ? null : "{ _id : 1, x : 2 }");
+                change.RenameTo.Should().BeNull();
                 change.ResumeToken.Should().NotBeNull();
                 change.UpdateDescription.RemovedFields.Should().BeEmpty();
                 change.UpdateDescription.UpdatedFields.Should().Be("{ x : 2 }");
@@ -451,14 +583,16 @@ namespace MongoDB.Driver.Core.Operations
         }
 
         [Theory]
-        [InlineData(null, null, ChangeStreamFullDocumentOption.Default, null, ReadConcernLevel.Local, null, "{ $changeStream : { fullDocument : \"default\" } }")]
-        [InlineData(1, null, ChangeStreamFullDocumentOption.Default, null, ReadConcernLevel.Local, null, "{ $changeStream : { fullDocument : \"default\" } }")]
-        [InlineData(null, "locale", ChangeStreamFullDocumentOption.Default, null, ReadConcernLevel.Local, null, "{ $changeStream : { fullDocument : \"default\" } }")]
-        [InlineData(null, null, ChangeStreamFullDocumentOption.UpdateLookup, null, ReadConcernLevel.Local, null, "{ $changeStream : { fullDocument : \"updateLookup\" } }")]
-        [InlineData(null, null, ChangeStreamFullDocumentOption.Default, 1, ReadConcernLevel.Local, null, "{ $changeStream : { fullDocument : \"default\" } }")]
-        [InlineData(null, null, ChangeStreamFullDocumentOption.Default, null, ReadConcernLevel.Majority, null, "{ $changeStream : { fullDocument : \"default\" } }")]
-        [InlineData(null, null, ChangeStreamFullDocumentOption.Default, null, ReadConcernLevel.Local, "{ a : 1 }", "{ $changeStream: { fullDocument: \"default\", resumeAfter : { a : 1 } } }")]
-        [InlineData(1, "locale", ChangeStreamFullDocumentOption.UpdateLookup, 2, ReadConcernLevel.Majority, "{ a : 1 }", "{ $changeStream: { fullDocument: \"updateLookup\", resumeAfter : { a : 1 } } }")]
+        [InlineData(null, null, ChangeStreamFullDocumentOption.Default, null, ReadConcernLevel.Local, null, null, "{ $changeStream : { } }")]
+        [InlineData(1, null, ChangeStreamFullDocumentOption.Default, null, ReadConcernLevel.Local, null, null, "{ $changeStream : { } }")]
+        [InlineData(null, "locale", ChangeStreamFullDocumentOption.Default, null, ReadConcernLevel.Local, null, null, "{ $changeStream : { } }")]
+        [InlineData(null, null, ChangeStreamFullDocumentOption.UpdateLookup, null, ReadConcernLevel.Local, null, null, "{ $changeStream : { fullDocument : \"updateLookup\" } }")]
+        [InlineData(null, null, ChangeStreamFullDocumentOption.Default, 1, ReadConcernLevel.Local, null, null, "{ $changeStream : { } }")]
+        [InlineData(null, null, ChangeStreamFullDocumentOption.Default, null, ReadConcernLevel.Majority, null, null, "{ $changeStream : { } }")]
+        [InlineData(null, null, ChangeStreamFullDocumentOption.Default, null, ReadConcernLevel.Local, "{ a : 1 }", null, "{ $changeStream: { resumeAfter : { a : 1 } } }")]
+        [InlineData(1, "locale", ChangeStreamFullDocumentOption.UpdateLookup, 2, ReadConcernLevel.Majority, "{ a : 1 }", null, "{ $changeStream: { fullDocument: \"updateLookup\", resumeAfter : { a : 1 } } }")]
+        [InlineData(null, null, ChangeStreamFullDocumentOption.Default, null, ReadConcernLevel.Local, "{ a : 1 }", "{ b : 2 }", "{ $changeStream: { startAfter : { b : 2 }, resumeAfter : { a : 1 } } }")]
+        [InlineData(1, "locale", ChangeStreamFullDocumentOption.UpdateLookup, 2, ReadConcernLevel.Majority, "{ a : 1 }", "{ b : 2 }", "{ $changeStream: { fullDocument: \"updateLookup\", startAfter : { b : 2 }, resumeAfter : { a : 1 } } }")]
         public void CreateAggregateOperation_should_return_expected_result(
             int? batchSize,
             string locale,
@@ -466,12 +600,14 @@ namespace MongoDB.Driver.Core.Operations
             int? maxAwaitTimeMS,
             ReadConcernLevel level,
             string resumeAferJson,
+            string startAfterJson,
             string expectedChangeStreamStageJson)
         {
             var collation = locale == null ? null : new Collation(locale);
             var maxAwaitTime = maxAwaitTimeMS == null ? (TimeSpan?)null : TimeSpan.FromMilliseconds(maxAwaitTimeMS.Value);
             var readConcern = new ReadConcern(level);
             var resumeAfter = resumeAferJson == null ? null : BsonDocument.Parse(resumeAferJson);
+            var startAfter = startAfterJson == null ? null : BsonDocument.Parse(startAfterJson);
             var expectedChangeStreamStage = BsonDocument.Parse(expectedChangeStreamStageJson);
             var collectionNamespace = new CollectionNamespace(new DatabaseNamespace("foo"), "bar");
             var pipeline = new List<BsonDocument> { BsonDocument.Parse("{ $match : { operationType : \"insert\" } }") };
@@ -484,7 +620,8 @@ namespace MongoDB.Driver.Core.Operations
                 FullDocument = fullDocument,
                 MaxAwaitTime = maxAwaitTime,
                 ReadConcern = readConcern,
-                ResumeAfter = resumeAfter
+                ResumeAfter = resumeAfter,
+                StartAfter = startAfter
             };
             var expectedPipeline = new BsonDocument[]
             {
@@ -492,7 +629,7 @@ namespace MongoDB.Driver.Core.Operations
                 pipeline[0]
             };
 
-            var result = subject.CreateAggregateOperation(resumeAfter);
+            var result = subject.CreateAggregateOperation();
 
             result.AllowDiskUse.Should().NotHaveValue();
             result.BatchSize.Should().Be(batchSize);
@@ -504,6 +641,7 @@ namespace MongoDB.Driver.Core.Operations
             result.Pipeline.Should().Equal(expectedPipeline);
             result.ReadConcern.Should().Be(readConcern);
             result.ResultSerializer.Should().Be(RawBsonDocumentSerializer.Instance);
+            result.RetryRequested.Should().BeFalse();
         }
 
         // private methods
@@ -523,12 +661,14 @@ namespace MongoDB.Driver.Core.Operations
 
     internal static class ChangeStreamOperationReflector
     {
-        public static AggregateOperation<RawBsonDocument> CreateAggregateOperation(
-            this ChangeStreamOperation<BsonDocument> subject,
-            BsonDocument resumeAfter)
+        public static AggregateOperation<RawBsonDocument> CreateAggregateOperation(this ChangeStreamOperation<BsonDocument> subject)
         {
-            var methodInfo = typeof(ChangeStreamOperation<BsonDocument>).GetMethod("CreateAggregateOperation", BindingFlags.NonPublic | BindingFlags.Instance);
-            return (AggregateOperation<RawBsonDocument>)methodInfo.Invoke(subject, new object[] { resumeAfter });
+            return (AggregateOperation<RawBsonDocument>)Reflector.Invoke(subject, nameof(CreateAggregateOperation));
+        }
+
+        public static BsonDocument CreateChangeStreamStage(this ChangeStreamOperation<ChangeStreamDocument<BsonDocument>> subject)
+        {
+            return (BsonDocument)Reflector.Invoke(subject, nameof(CreateChangeStreamStage));
         }
     }
 }

@@ -20,7 +20,7 @@ namespace MongoDB.Bson.IO
     /// <summary>
     /// Represents settings for a JsonReader.
     /// </summary>
-#if NET45
+#if NET452
     [Serializable]
 #endif
     public class JsonReaderSettings : BsonReaderSettings
@@ -71,10 +71,13 @@ namespace MongoDB.Bson.IO
         /// <returns>A clone of the settings.</returns>
         protected override BsonReaderSettings CloneImplementation()
         {
-            var clone = new JsonReaderSettings
+            var clone = new JsonReaderSettings();
+#pragma warning disable 618
+            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
             {
-                GuidRepresentation = GuidRepresentation
-            };
+                clone.GuidRepresentation = GuidRepresentation;
+            }
+#pragma warning restore 618
             return clone;
         }
     }

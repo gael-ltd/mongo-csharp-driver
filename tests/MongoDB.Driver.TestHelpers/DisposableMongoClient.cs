@@ -14,11 +14,11 @@
 */
 
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver.Core.Clusters;
+using MongoDB.Driver.Core.Operations;
 
 namespace MongoDB.Driver.TestHelpers
 {
@@ -69,10 +69,25 @@ namespace MongoDB.Driver.TestHelpers
         }
 
         public IAsyncCursor<string> ListDatabaseNames(
+            ListDatabaseNamesOptions options,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return wrapped.ListDatabaseNames(options, cancellationToken);
+        }
+
+        public IAsyncCursor<string> ListDatabaseNames(
             IClientSessionHandle session,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             return wrapped.ListDatabaseNames(session, cancellationToken);
+        }
+
+        public IAsyncCursor<string> ListDatabaseNames(
+            IClientSessionHandle session,
+            ListDatabaseNamesOptions options,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return wrapped.ListDatabaseNames(session, options, cancellationToken);
         }
 
         public Task<IAsyncCursor<string>> ListDatabaseNamesAsync(
@@ -82,10 +97,25 @@ namespace MongoDB.Driver.TestHelpers
         }
 
         public Task<IAsyncCursor<string>> ListDatabaseNamesAsync(
+            ListDatabaseNamesOptions options,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return wrapped.ListDatabaseNamesAsync(options, cancellationToken);
+        }
+
+        public Task<IAsyncCursor<string>> ListDatabaseNamesAsync(
             IClientSessionHandle session,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             return wrapped.ListDatabaseNamesAsync(session, cancellationToken);
+        }
+
+        public Task<IAsyncCursor<string>> ListDatabaseNamesAsync(
+            IClientSessionHandle session,
+            ListDatabaseNamesOptions options,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return wrapped.ListDatabaseNamesAsync(session, options, cancellationToken);
         }
 
         public IAsyncCursor<BsonDocument> ListDatabases(
@@ -115,7 +145,6 @@ namespace MongoDB.Driver.TestHelpers
         {
             return wrapped.ListDatabases(session, options, cancellationToken);
         }
-        
 
         public Task<IAsyncCursor<BsonDocument>> ListDatabasesAsync(CancellationToken cancellationToken = default(CancellationToken))
         {
@@ -150,6 +179,44 @@ namespace MongoDB.Driver.TestHelpers
         public Task<IClientSessionHandle> StartSessionAsync(ClientSessionOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             return wrapped.StartSessionAsync(options, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public virtual IChangeStreamCursor<TResult> Watch<TResult>(
+            PipelineDefinition<ChangeStreamDocument<BsonDocument>, TResult> pipeline,
+            ChangeStreamOptions options = null,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return wrapped.Watch(pipeline, options, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public virtual IChangeStreamCursor<TResult> Watch<TResult>(
+            IClientSessionHandle session,
+            PipelineDefinition<ChangeStreamDocument<BsonDocument>, TResult> pipeline,
+            ChangeStreamOptions options = null,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return wrapped.Watch(session, pipeline, options, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public virtual Task<IChangeStreamCursor<TResult>> WatchAsync<TResult>(
+            PipelineDefinition<ChangeStreamDocument<BsonDocument>, TResult> pipeline,
+            ChangeStreamOptions options = null,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return wrapped.WatchAsync(pipeline, options, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public virtual Task<IChangeStreamCursor<TResult>> WatchAsync<TResult>(
+            IClientSessionHandle session,
+            PipelineDefinition<ChangeStreamDocument<BsonDocument>, TResult> pipeline,
+            ChangeStreamOptions options = null,
+            CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return wrapped.WatchAsync(session, pipeline, options, cancellationToken);
         }
 
         public IMongoClient WithReadConcern(ReadConcern readConcern)

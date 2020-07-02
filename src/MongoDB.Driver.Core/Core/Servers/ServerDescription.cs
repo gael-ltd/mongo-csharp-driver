@@ -34,6 +34,7 @@ namespace MongoDB.Driver.Core.Servers
         private readonly EndPoint _endPoint;
         private readonly Exception _heartbeatException;
         private readonly TimeSpan _heartbeatInterval;
+        private readonly DateTime? _lastHeartbeatTimestamp;
         private readonly DateTime _lastUpdateTimestamp;
         private readonly DateTime? _lastWriteTimestamp;
         private readonly TimeSpan? _logicalSessionTimeout;
@@ -41,10 +42,12 @@ namespace MongoDB.Driver.Core.Servers
         private readonly int _maxDocumentSize;
         private readonly int _maxMessageSize;
         private readonly int _maxWireDocumentSize;
+        private readonly string _reasonChanged;
         private readonly ReplicaSetConfig _replicaSetConfig;
         private readonly ServerId _serverId;
         private readonly ServerState _state;
         private readonly TagSet _tags;
+        private readonly TopologyVersion _topologyVersion;
         private readonly ServerType _type;
         private readonly SemanticVersion _version;
         private readonly Range<int> _wireVersionRange;
@@ -55,11 +58,13 @@ namespace MongoDB.Driver.Core.Servers
         /// </summary>
         /// <param name="serverId">The server identifier.</param>
         /// <param name="endPoint">The end point.</param>
+        /// <param name="reasonChanged">The reason the server description was last changed.</param>
         /// <param name="averageRoundTripTime">The average round trip time.</param>
         /// <param name="canonicalEndPoint">The canonical end point.</param>
         /// <param name="electionId">The election identifier.</param>
         /// <param name="heartbeatException">The heartbeat exception.</param>
         /// <param name="heartbeatInterval">The heartbeat interval.</param>
+        /// <param name="lastHeartbeatTimestamp">The last heartbeat timestamp.</param>
         /// <param name="lastUpdateTimestamp">The last update timestamp.</param>
         /// <param name="lastWriteTimestamp">The last write timestamp.</param>
         /// <param name="logicalSessionTimeout">The logical session timeout.</param>
@@ -70,6 +75,7 @@ namespace MongoDB.Driver.Core.Servers
         /// <param name="replicaSetConfig">The replica set configuration.</param>
         /// <param name="state">The server state.</param>
         /// <param name="tags">The replica set tags.</param>
+        /// <param name="topologyVersion">The topology version.</param>
         /// <param name="type">The server type.</param>
         /// <param name="version">The server version.</param>
         /// <param name="wireVersionRange">The wire version range.</param>
@@ -77,11 +83,13 @@ namespace MongoDB.Driver.Core.Servers
         public ServerDescription(
             ServerId serverId,
             EndPoint endPoint,
+            Optional<string> reasonChanged = default(Optional<string>),
             Optional<TimeSpan> averageRoundTripTime = default(Optional<TimeSpan>),
             Optional<EndPoint> canonicalEndPoint = default(Optional<EndPoint>),
             Optional<ElectionId> electionId = default(Optional<ElectionId>),
             Optional<Exception> heartbeatException = default(Optional<Exception>),
             Optional<TimeSpan> heartbeatInterval = default(Optional<TimeSpan>),
+            Optional<DateTime?> lastHeartbeatTimestamp = default(Optional<DateTime?>),
             Optional<DateTime> lastUpdateTimestamp = default(Optional<DateTime>),
             Optional<DateTime?> lastWriteTimestamp = default(Optional<DateTime?>),
             Optional<TimeSpan?> logicalSessionTimeout = default(Optional<TimeSpan?>),
@@ -92,6 +100,7 @@ namespace MongoDB.Driver.Core.Servers
             Optional<ReplicaSetConfig> replicaSetConfig = default(Optional<ReplicaSetConfig>),
             Optional<ServerState> state = default(Optional<ServerState>),
             Optional<TagSet> tags = default(Optional<TagSet>),
+            Optional<TopologyVersion> topologyVersion = default(Optional<TopologyVersion>),
             Optional<ServerType> type = default(Optional<ServerType>),
             Optional<SemanticVersion> version = default(Optional<SemanticVersion>),
             Optional<Range<int>> wireVersionRange = default(Optional<Range<int>>))
@@ -109,6 +118,7 @@ namespace MongoDB.Driver.Core.Servers
             _endPoint = endPoint;
             _heartbeatException = heartbeatException.WithDefault(null);
             _heartbeatInterval = heartbeatInterval.WithDefault(TimeSpan.Zero);
+            _lastHeartbeatTimestamp = lastHeartbeatTimestamp.WithDefault(null);
             _lastUpdateTimestamp = lastUpdateTimestamp.WithDefault(DateTime.UtcNow);
             _lastWriteTimestamp = lastWriteTimestamp.WithDefault(null);
             _logicalSessionTimeout = logicalSessionTimeout.WithDefault(null);
@@ -116,10 +126,12 @@ namespace MongoDB.Driver.Core.Servers
             _maxDocumentSize = maxDocumentSize.WithDefault(4 * 1024 * 1024);
             _maxMessageSize = maxMessageSize.WithDefault(Math.Max(_maxDocumentSize + 1024, 16000000));
             _maxWireDocumentSize = maxWireDocumentSize.WithDefault(_maxDocumentSize + 16 * 1024);
+            _reasonChanged = reasonChanged.WithDefault("NotSpecified");
             _replicaSetConfig = replicaSetConfig.WithDefault(null);
             _serverId = serverId;
             _state = state.WithDefault(ServerState.Disconnected);
             _tags = tags.WithDefault(null);
+            _topologyVersion = topologyVersion.WithDefault(null);
             _type = type.WithDefault(ServerType.Unknown);
             _version = version.WithDefault(null);
             _wireVersionRange = wireVersionRange.WithDefault(null);
@@ -138,7 +150,7 @@ namespace MongoDB.Driver.Core.Servers
         }
 
         /// <summary>
-        /// Gets the canonical end point. This is the endpoint that the cluster knows this 
+        /// Gets the canonical end point. This is the endpoint that the cluster knows this
         /// server by. Currently, it only applies to a replica set config and will match
         /// what is in the replica set configuration.
         /// </summary>
@@ -194,13 +206,10 @@ namespace MongoDB.Driver.Core.Servers
         /// <value>
         /// <c>true</c> if this server is compatible with the driver; otherwise, <c>false</c>.
         /// </value>
-        public bool IsCompatibleWithDriver
-        {
-            get
-            {
-                return _wireVersionRange == null || _wireVersionRange.Overlaps(Cluster.SupportedWireVersionRange);
-            }
-        }
+        public bool IsCompatibleWithDriver =>
+            _type == ServerType.Unknown ||
+            _wireVersionRange == null ||
+            _wireVersionRange.Overlaps(Cluster.SupportedWireVersionRange);
 
         /// <summary>
         /// Gets a value indicating whether this instance is a data bearing server.
@@ -224,6 +233,17 @@ namespace MongoDB.Driver.Core.Servers
                         return false;
                 }
             }
+        }
+
+        /// <summary>
+        /// Gets the last heartbeat timestamp.
+        /// </summary>
+        /// <value>
+        /// The last heartbeat timestamp.
+        /// </value>
+        public DateTime? LastHeartbeatTimestamp
+        {
+            get { return _lastHeartbeatTimestamp; }
         }
 
         /// <summary>
@@ -304,6 +324,12 @@ namespace MongoDB.Driver.Core.Servers
         }
 
         /// <summary>
+        /// The reason the server description was last changed.
+        /// </summary>
+        /// <value>The reason the server description was last changed.</value>
+        public string ReasonChanged => _reasonChanged;
+
+        /// <summary>
         /// Gets the replica set configuration.
         /// </summary>
         /// <value>
@@ -359,6 +385,17 @@ namespace MongoDB.Driver.Core.Servers
         }
 
         /// <summary>
+        /// Gets the topology version.
+        /// </summary>
+        /// <value>
+        /// The server topology version.
+        /// </value>
+        public TopologyVersion TopologyVersion
+        {
+            get { return _topologyVersion; }
+        }
+
+        /// <summary>
         /// Gets the server version.
         /// </summary>
         /// <value>
@@ -402,6 +439,7 @@ namespace MongoDB.Driver.Core.Servers
                 EndPointHelper.Equals(_endPoint, other._endPoint) &&
                 object.Equals(_heartbeatException, other._heartbeatException) &&
                 _heartbeatInterval == other._heartbeatInterval &&
+                _lastHeartbeatTimestamp == other.LastHeartbeatTimestamp &&
                 _lastUpdateTimestamp == other._lastUpdateTimestamp &&
                 _lastWriteTimestamp == other._lastWriteTimestamp &&
                 _logicalSessionTimeout == other._logicalSessionTimeout &&
@@ -409,6 +447,7 @@ namespace MongoDB.Driver.Core.Servers
                 _maxDocumentSize == other._maxDocumentSize &&
                 _maxMessageSize == other._maxMessageSize &&
                 _maxWireDocumentSize == other._maxWireDocumentSize &&
+                _reasonChanged.Equals(other._reasonChanged, StringComparison.Ordinal) &&
                 object.Equals(_replicaSetConfig, other._replicaSetConfig) &&
                 _serverId.Equals(other._serverId) &&
                 _state == other._state &&
@@ -429,6 +468,7 @@ namespace MongoDB.Driver.Core.Servers
                 .Hash(_endPoint)
                 .Hash(_heartbeatException)
                 .Hash(_heartbeatInterval)
+                .Hash(_lastHeartbeatTimestamp)
                 .Hash(_lastUpdateTimestamp)
                 .Hash(_lastWriteTimestamp)
                 .Hash(_logicalSessionTimeout)
@@ -436,14 +476,37 @@ namespace MongoDB.Driver.Core.Servers
                 .Hash(_maxDocumentSize)
                 .Hash(_maxMessageSize)
                 .Hash(_maxWireDocumentSize)
+                .Hash(_reasonChanged)
                 .Hash(_replicaSetConfig)
                 .Hash(_serverId)
                 .Hash(_state)
                 .Hash(_tags)
+                .Hash(_topologyVersion)
                 .Hash(_type)
                 .Hash(_version)
                 .Hash(_wireVersionRange)
                 .GetHashCode();
+        }
+
+        /// <summary>
+        /// Determines whether the specified <see cref="ServerDescription" /> can be considered as equal to decide should we publish sdam events or not.
+        /// </summary>
+        /// <param name="other">The other server description.</param>
+        /// <returns><c>true</c>, if sdam events should be suppressed, otherwise <c>false</c>.</returns>
+        public bool SdamEquals(ServerDescription other)
+        {
+            return
+                EndPointHelper.Equals(_endPoint, other._endPoint) &&
+                _type == other.Type &&
+                object.Equals(_wireVersionRange, other._wireVersionRange) &&
+                EndPointHelper.Equals(_canonicalEndPoint, other._canonicalEndPoint) && // me
+                EndPointHelper.SequenceEquals(_replicaSetConfig?.Members, other._replicaSetConfig?.Members) && // hosts, passives, arbiters
+                object.Equals(_tags, other._tags) &&
+                _replicaSetConfig?.Name == other._replicaSetConfig?.Name && // setName
+                _replicaSetConfig?.Version == other._replicaSetConfig?.Version && // setVersion
+                object.Equals(_electionId, other._electionId) &&
+                EndPointHelper.Equals(_replicaSetConfig?.Primary, other._replicaSetConfig?.Primary) && // primary
+                _logicalSessionTimeout == other._logicalSessionTimeout;
         }
 
         /// <inheritdoc/>
@@ -453,12 +516,16 @@ namespace MongoDB.Driver.Core.Servers
                 .Append("{ ")
                 .AppendFormat("ServerId: \"{0}\"", _serverId)
                 .AppendFormat(", EndPoint: \"{0}\"", _endPoint)
+                .AppendFormat(", ReasonChanged: \"{0}\"", _reasonChanged)
                 .AppendFormat(", State: \"{0}\"", _state)
+                .Append($", TopologyVersion: {_topologyVersion}")
                 .AppendFormat(", Type: \"{0}\"", _type)
                 .AppendFormatIf(_tags != null && !_tags.IsEmpty, ", Tags: \"{0}\"", _tags)
                 .AppendFormatIf(_state == ServerState.Connected, ", WireVersionRange: \"{0}\"", _wireVersionRange)
                 .AppendFormatIf(_electionId != null, ", ElectionId: \"{0}\"", _electionId)
                 .AppendFormatIf(_heartbeatException != null, ", HeartbeatException: \"{0}\"", _heartbeatException)
+                .AppendFormat(", LastHeartbeatTimestamp: {0}", _lastHeartbeatTimestamp.HasValue ? "\"" + LastHeartbeatTimestamp.Value.ToString("yyyy-MM-ddTHH:mm:ss.fffffffK") + "\"" : "null")
+                .AppendFormat(", LastUpdateTimestamp: \"{0:yyyy-MM-ddTHH:mm:ss.fffffffK}\"", _lastUpdateTimestamp)
                 .Append(" }")
                 .ToString();
         }
@@ -466,11 +533,13 @@ namespace MongoDB.Driver.Core.Servers
         /// <summary>
         /// Returns a new instance of ServerDescription with some values changed.
         /// </summary>
+        /// <param name="reasonChanged">The reason the server description changed.</param>
         /// <param name="averageRoundTripTime">The average round trip time.</param>
         /// <param name="canonicalEndPoint">The canonical end point.</param>
         /// <param name="electionId">The election identifier.</param>
         /// <param name="heartbeatException">The heartbeat exception.</param>
         /// <param name="heartbeatInterval">The heartbeat interval.</param>
+        /// <param name="lastHeartbeatTimestamp">The last heartbeat timestamp.</param>
         /// <param name="lastUpdateTimestamp">The last update timestamp.</param>
         /// <param name="lastWriteTimestamp">The last write timestamp.</param>
         /// <param name="logicalSessionTimeout">The logical session timeout.</param>
@@ -481,6 +550,7 @@ namespace MongoDB.Driver.Core.Servers
         /// <param name="replicaSetConfig">The replica set configuration.</param>
         /// <param name="state">The server state.</param>
         /// <param name="tags">The replica set tags.</param>
+        /// <param name="topologyVersion">The topology version.</param>
         /// <param name="type">The server type.</param>
         /// <param name="version">The server version.</param>
         /// <param name="wireVersionRange">The wire version range.</param>
@@ -488,11 +558,13 @@ namespace MongoDB.Driver.Core.Servers
         /// A new instance of ServerDescription.
         /// </returns>
         public ServerDescription With(
+            Optional<string> reasonChanged = default(Optional<string>),
             Optional<TimeSpan> averageRoundTripTime = default(Optional<TimeSpan>),
             Optional<EndPoint> canonicalEndPoint = default(Optional<EndPoint>),
             Optional<ElectionId> electionId = default(Optional<ElectionId>),
             Optional<Exception> heartbeatException = default(Optional<Exception>),
             Optional<TimeSpan> heartbeatInterval = default(Optional<TimeSpan>),
+            Optional<DateTime?> lastHeartbeatTimestamp = default(Optional<DateTime?>),
             Optional<DateTime> lastUpdateTimestamp = default(Optional<DateTime>),
             Optional<DateTime?> lastWriteTimestamp = default(Optional<DateTime?>),
             Optional<TimeSpan?> logicalSessionTimeout = default(Optional<TimeSpan?>),
@@ -503,61 +575,70 @@ namespace MongoDB.Driver.Core.Servers
             Optional<ReplicaSetConfig> replicaSetConfig = default(Optional<ReplicaSetConfig>),
             Optional<ServerState> state = default(Optional<ServerState>),
             Optional<TagSet> tags = default(Optional<TagSet>),
+            Optional<TopologyVersion> topologyVersion = default(Optional<TopologyVersion>),
             Optional<ServerType> type = default(Optional<ServerType>),
             Optional<SemanticVersion> version = default(Optional<SemanticVersion>),
             Optional<Range<int>> wireVersionRange = default(Optional<Range<int>>))
         {
-            if (!lastUpdateTimestamp.HasValue)
-            {
-                lastUpdateTimestamp = DateTime.UtcNow;
-            }
+            return new ServerDescription(
+                _serverId,
+                _endPoint,
+                reasonChanged,
+                averageRoundTripTime: averageRoundTripTime.WithDefault(_averageRoundTripTime),
+                canonicalEndPoint: canonicalEndPoint.WithDefault(_canonicalEndPoint),
+                electionId: electionId.WithDefault(_electionId),
+                heartbeatException: heartbeatException.WithDefault(_heartbeatException),
+                heartbeatInterval: heartbeatInterval.WithDefault(_heartbeatInterval),
+                lastHeartbeatTimestamp: lastHeartbeatTimestamp.WithDefault(_lastHeartbeatTimestamp),
+                lastUpdateTimestamp: lastUpdateTimestamp.WithDefault(DateTime.UtcNow),
+                lastWriteTimestamp: lastWriteTimestamp.WithDefault(_lastWriteTimestamp),
+                logicalSessionTimeout: logicalSessionTimeout.WithDefault(_logicalSessionTimeout),
+                maxBatchCount: maxBatchCount.WithDefault(_maxBatchCount),
+                maxDocumentSize: maxDocumentSize.WithDefault(_maxDocumentSize),
+                maxMessageSize: maxMessageSize.WithDefault(_maxMessageSize),
+                maxWireDocumentSize: maxWireDocumentSize.WithDefault(_maxWireDocumentSize),
+                replicaSetConfig: replicaSetConfig.WithDefault(_replicaSetConfig),
+                state: state.WithDefault(_state),
+                tags: tags.WithDefault(_tags),
+                topologyVersion: topologyVersion.WithDefault(_topologyVersion),
+                type: type.WithDefault(_type),
+                version: version.WithDefault(_version),
+                wireVersionRange: wireVersionRange.WithDefault(_wireVersionRange));
+        }
 
-            if (
-                averageRoundTripTime.Replaces(_averageRoundTripTime) ||
-                canonicalEndPoint.Replaces(_canonicalEndPoint) ||
-                electionId.Replaces(_electionId) ||
-                heartbeatException.Replaces(_heartbeatException) ||
-                heartbeatInterval.Replaces(_heartbeatInterval) ||
-                lastUpdateTimestamp.Replaces(_lastUpdateTimestamp) ||
-                lastWriteTimestamp.Replaces(_lastWriteTimestamp) ||
-                logicalSessionTimeout.Replaces(_logicalSessionTimeout) ||
-                maxBatchCount.Replaces(_maxBatchCount) ||
-                maxDocumentSize.Replaces(_maxDocumentSize) ||
-                maxMessageSize.Replaces(_maxMessageSize) ||
-                maxWireDocumentSize.Replaces(_maxWireDocumentSize) ||
-                replicaSetConfig.Replaces(_replicaSetConfig) ||
-                state.Replaces(_state) ||
-                tags.Replaces(_tags) ||
-                type.Replaces(_type) ||
-                version.Replaces(_version) ||
-                wireVersionRange.Replaces(_wireVersionRange))
-            {
-                return new ServerDescription(
-                    _serverId,
-                    _endPoint,
-                    averageRoundTripTime: averageRoundTripTime.WithDefault(_averageRoundTripTime),
-                    canonicalEndPoint: canonicalEndPoint.WithDefault(_canonicalEndPoint),
-                    electionId: electionId.WithDefault(_electionId),
-                    heartbeatException: heartbeatException.WithDefault(_heartbeatException),
-                    heartbeatInterval: heartbeatInterval.WithDefault(_heartbeatInterval),
-                    lastUpdateTimestamp: lastUpdateTimestamp.WithDefault(_lastUpdateTimestamp),
-                    lastWriteTimestamp: lastWriteTimestamp.WithDefault(_lastWriteTimestamp),
-                    logicalSessionTimeout: logicalSessionTimeout.WithDefault(_logicalSessionTimeout),
-                    maxBatchCount: maxBatchCount.WithDefault(_maxBatchCount),
-                    maxDocumentSize: maxDocumentSize.WithDefault(_maxDocumentSize),
-                    maxMessageSize: maxMessageSize.WithDefault(_maxMessageSize),
-                    maxWireDocumentSize: maxWireDocumentSize.WithDefault(_maxWireDocumentSize),
-                    replicaSetConfig: replicaSetConfig.WithDefault(_replicaSetConfig),
-                    state: state.WithDefault(_state),
-                    tags: tags.WithDefault(_tags),
-                    type: type.WithDefault(_type),
-                    version: version.WithDefault(_version),
-                    wireVersionRange: wireVersionRange.WithDefault(_wireVersionRange));
-            }
-            else
-            {
-                return this;
-            }
+        /// <summary>
+        /// Returns a new ServerDescription with a new HeartbeatException.
+        /// </summary>
+        /// <param name="heartbeatException">The heartbeat exception.</param>
+        /// <returns>
+        /// A new instance of ServerDescription.
+        /// </returns>
+        public ServerDescription WithHeartbeatException(Exception heartbeatException)
+        {
+            return new ServerDescription(
+                _serverId,
+                _endPoint,
+                reasonChanged: "HeartbeatFailed",
+                averageRoundTripTime: _averageRoundTripTime,
+                canonicalEndPoint: _canonicalEndPoint,
+                electionId: _electionId,
+                heartbeatException: heartbeatException,
+                heartbeatInterval: _heartbeatInterval,
+                lastHeartbeatTimestamp: DateTime.UtcNow,
+                lastUpdateTimestamp: DateTime.UtcNow,
+                lastWriteTimestamp: _lastWriteTimestamp,
+                logicalSessionTimeout: _logicalSessionTimeout,
+                maxBatchCount: _maxBatchCount,
+                maxDocumentSize: _maxDocumentSize,
+                maxMessageSize: _maxMessageSize,
+                maxWireDocumentSize: _maxWireDocumentSize,
+                replicaSetConfig: _replicaSetConfig,
+                state: _state,
+                tags: _tags,
+                topologyVersion: _topologyVersion,
+                type: _type,
+                version: _version,
+                wireVersionRange: _wireVersionRange);
         }
     }
 }

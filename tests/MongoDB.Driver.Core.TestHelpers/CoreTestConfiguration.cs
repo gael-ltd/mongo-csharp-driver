@@ -24,6 +24,7 @@ using System.Threading;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver.Core;
+using MongoDB.Driver.Core.Authentication;
 using MongoDB.Driver.Core.Bindings;
 using MongoDB.Driver.Core.Clusters;
 using MongoDB.Driver.Core.Clusters.ServerSelectors;
@@ -43,6 +44,8 @@ namespace MongoDB.Driver
         // static fields
         private static Lazy<ICluster> __cluster = new Lazy<ICluster>(CreateCluster, isThreadSafe: true);
         private static Lazy<ConnectionString> __connectionString = new Lazy<ConnectionString>(GetConnectionString, isThreadSafe: true);
+        private static Lazy<ConnectionString> __connectionStringWithMultipleShardRouters = new Lazy<ConnectionString>(
+            GetConnectionStringWithMultipleShardRouters, isThreadSafe: true);
         private static Lazy<DatabaseNamespace> __databaseNamespace = new Lazy<DatabaseNamespace>(GetDatabaseNamespace, isThreadSafe: true);
         private static MessageEncoderSettings __messageEncoderSettings = new MessageEncoderSettings();
         private static TraceSource __traceSource;
@@ -56,6 +59,11 @@ namespace MongoDB.Driver
         public static ConnectionString ConnectionString
         {
             get { return __connectionString.Value; }
+        }
+
+        public static ConnectionString ConnectionStringWithMultipleShardRouters
+        {
+            get => __connectionStringWithMultipleShardRouters.Value;
         }
 
         public static DatabaseNamespace DatabaseNamespace
@@ -100,14 +108,17 @@ namespace MongoDB.Driver
                 .ConfigureWithConnectionString(__connectionString.Value)
                 .ConfigureCluster(c => c.With(serverSelectionTimeout: TimeSpan.FromMilliseconds(int.Parse(serverSelectionTimeoutString))));
 
-            if (__connectionString.Value.Ssl.HasValue && __connectionString.Value.Ssl.Value)
+            if (__connectionString.Value.Tls.HasValue &&
+                __connectionString.Value.Tls.Value &&
+                __connectionString.Value.AuthMechanism != null &&
+                __connectionString.Value.AuthMechanism == MongoDBX509Authenticator.MechanismName)
             {
-                var certificateFilename = Environment.GetEnvironmentVariable("MONGO_SSL_CERT_FILE");
+                var certificateFilename = Environment.GetEnvironmentVariable("MONGO_X509_CLIENT_CERTIFICATE_PATH");
                 if (certificateFilename != null)
                 {
                     builder.ConfigureSsl(ssl =>
                     {
-                        var password = Environment.GetEnvironmentVariable("MONGO_SSL_CERT_PASS");
+                        var password = Environment.GetEnvironmentVariable("MONGO_X509_CLIENT_CERTIFICATE_PASSWORD");
                         X509Certificate cert;
                         if (password == null)
                         {
@@ -207,10 +218,9 @@ namespace MongoDB.Driver
             return new CollectionNamespace(__databaseNamespace.Value, collectionName);
         }
 
-        public static CollectionNamespace GetCollectionNamespaceForTestMethod()
+        public static CollectionNamespace GetCollectionNamespaceForTestMethod(string className, string methodName)
         {
-            var testMethodInfo = GetTestMethodInfoFromCallStack();
-            var collectionName = TruncateCollectionNameIfTooLong(__databaseNamespace.Value, testMethodInfo.DeclaringType.Name + "-" + testMethodInfo.Name);
+            var collectionName = TruncateCollectionNameIfTooLong(__databaseNamespace.Value, $"{className}-{methodName}");
             return new CollectionNamespace(__databaseNamespace.Value, collectionName);
         }
 
@@ -226,6 +236,12 @@ namespace MongoDB.Driver
                 }
             }
 
+            return new ConnectionString(uri);
+        }
+
+        private static ConnectionString GetConnectionStringWithMultipleShardRouters()
+        {
+            var uri = Environment.GetEnvironmentVariable("MONGODB_URI_WITH_MULTIPLE_MONGOSES") ?? "mongodb://localhost,localhost:27018";
             return new ConnectionString(uri);
         }
 
@@ -295,47 +311,16 @@ namespace MongoDB.Driver
             return StartSession(__cluster.Value);
         }
 
-        public static ICoreSessionHandle StartSession(ICluster cluster)
+        public static ICoreSessionHandle StartSession(ICluster cluster, CoreSessionOptions options = null)
         {
             if (AreSessionsSupported(cluster))
             {
-                return cluster.StartSession();
+                return cluster.StartSession(options);
             }
             else
             {
                 return NoCoreSession.NewHandle();
             }
-        }
-
-        private static Type GetTestClassTypeFromCallStack()
-        {
-            var methodInfo = GetTestMethodInfoFromCallStack();
-            return methodInfo.DeclaringType;
-        }
-
-        private static MethodInfo GetTestMethodInfoFromCallStack()
-        {
-#if NET45
-            var stackTrace = new StackTrace();
-#else
-            var stackTrace = new StackTrace(new Exception(), needFileInfo: false);
-#endif
-            var stackFrames = stackTrace.GetFrames();
-            for (var index = 0; index < stackFrames.Length; index++)
-            {
-                var frame = stackFrames[index];
-                var methodInfo = frame.GetMethod() as MethodInfo;
-                if (methodInfo != null)
-                {
-                    var factAttribute = methodInfo.GetCustomAttribute<FactAttribute>();
-                    if (factAttribute != null)
-                    {
-                        return methodInfo;
-                    }
-                }
-            }
-
-            throw new Exception("No [FactAttribute] found on the call stack.");
         }
 
         private static bool IsReplicaSet(string uri)
@@ -356,14 +341,14 @@ namespace MongoDB.Driver
         private static string TruncateCollectionNameIfTooLong(DatabaseNamespace databaseNamespace, string collectionName)
         {
             var fullNameLength = databaseNamespace.DatabaseName.Length + 1 + collectionName.Length;
-            if (fullNameLength < 123)
+            if (fullNameLength <= 120)
             {
                 return collectionName;
             }
             else
             {
-                var maxCollectionNameLength = 123 - (databaseNamespace.DatabaseName.Length + 1);
-                return collectionName.Substring(0, maxCollectionNameLength);
+                var maxCollectionNameLength = 120 - (databaseNamespace.DatabaseName.Length + 1);
+                return collectionName.Substring(0, maxCollectionNameLength - 1);
             }
         }
 

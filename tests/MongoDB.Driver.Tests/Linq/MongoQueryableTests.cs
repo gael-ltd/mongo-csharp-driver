@@ -16,15 +16,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Threading.Tasks;
 using FluentAssertions;
 using MongoDB.Bson;
-using MongoDB.Bson.TestHelpers.XunitExtensions;
 using MongoDB.Driver;
-using MongoDB.Driver.Core;
+using MongoDB.Driver.Core.Clusters;
+using MongoDB.Driver.Core.Misc;
 using MongoDB.Driver.Core.TestHelpers.XunitExtensions;
 using MongoDB.Driver.Linq;
+using MongoDB.Driver.Tests;
 using MongoDB.Driver.Tests.Linq;
 using Xunit;
 
@@ -183,6 +183,7 @@ namespace Tests.MongoDB.Driver.Linq
         public void Distinct_document_followed_by_where()
         {
             RequireServer.Check().VersionGreaterThanOrEqualTo("2.6.0");
+            RequireServer.Check().VersionLessThan("4.1.0"); // TODO: remove this line when SERVER-37459 is fixed
             var query = CreateQuery()
                 .Distinct()
                 .Where(x => x.A == "Awesome");
@@ -1148,6 +1149,61 @@ namespace Tests.MongoDB.Driver.Linq
         }
 
         [Fact]
+        public void SelectMany_with_result_selector_which_has_subobjects()
+        {
+            var query = CreateQuery()
+                .SelectMany(x => x.C.X);
+
+            Assert(query,
+                2,
+                "{ $unwind : '$C.X' }",
+                "{ $project : { X : '$C.X', _id : 0 } }");
+        }
+
+        [Fact]
+        public void SelectMany_with_result_selector_which_is_called_from_SelectMany()
+        {
+            var cQuery = CreateQuery()
+                .SelectMany(g => g.G)
+                .SelectMany(s => s.S);
+
+            Assert(cQuery,
+                1,
+                "{ $unwind : '$G' }",
+                "{ $project : { G : '$G', _id : 0 } }",
+                "{ $unwind : '$G.S' }",
+                "{ $project : { S : '$G.S', _id : 0 } }");
+
+            var xQuery = CreateQuery()
+                .SelectMany(g => g.G)
+                .SelectMany(s => s.S)
+                .SelectMany(x => x.X);
+
+            Assert(xQuery,
+                0,
+                "{ $unwind : '$G' }",
+                "{ $project : { G : '$G', _id : 0 } }",
+                "{ $unwind : '$G.S' }",
+                "{ $project : { S : '$G.S', _id : 0 } }",
+                "{ $unwind : '$S.X' }",
+                "{ $project : { X : '$S.X', _id : 0 } }");
+        }
+
+        [Fact]
+        public void SelectMany_with_result_selector_which_called_from_where()
+        {
+            var query = CreateQuery()
+                .Where(c => c.K)
+                .SelectMany(x => x.G);
+
+            Assert(query,
+                2,
+                "{ $match : { 'K' : true } }",
+                "{ $unwind : '$G' }",
+                "{ $project : { G : '$G', _id : 0 } }");
+        }
+
+        [Fact]
         public void SelectMany_with_collection_selector_method_simple_scalar()
         {
             var query = CreateQuery()
@@ -1157,6 +1213,57 @@ namespace Tests.MongoDB.Driver.Linq
                 4,
                 "{ $unwind: '$G' }",
                 "{ $project: { G: '$G', _id: 0 } }");
+        }
+
+        [Fact]
+        public void SelectMany_with_collection_selector_method_simple_scalar_which_is_called_from_SelectMany()
+        {
+            var cQuery = CreateQuery()
+                .SelectMany(g => g.G, (x, c) => c)
+                .SelectMany(s => s.S);
+
+            Assert(cQuery,
+                1,
+                "{ $unwind : '$G' }",
+                "{ $project : { G : '$G', _id : 0 } }",
+                "{ $unwind : '$G.S' }",
+                "{ $project : { S : '$G.S', _id : 0 } }");
+
+            cQuery = CreateQuery()
+                .SelectMany(g => g.G)
+                .SelectMany(s => s.S, (x, c) => c);
+
+            Assert(cQuery,
+                1,
+                "{ $unwind : '$G' }",
+                "{ $project : { G : '$G', _id : 0 } }",
+                "{ $unwind : '$G.S' }",
+                "{ $project : { S : '$G.S', _id : 0 } }");
+
+            cQuery = CreateQuery()
+                .SelectMany(g => g.G, (x, c) => c)
+                .SelectMany(s => s.S, (x, c) => c);
+
+            Assert(cQuery,
+                1,
+                "{ $unwind : '$G' }",
+                "{ $project : { G : '$G', _id : 0 } }",
+                "{ $unwind : '$G.S' }",
+                "{ $project : { S : '$G.S', _id : 0 } }");
+
+            var xQuery = CreateQuery()
+                .SelectMany(g => g.G, (x, c) => c)
+                .SelectMany(s => s.S, (x, c) => c)
+                .SelectMany(x => x.X, (x, c) => c);
+
+            Assert(xQuery,
+                0,
+                "{ $unwind : '$G' }",
+                "{ $project : { G : '$G', _id : 0 } }",
+                "{ $unwind : '$G.S' }",
+                "{ $project : { S : '$G.S', _id : 0 } }",
+                "{ $unwind : '$S.X' }",
+                "{ $project : { X : '$S.X', _id : 0 } }");
         }
 
         [Fact]
@@ -1173,6 +1280,24 @@ namespace Tests.MongoDB.Driver.Linq
         }
 
         [Fact]
+        public void SelectMany_with_collection_selector_syntax_simple_scalar_which_is_called_from_SelectMany()
+        {
+            var selectMany1 = from x in CreateQuery()
+                              from g in x.G
+                              select g;
+            var selectMany2 = from g in selectMany1
+                              from s in g.S
+                              select s;
+
+            Assert(selectMany2,
+                1,
+                "{ $unwind : '$G' }",
+                "{ $project : { G : '$G', _id : 0 } }",
+                "{ $unwind : '$G.S' }",
+                "{ $project : { S : '$G.S', _id : 0 } }");
+        }
+
+        [Fact]
         public void SelectMany_with_collection_selector_method_computed_scalar()
         {
             var query = CreateQuery()
@@ -1182,6 +1307,21 @@ namespace Tests.MongoDB.Driver.Linq
                 4,
                 "{ $unwind: '$G' }",
                 "{ $project: { __fld0: { $add: ['$C.E.F', '$G.E.F', '$G.E.H'] }, _id: 0 } }");
+        }
+
+        [Fact]
+        public void SelectMany_with_collection_selector_method_computed_scalar_which_is_called_from_SelectMany()
+        {
+            var query = CreateQuery()
+                .SelectMany(g => g.G)
+                .SelectMany(s => s.S, (x, c) => (int?)(x.E.F + c.E.F + c.E.H));
+
+            Assert(query,
+                1,
+                "{ $unwind : '$G' }",
+                "{ $project : { G : '$G', _id : 0 } }",
+                "{ $unwind : '$G.S' }",
+                "{ $project : { __fld0 : { $add : ['$G.E.F', '$G.S.E.F', '$G.S.E.H'] }, _id : 0 } }");
         }
 
         [Fact]
@@ -1198,6 +1338,26 @@ namespace Tests.MongoDB.Driver.Linq
         }
 
         [Fact]
+        public void SelectMany_with_collection_selector_syntax_computed_scalar_which_is_called_from_SelectMany()
+        {
+            var selectMany1 =
+                from x in CreateQuery()
+                from g in x.G
+                select g;
+            var selectMany2 =
+                from g in selectMany1
+                from s in g.S
+                select (int?)(g.E.F + s.E.F + s.E.H);
+
+            Assert(selectMany2,
+                1,
+                "{ $unwind : '$G' }",
+                "{ $project : { G : '$G', _id : 0 } }",
+                "{ $unwind : '$G.S' }",
+                "{ $project: { __fld0 : { $add : ['$G.E.F', '$G.S.E.F', '$G.S.E.H'] }, _id : 0 } }");
+        }
+
+        [Fact]
         public void SelectMany_with_collection_selector_method_anonymous_type()
         {
             var query = CreateQuery()
@@ -1207,6 +1367,21 @@ namespace Tests.MongoDB.Driver.Linq
                 4,
                 "{ $unwind: '$G' }",
                 "{ $project: { F: '$C.E.F', Other: '$G.D', _id: 0 } }");
+        }
+
+        [Fact]
+        public void SelectMany_with_collection_selector_method_anonymous_type_which_is_called_from_SelectMany()
+        {
+            var query = CreateQuery()
+                .SelectMany(g => g.G)
+                .SelectMany(s => s.S, (x, c) => new { x.E.F, Other = c.D });
+
+            Assert(query,
+                1,
+                "{ $unwind : '$G' }",
+                "{ $project : { G : '$G', _id : 0 } }",
+                "{ $unwind : '$G.S' }",
+                "{ $project : { F : '$G.E.F', Other : '$G.S.D', _id : 0 } }");
         }
 
         [Fact]
@@ -1223,19 +1398,41 @@ namespace Tests.MongoDB.Driver.Linq
         }
 
         [Fact]
+        public void SelectMany_with_collection_selector_syntax_anonymous_type_which_is_called_from_SelectMany()
+        {
+            var selectMany1 =
+                from x in CreateQuery()
+                from g in x.G
+                select g;
+            var selectMany2 =
+                from g in selectMany1
+                from s in g.S
+                select new { g.E.F, Other = s.D };
+
+            Assert(selectMany2,
+                1,
+                "{ $unwind : '$G' }",
+                "{ $project : { G : '$G', _id : 0 } }",
+                "{ $unwind : '$G.S' }",
+                "{ $project : { F : '$G.E.F', Other : '$G.S.D', _id : 0 } }");
+        }
+
+        [Fact]
         public void SelectMany_followed_by_a_group()
         {
-            var first = from x in CreateQuery()
-                        from y in x.G
-                        select y;
+            var first =
+                from x in CreateQuery()
+                from y in x.G
+                select y;
 
-            var query = from f in first
-                        group f by f.D into g
-                        select new
-                        {
-                            g.Key,
-                            SumF = g.Sum(x => x.E.F)
-                        };
+            var query =
+                from f in first
+                group f by f.D into g
+                select new
+                {
+                    g.Key,
+                    SumF = g.Sum(x => x.E.F)
+                };
 
             Assert(query,
                 4,
@@ -1243,6 +1440,36 @@ namespace Tests.MongoDB.Driver.Linq
                 "{ $project: { G: '$G', _id: 0 } }",
                 "{ $group: { _id: '$G.D', __agg0: { $sum : '$G.E.F' } } }",
                 "{ $project: { Key: '$_id', SumF: '$__agg0', _id: 0 } }");
+        }
+
+        [Fact]
+        public void SelectMany_followed_by_a_group_which_is_called_from_SelectMany()
+        {
+            var selectMany1 =
+                from x in CreateQuery()
+                from g in x.G
+                select g;
+            var selectMany2 =
+                from g in selectMany1
+                from s in g.S
+                select s;
+            var query =
+                from s in selectMany2
+                group s by s.D into g
+                select new
+                {
+                    g.Key,
+                    SumF = g.Sum(x => x.E.F)
+                };
+
+            Assert(query,
+                1,
+                "{ $unwind : '$G' }",
+                "{ $project : { G: '$G', _id : 0 } }",
+                "{ $unwind : '$G.S' }",
+                "{ $project : { 'S' : '$G.S', '_id' : 0 } }",
+                "{ $group : { _id : '$S.D', __agg0 : { $sum : '$S.E.F' } } }",
+                "{ $project : { Key : '$_id', SumF : '$__agg0', _id : 0 } }");
         }
 
         [Fact]
@@ -1471,9 +1698,10 @@ namespace Tests.MongoDB.Driver.Linq
         [Fact]
         public void Where_syntax()
         {
-            var query = from x in CreateQuery()
-                        where x.A == "Awesome"
-                        select x;
+            var query =
+                from x in CreateQuery()
+                where x.A == "Awesome"
+                select x;
 
             Assert(query,
                 1,
@@ -1488,7 +1716,38 @@ namespace Tests.MongoDB.Driver.Linq
 
             Assert(query,
                 1,
-                "{ $match: { 'G.D': \"Don't\" } }");
+                "{ $match : { 'G' : { '$elemMatch' : { 'D' : \"Don't\" } } } }");
+        }
+
+        [SkippableFact]
+        public void AsQueryable_in_transaction()
+        {
+            RequireServer.Check().ClusterTypes(ClusterType.ReplicaSet, ClusterType.Sharded).Supports(Feature.Transactions);
+            if (CoreTestConfiguration.Cluster.Description.Type == ClusterType.Sharded)
+            {
+                RequireServer.Check().Supports(Feature.ShardedTransactions);
+            }
+
+            using (var session = DriverTestConfiguration.Client.StartSession())
+            {
+                session.StartTransaction();
+                try
+                {
+                    __collection.InsertOne(session, new Root());
+
+                    var result_not_in_transaction = CreateQuery().Count(); // checks AsQueryable with no session (outside transaction)
+
+                    result_not_in_transaction.Should().Be(2);
+
+                    var result_in_transaction = CreateQuery(session).Count(); // checks AsQueryable with current session (inside transaction)
+
+                    result_in_transaction.Should().Be(3);
+                }
+                finally
+                {
+                    session.AbortTransaction();
+                }
+            }
         }
 
         private List<T> Assert<T>(IMongoQueryable<T> queryable, int resultCount, params string[] expectedStages)
@@ -1511,6 +1770,11 @@ namespace Tests.MongoDB.Driver.Linq
         private IMongoQueryable<Root> CreateQuery()
         {
             return __collection.AsQueryable();
+        }
+
+        private IMongoQueryable<Root> CreateQuery(IClientSessionHandle session)
+        {
+            return __collection.AsQueryable(session);
         }
 
         private IMongoQueryable<Other> CreateOtherQuery()

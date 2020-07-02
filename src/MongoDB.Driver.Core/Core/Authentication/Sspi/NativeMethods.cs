@@ -14,7 +14,7 @@
 */
 
 using System;
-#if NET45
+#if NET452
 using System.Runtime.ConstrainedExecution;
 #endif
 using System.Runtime.InteropServices;
@@ -44,7 +44,7 @@ namespace MongoDB.Driver.Core.Authentication.Sspi
         public const long SEC_E_INCOMPLETE_MESSAGE = 0x80090318;
         public const long SEC_E_BUFFER_TOO_SMALL = 0x80090321;
         public const long SEC_E_CRYPTO_SYSTEM_INVALID = 0x80090337;
-        
+
         public const long SEC_I_CONTINUE_NEEDED = 0x00090312;
         public const long SEC_I_CONTEXT_EXPIRED = 0x00090317;
         public const long SEC_I_RENEGOTIATE = 0x00090321;
@@ -54,7 +54,7 @@ namespace MongoDB.Driver.Core.Authentication.Sspi
         /// </summary>
         /// <param name="errorCode">The error code.</param>
         /// <param name="defaultMessage">The default message.</param>
-        /// <returns></returns>
+        /// <returns>A Win32Exception.</returns>
         public static Win32Exception CreateException(long errorCode, string defaultMessage)
         {
             string message = defaultMessage;
@@ -188,7 +188,7 @@ namespace MongoDB.Driver.Core.Authentication.Sspi
         /// http://msdn.microsoft.com/en-us/library/windows/desktop/aa375354(v=vs.85).aspx
         /// </remarks>
         [DllImport("security.dll", CharSet = CharSet.Unicode, SetLastError = false)]
-#if NET45
+#if NET452
         [ReliabilityContract(Consistency.WillNotCorruptState, Cer.Success)]
 #endif
         public static extern uint DeleteSecurityContext(ref SspiHandle context);
@@ -248,7 +248,7 @@ namespace MongoDB.Driver.Core.Authentication.Sspi
         /// http://msdn.microsoft.com/en-us/library/aa375416(v=vs.85).aspx
         /// </remarks>
         [DllImport("security.dll")]
-#if NET45
+#if NET452
         [ReliabilityContract(Consistency.WillNotCorruptState, Cer.Success)]
 #endif
         public static extern uint FreeContextBuffer(IntPtr contextBuffer);
@@ -262,7 +262,7 @@ namespace MongoDB.Driver.Core.Authentication.Sspi
         /// http://msdn.microsoft.com/en-us/library/windows/desktop/aa375417(v=vs.85).aspx
         /// </remarks>
         [DllImport("security.dll")]
-#if NET45
+#if NET452
         [ReliabilityContract(Consistency.WillNotCorruptState, Cer.Success)]
 #endif
         public static extern int FreeCredentialsHandle(ref SspiHandle sspiHandle);

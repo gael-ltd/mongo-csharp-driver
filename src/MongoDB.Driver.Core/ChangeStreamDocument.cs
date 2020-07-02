@@ -51,7 +51,7 @@ namespace MongoDB.Driver
         /// <value>
         /// The cluster time.
         /// </value>
-        public BsonDocument ClusterTime => GetValue<BsonDocument>(nameof(ClusterTime), null);
+        public BsonTimestamp ClusterTime => GetValue<BsonTimestamp>(nameof(ClusterTime), null);
 
         /// <summary>
         /// Gets the namespace of the collection.
@@ -75,7 +75,21 @@ namespace MongoDB.Driver
         /// <value>
         /// The full document.
         /// </value>
-        public TDocument FullDocument => GetValue<TDocument>(nameof(FullDocument), default(TDocument));
+        public TDocument FullDocument
+        {
+            get
+            {
+                // if TDocument is BsonDocument avoid deserializing it again to prevent possible duplicate element name errors
+                if (typeof(TDocument) == typeof(BsonDocument) && BackingDocument.TryGetValue("fullDocument", out var fullDocument))
+                {
+                    return (TDocument)(object)fullDocument.AsBsonDocument;
+                }
+                else
+                {
+                    return GetValue<TDocument>(nameof(FullDocument), default(TDocument));
+                }
+            }
+        }
 
         /// <summary>
         /// Gets the type of the operation.
@@ -84,6 +98,14 @@ namespace MongoDB.Driver
         /// The type of the operation.
         /// </value>
         public ChangeStreamOperationType OperationType => GetValue<ChangeStreamOperationType>(nameof(OperationType), (ChangeStreamOperationType)(-1));
+
+        /// <summary>
+        /// Gets the new namespace for the ns collection. This field is omitted for all operation types except "rename".
+        /// </summary>
+        /// <value>
+        /// The new namespace of the ns collection.
+        /// </value>
+        public CollectionNamespace RenameTo => GetValue<CollectionNamespace>(nameof(RenameTo), null);
 
         /// <summary>
         /// Gets the resume token.

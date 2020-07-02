@@ -289,7 +289,18 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
             var stream = writer.BsonStream;
             var serializer = section.DocumentSerializer;
             var context = BsonSerializationContext.CreateRoot(writer);
-            var maxMessageSize = MaxMessageSize;
+
+            int? maxMessageSize;
+            if (IsEncryptionConfigured)
+            {
+                var maxBatchSize = 2 * 1024 * 1024; // 2 MiB
+                var maxMessageEndPosition = stream.Position + maxBatchSize;
+                maxMessageSize = (int)(maxMessageEndPosition - messageStartPosition);
+            }
+            else
+            {
+                maxMessageSize = MaxMessageSize;
+            }
 
             var payloadStartPosition = stream.Position;
             stream.WriteInt32(0); // size
@@ -310,7 +321,7 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
                     serializer.Serialize(context, document);
 
                     var messageSize = stream.Position - messageStartPosition;
-                    if (messageSize > maxMessageSize && batch.CanBeSplit)
+                    if (messageSize > maxMessageSize && batch.CanBeSplit && i > 0)
                     {
                         stream.Position = documentStartPosition;
                         stream.SetLength(documentStartPosition);
@@ -441,7 +452,7 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
                     }
                 }
 
-                notFound:
+            notFound:
                 throw new InvalidOperationException("{ w : <Int32> } not found.");
             }
 

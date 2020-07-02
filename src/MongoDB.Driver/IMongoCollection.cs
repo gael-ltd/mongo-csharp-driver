@@ -19,6 +19,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
+using MongoDB.Driver.Core.Operations;
 
 namespace MongoDB.Driver
 {
@@ -104,6 +105,46 @@ namespace MongoDB.Driver
         Task<IAsyncCursor<TResult>> AggregateAsync<TResult>(IClientSessionHandle session, PipelineDefinition<TDocument, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
+        /// Runs an aggregation pipeline whose results are written to a collection.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the result.</typeparam>
+        /// <param name="pipeline">The pipeline.</param>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        void AggregateToCollection<TResult>(PipelineDefinition<TDocument, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Runs an aggregation pipeline whose results are written to a collection.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the result.</typeparam>
+        /// <param name="session">The session.</param>
+        /// <param name="pipeline">The pipeline.</param>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        void AggregateToCollection<TResult>(IClientSessionHandle session, PipelineDefinition<TDocument, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Runs an aggregation pipeline whose results are written to a collection.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the result.</typeparam>
+        /// <param name="pipeline">The pipeline.</param>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>A Task.</returns>
+        Task AggregateToCollectionAsync<TResult>(PipelineDefinition<TDocument, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Runs an aggregation pipeline whose results are written to a collection.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the result.</typeparam>
+        /// <param name="session">The session.</param>
+        /// <param name="pipeline">The pipeline.</param>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>A Task.</returns>
+        Task AggregateToCollectionAsync<TResult>(IClientSessionHandle session, PipelineDefinition<TDocument, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
         /// Performs multiple write operations.
         /// </summary>
         /// <param name="requests">The requests.</param>
@@ -154,6 +195,7 @@ namespace MongoDB.Driver
         /// <returns>
         /// The number of documents in the collection.
         /// </returns>
+        [Obsolete("Use CountDocuments or EstimatedDocumentCount instead.")]
         long Count(FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
@@ -166,6 +208,7 @@ namespace MongoDB.Driver
         /// <returns>
         /// The number of documents in the collection.
         /// </returns>
+        [Obsolete("Use CountDocuments or EstimatedDocumentCount instead.")]
         long Count(IClientSessionHandle session, FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
@@ -177,6 +220,7 @@ namespace MongoDB.Driver
         /// <returns>
         /// The number of documents in the collection.
         /// </returns>
+        [Obsolete("Use CountDocumentsAsync or EstimatedDocumentCountAsync instead.")]
         Task<long> CountAsync(FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
@@ -189,7 +233,118 @@ namespace MongoDB.Driver
         /// <returns>
         /// The number of documents in the collection.
         /// </returns>
+        [Obsolete("Use CountDocumentsAsync or EstimatedDocumentCountAsync instead.")]
         Task<long> CountAsync(IClientSessionHandle session, FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Counts the number of documents in the collection.
+        /// For a fast estimate of the total documents in a collection see <see cref="EstimatedDocumentCount"/>.
+        /// </summary>
+        /// <remarks>
+        /// Note: when migrating from Count to CountDocuments the following query operations must be replaced:
+        /// 
+        /// <code>
+        /// +-------------+--------------------------------+
+        /// | Operator    | Replacement                    |
+        /// +=============+================================+
+        /// | $where      |  $expr                         |
+        /// +-------------+--------------------------------+
+        /// | $near       |  $geoWithin with $center       |
+        /// +-------------+--------------------------------+
+        /// | $nearSphere |  $geoWithin with $centerSphere |
+        /// +-------------+--------------------------------+
+        /// </code>
+        /// </remarks>
+        /// <param name="filter">The filter.</param>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>
+        /// The number of documents in the collection.
+        /// </returns>
+        long CountDocuments(FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Counts the number of documents in the collection.
+        /// For a fast estimate of the total documents in a collection see <see cref="EstimatedDocumentCount"/>.
+        /// </summary>
+        /// <remarks>
+        /// Note: when migrating from Count to CountDocuments the following query operations must be replaced:
+        /// 
+        /// <code>
+        /// +-------------+--------------------------------+
+        /// | Operator    | Replacement                    |
+        /// +=============+================================+
+        /// | $where      |  $expr                         |
+        /// +-------------+--------------------------------+
+        /// | $near       |  $geoWithin with $center       |
+        /// +-------------+--------------------------------+
+        /// | $nearSphere |  $geoWithin with $centerSphere |
+        /// +-------------+--------------------------------+
+        /// </code>
+        /// </remarks>
+        /// <param name="session">The session.</param>
+        /// <param name="filter">The filter.</param>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>
+        /// The number of documents in the collection.
+        /// </returns>
+        long CountDocuments(IClientSessionHandle session, FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Counts the number of documents in the collection.
+        /// For a fast estimate of the total documents in a collection see <seea cref="EstimatedDocumentCountAsync"/>.
+        /// </summary>
+        /// <remarks>
+        /// Note: when migrating from CountAsync to CountDocumentsAsync the following query operations must be replaced:
+        /// 
+        /// <code>
+        /// +-------------+--------------------------------+
+        /// | Operator    | Replacement                    |
+        /// +=============+================================+
+        /// | $where      |  $expr                         |
+        /// +-------------+--------------------------------+
+        /// | $near       |  $geoWithin with $center       |
+        /// +-------------+--------------------------------+
+        /// | $nearSphere |  $geoWithin with $centerSphere |
+        /// +-------------+--------------------------------+
+        /// </code>
+        /// </remarks>
+        /// <param name="filter">The filter.</param>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>
+        /// The number of documents in the collection.
+        /// </returns>
+        Task<long> CountDocumentsAsync(FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Counts the number of documents in the collection.
+        /// For a fast estimate of the total documents in a collection see <see cref="EstimatedDocumentCountAsync"/>.
+        /// </summary>
+        /// <remarks>
+        /// Note: when migrating from CountAsync to CountDocumentsAsync the following query operations must be replaced:
+        /// 
+        /// <code>
+        /// +-------------+--------------------------------+
+        /// | Operator    | Replacement                    |
+        /// +=============+================================+
+        /// | $where      |  $expr                         |
+        /// +-------------+--------------------------------+
+        /// | $near       |  $geoWithin with $center       |
+        /// +-------------+--------------------------------+
+        /// | $nearSphere |  $geoWithin with $centerSphere |
+        /// +-------------+--------------------------------+
+        /// </code>
+        /// </remarks>
+        /// <param name="session">The session.</param>
+        /// <param name="filter">The filter.</param>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>
+        /// The number of documents in the collection.
+        /// </returns>
+        Task<long> CountDocumentsAsync(IClientSessionHandle session, FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
         /// Deletes multiple documents.
@@ -372,6 +527,26 @@ namespace MongoDB.Driver
         /// A Task whose result is a cursor.
         /// </returns>
         Task<IAsyncCursor<TField>> DistinctAsync<TField>(IClientSessionHandle session, FieldDefinition<TDocument, TField> field, FilterDefinition<TDocument> filter, DistinctOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Returns an estimate of the number of documents in the collection.
+        /// </summary>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>
+        /// An estimate of the number of documents in the collection.
+        /// </returns>
+        long EstimatedDocumentCount(EstimatedDocumentCountOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Returns an estimate of the number of documents in the collection.
+        /// </summary>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>
+        /// An estimate of the number of documents in the collection.
+        /// </returns>
+        Task<long> EstimatedDocumentCountAsync(EstimatedDocumentCountOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
         /// Finds the documents matching the filter.
@@ -592,7 +767,7 @@ namespace MongoDB.Driver
         /// <param name="document">The document.</param>
         /// <param name="options">The options.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
-        void InsertOne( IClientSessionHandle session, TDocument document, InsertOneOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
+        void InsertOne(IClientSessionHandle session, TDocument document, InsertOneOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
         /// Inserts a single document.
@@ -736,7 +911,21 @@ namespace MongoDB.Driver
         /// <returns>
         /// The result of the replacement.
         /// </returns>
-        ReplaceOneResult ReplaceOne(FilterDefinition<TDocument> filter, TDocument replacement, UpdateOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
+        ReplaceOneResult ReplaceOne(FilterDefinition<TDocument> filter, TDocument replacement, ReplaceOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
+
+
+        /// <summary>
+        /// Replaces a single document.
+        /// </summary>
+        /// <param name="filter">The filter.</param>
+        /// <param name="replacement">The replacement.</param>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>
+        /// The result of the replacement.
+        /// </returns>
+        [Obsolete("Use the overload that takes a ReplaceOptions instead of an UpdateOptions.")]
+        ReplaceOneResult ReplaceOne(FilterDefinition<TDocument> filter, TDocument replacement, UpdateOptions options, CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
         /// Replaces a single document.
@@ -749,19 +938,7 @@ namespace MongoDB.Driver
         /// <returns>
         /// The result of the replacement.
         /// </returns>
-        ReplaceOneResult ReplaceOne(IClientSessionHandle session, FilterDefinition<TDocument> filter, TDocument replacement, UpdateOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
-
-        /// <summary>
-        /// Replaces a single document.
-        /// </summary>
-        /// <param name="filter">The filter.</param>
-        /// <param name="replacement">The replacement.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>
-        /// The result of the replacement.
-        /// </returns>
-        Task<ReplaceOneResult> ReplaceOneAsync(FilterDefinition<TDocument> filter, TDocument replacement, UpdateOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
+        ReplaceOneResult ReplaceOne(IClientSessionHandle session, FilterDefinition<TDocument> filter, TDocument replacement, ReplaceOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
         /// Replaces a single document.
@@ -774,7 +951,60 @@ namespace MongoDB.Driver
         /// <returns>
         /// The result of the replacement.
         /// </returns>
-        Task<ReplaceOneResult> ReplaceOneAsync(IClientSessionHandle session, FilterDefinition<TDocument> filter, TDocument replacement, UpdateOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
+        [Obsolete("Use the overload that takes a ReplaceOptions instead of an UpdateOptions.")]
+        ReplaceOneResult ReplaceOne(IClientSessionHandle session, FilterDefinition<TDocument> filter, TDocument replacement, UpdateOptions options, CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Replaces a single document.
+        /// </summary>
+        /// <param name="filter">The filter.</param>
+        /// <param name="replacement">The replacement.</param>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>
+        /// The result of the replacement.
+        /// </returns>
+        Task<ReplaceOneResult> ReplaceOneAsync(FilterDefinition<TDocument> filter, TDocument replacement, ReplaceOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Replaces a single document.
+        /// </summary>
+        /// <param name="filter">The filter.</param>
+        /// <param name="replacement">The replacement.</param>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>
+        /// The result of the replacement.
+        /// </returns>
+        [Obsolete("Use the overload that takes a ReplaceOptions instead of an UpdateOptions.")]
+        Task<ReplaceOneResult> ReplaceOneAsync(FilterDefinition<TDocument> filter, TDocument replacement, UpdateOptions options, CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Replaces a single document.
+        /// </summary>
+        /// <param name="session">The session.</param>
+        /// <param name="filter">The filter.</param>
+        /// <param name="replacement">The replacement.</param>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>
+        /// The result of the replacement.
+        /// </returns>
+        Task<ReplaceOneResult> ReplaceOneAsync(IClientSessionHandle session, FilterDefinition<TDocument> filter, TDocument replacement, ReplaceOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Replaces a single document.
+        /// </summary>
+        /// <param name="session">The session.</param>
+        /// <param name="filter">The filter.</param>
+        /// <param name="replacement">The replacement.</param>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>
+        /// The result of the replacement.
+        /// </returns>
+        [Obsolete("Use the overload that takes a ReplaceOptions instead of an UpdateOptions.")]
+        Task<ReplaceOneResult> ReplaceOneAsync(IClientSessionHandle session, FilterDefinition<TDocument> filter, TDocument replacement, UpdateOptions options, CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
         /// Updates many documents.
@@ -886,7 +1116,7 @@ namespace MongoDB.Driver
         /// <returns>
         /// A change stream.
         /// </returns>
-        IAsyncCursor<TResult> Watch<TResult>(
+        IChangeStreamCursor<TResult> Watch<TResult>(
             PipelineDefinition<ChangeStreamDocument<TDocument>, TResult> pipeline,
             ChangeStreamOptions options = null,
             CancellationToken cancellationToken = default(CancellationToken));
@@ -902,7 +1132,7 @@ namespace MongoDB.Driver
         /// <returns>
         /// A change stream.
         /// </returns>
-        IAsyncCursor<TResult> Watch<TResult>(
+        IChangeStreamCursor<TResult> Watch<TResult>(
             IClientSessionHandle session,
             PipelineDefinition<ChangeStreamDocument<TDocument>, TResult> pipeline,
             ChangeStreamOptions options = null,
@@ -918,7 +1148,7 @@ namespace MongoDB.Driver
         /// <returns>
         /// A change stream.
         /// </returns>
-        Task<IAsyncCursor<TResult>> WatchAsync<TResult>(
+        Task<IChangeStreamCursor<TResult>> WatchAsync<TResult>(
             PipelineDefinition<ChangeStreamDocument<TDocument>, TResult> pipeline,
             ChangeStreamOptions options = null,
             CancellationToken cancellationToken = default(CancellationToken));
@@ -934,7 +1164,7 @@ namespace MongoDB.Driver
         /// <returns>
         /// A change stream.
         /// </returns>
-        Task<IAsyncCursor<TResult>> WatchAsync<TResult>(
+        Task<IChangeStreamCursor<TResult>> WatchAsync<TResult>(
             IClientSessionHandle session,
             PipelineDefinition<ChangeStreamDocument<TDocument>, TResult> pipeline,
             ChangeStreamOptions options = null,

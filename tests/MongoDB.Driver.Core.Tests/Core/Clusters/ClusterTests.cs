@@ -17,34 +17,33 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
-using MongoDB.Driver.Core.Clusters;
+using MongoDB.Bson.TestHelpers;
+using MongoDB.Bson.TestHelpers.XunitExtensions;
+using MongoDB.Driver.Core.Bindings;
 using MongoDB.Driver.Core.Clusters.ServerSelectors;
 using MongoDB.Driver.Core.Configuration;
 using MongoDB.Driver.Core.Events;
+using MongoDB.Driver.Core.Helpers;
 using MongoDB.Driver.Core.Misc;
 using MongoDB.Driver.Core.Servers;
-using MongoDB.Driver.Core.Helpers;
 using Moq;
 using Xunit;
-using MongoDB.Bson.TestHelpers.XunitExtensions;
-using System.Reflection;
-using MongoDB.Driver.Core.Bindings;
 
 namespace MongoDB.Driver.Core.Clusters
 {
     public class ClusterTests
     {
-        private EventCapturer _capturedEvents;
-        private Mock<IClusterableServerFactory> _mockServerFactory;
+        private readonly EventCapturer _capturedEvents;
+        private readonly Mock<IClusterableServerFactory> _mockServerFactory;
         private ClusterSettings _settings;
 
         public ClusterTests()
         {
-            _settings = new ClusterSettings(serverSelectionTimeout: TimeSpan.FromSeconds(2),
-                postServerSelector: new LatencyLimitingServerSelector(TimeSpan.FromMinutes(2)));
+            _settings = new ClusterSettings(serverSelectionTimeout: TimeSpan.FromSeconds(2));
             _mockServerFactory = new Mock<IClusterableServerFactory>();
             _mockServerFactory.Setup(f => f.CreateServer(It.IsAny<ClusterId>(), It.IsAny<IClusterClock>(), It.IsAny<EndPoint>()))
                 .Returns((ClusterId clusterId, IClusterClock clusterClock, EndPoint endPoint) =>
@@ -61,7 +60,7 @@ namespace MongoDB.Driver.Core.Clusters
         {
             var result = Cluster.SupportedWireVersionRange;
 
-            result.Should().Be(new Range<int>(2, 6));
+            result.Should().Be(new Range<int>(2, 9));
         }
 
         [Fact]
@@ -481,6 +480,59 @@ namespace MongoDB.Driver.Core.Clusters
             _capturedEvents.Any().Should().BeFalse();
         }
 
+        [Theory]
+        [ParameterAttributeData]
+        public void SelectServer_should_call_custom_selector(
+            [Values(true, false)] bool withEligibleServers,
+            [Values(true, false)] bool async)
+        {
+            int numberOfCustomServerSelectorCalls = 0;
+            var customServerSelector = new DelegateServerSelector((c, s) =>
+            {
+                numberOfCustomServerSelectorCalls++;
+                return s.Skip(1);
+            });
+
+            var settings = _settings.With(postServerSelector: customServerSelector);
+            var subject = new StubCluster(settings, _mockServerFactory.Object, _capturedEvents);
+
+            subject.Initialize();
+            subject.SetServerDescriptions(
+                ServerDescriptionHelper.Connected(subject.Description.ClusterId, new DnsEndPoint("localhost", 27019)),
+                ServerDescriptionHelper.Connected(subject.Description.ClusterId, new DnsEndPoint("localhost", 27020)));
+            _capturedEvents.Clear();
+
+            if (withEligibleServers)
+            {
+                var selectedServer = SelectServerAttempt(
+                    subject,
+                    new DelegateServerSelector((c, s) => s), // do not filter servers
+                    async);
+
+                var selectedServerPort = ((DnsEndPoint)selectedServer.EndPoint).Port;
+                selectedServerPort.Should().Be(27020);
+                _capturedEvents.Next().Should().BeOfType<ClusterSelectingServerEvent>();
+                _capturedEvents.Next().Should().BeOfType<ClusterSelectedServerEvent>();
+            }
+            else
+            {
+                var exception = Record.Exception(
+                    () =>
+                        SelectServerAttempt(
+                            subject,
+                            new DelegateServerSelector((c, s) => new ServerDescription[0]), // no eligible servers
+                            async));
+
+                exception.Should().BeOfType<TimeoutException>();
+                _capturedEvents.Next().Should().BeOfType<ClusterSelectingServerEvent>();
+                _capturedEvents.Next().Should().BeOfType<ClusterSelectingServerFailedEvent>();
+            }
+
+            numberOfCustomServerSelectorCalls.Should().Be(1);
+            _capturedEvents.Any().Should().BeFalse();
+        }
+
+        // private methods
         private StubCluster CreateSubject(ClusterConnectionMode connectionMode = ClusterConnectionMode.Automatic, TimeSpan? serverSelectionTimeout = null)
         {
             _settings = _settings.With(connectionMode: connectionMode);
@@ -492,6 +544,22 @@ namespace MongoDB.Driver.Core.Clusters
             return new StubCluster(_settings, _mockServerFactory.Object, _capturedEvents);
         }
 
+        private IServer SelectServerAttempt(Cluster cluster, IServerSelector operationSelector, bool async)
+        {
+            if (async)
+            {
+                return cluster
+                    .SelectServerAsync(operationSelector, CancellationToken.None)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            else
+            {
+                return cluster.SelectServer(operationSelector, CancellationToken.None);
+            }
+        }
+
+        // nested types
         private class StubCluster : Cluster
         {
             private Dictionary<EndPoint, IClusterableServer> _servers = new Dictionary<EndPoint, IClusterableServer>();
@@ -542,5 +610,10 @@ namespace MongoDB.Driver.Core.Clusters
                 }
             }
         }
+    }
+
+    internal static class ClusterReflector
+    {
+        public static InterlockedInt32 _state(this Cluster cluster) => (InterlockedInt32)Reflector.GetFieldValue(cluster, nameof(_state));
     }
 }

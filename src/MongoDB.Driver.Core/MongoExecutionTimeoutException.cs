@@ -14,7 +14,8 @@
 */
 
 using System;
-#if NET45
+using MongoDB.Bson;
+#if NET452
 using System.Runtime.Serialization;
 #endif
 using MongoDB.Driver.Core.Connections;
@@ -24,11 +25,13 @@ namespace MongoDB.Driver
     /// <summary>
     /// Represents a MongoDB execution timeout exception.
     /// </summary>
-#if NET45
+#if NET452
     [Serializable]
 #endif
     public class MongoExecutionTimeoutException : MongoServerException
     {
+        private readonly BsonDocument _result;
+
         // constructors
         /// <summary>
         /// Initializes a new instance of the <see cref="MongoExecutionTimeoutException"/> class.
@@ -51,7 +54,32 @@ namespace MongoDB.Driver
         {
         }
 
-#if NET45
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MongoExecutionTimeoutException"/> class.
+        /// </summary>
+        /// <param name="connectionId">The connection identifier.</param>
+        /// <param name="message">The error message.</param>
+        /// <param name="result">The command result.</param>
+        public MongoExecutionTimeoutException(ConnectionId connectionId, string message, BsonDocument result)
+            : this(connectionId, message, null, result)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MongoExecutionTimeoutException"/> class.
+        /// </summary>
+        /// <param name="connectionId">The connection identifier.</param>
+        /// <param name="message">The error message.</param>
+        /// <param name="innerException">The inner exception.</param>
+        /// <param name="result">The command result.</param>
+        public MongoExecutionTimeoutException(ConnectionId connectionId, string message, Exception innerException, BsonDocument result)
+            : base(connectionId, message, innerException)
+        {
+            _result = result;
+            AddErrorLabelsFromCommandResult(this, result);
+        }
+
+#if NET452
         /// <summary>
         /// Initializes a new instance of the <see cref="MongoExecutionTimeoutException"/> class.
         /// </summary>
@@ -62,5 +90,25 @@ namespace MongoDB.Driver
         {
         }
 #endif
+
+        // properties
+        /// <summary>
+        /// Gets the error code.
+        /// </summary>
+        /// <value>
+        /// The error code.
+        /// </value>
+        public int Code =>
+            _result != null && _result.TryGetValue("code", out var code)
+                ? code.ToInt32()
+                : -1;
+
+        /// <summary>
+        /// Gets the name of the error code.
+        /// </summary>
+        /// <value>
+        /// The name of the error code.
+        /// </value>
+        public string CodeName => _result?.GetValue("codeName", null)?.AsString;
     }
 }

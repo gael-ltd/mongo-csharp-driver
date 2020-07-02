@@ -17,7 +17,9 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading;
+using System.Threading.Tasks;
 using FluentAssertions;
+using MongoDB.Bson.TestHelpers;
 using MongoDB.Bson.TestHelpers.XunitExtensions;
 using MongoDB.Driver.Core.Clusters;
 using MongoDB.Driver.Core.Configuration;
@@ -45,6 +47,16 @@ namespace MongoDB.Driver.Core.ConnectionPools
             _endPoint = new DnsEndPoint("localhost", 27017);
             _capturedEvents = new EventCapturer();
             _serverId = new ServerId(new ClusterId(), _endPoint);
+            _mockConnectionFactory
+                .Setup(c => c.CreateConnection(It.IsAny<ServerId>(), It.IsAny<EndPoint>()))
+                .Returns(() =>
+                {
+                    var connectionMock = new Mock<IConnection>();
+                    connectionMock
+                        .Setup(c => c.Settings)
+                        .Returns(new ConnectionSettings());
+                    return connectionMock.Object;
+                });
             _settings = new ConnectionPoolSettings(
                 maintenanceInterval: Timeout.InfiniteTimeSpan,
                 maxConnections: 4,
@@ -52,12 +64,7 @@ namespace MongoDB.Driver.Core.ConnectionPools
                 waitQueueSize: 1,
                 waitQueueTimeout: TimeSpan.FromSeconds(2));
 
-            _subject = new ExclusiveConnectionPool(
-                _serverId,
-                _endPoint,
-                _settings,
-                _mockConnectionFactory.Object,
-                _capturedEvents);
+            _subject = CreateSubject();
         }
 
         [Fact]
@@ -106,6 +113,7 @@ namespace MongoDB.Driver.Core.ConnectionPools
             [Values(false, true)]
             bool async)
         {
+            _capturedEvents.Clear();
             Action act;
             if (async)
             {
@@ -117,6 +125,11 @@ namespace MongoDB.Driver.Core.ConnectionPools
             }
 
             act.ShouldThrow<InvalidOperationException>();
+            _capturedEvents.Next().Should().BeOfType<ConnectionPoolCheckingOutConnectionEvent>();
+            var connectionPoolCheckingOutConnectionFailedEvent = _capturedEvents.Next();
+            var e = connectionPoolCheckingOutConnectionFailedEvent.Should().BeOfType<ConnectionPoolCheckingOutConnectionFailedEvent>().Subject;
+            e.Reason.Should().Be(ConnectionCheckOutFailedReason.ConnectionError);
+            _capturedEvents.Any().Should().BeFalse();
         }
 
         [Theory]
@@ -125,6 +138,7 @@ namespace MongoDB.Driver.Core.ConnectionPools
             [Values(false, true)]
             bool async)
         {
+            _capturedEvents.Clear();
             _subject.Dispose();
 
             Action act;
@@ -138,6 +152,13 @@ namespace MongoDB.Driver.Core.ConnectionPools
             }
 
             act.ShouldThrow<ObjectDisposedException>();
+            _capturedEvents.Next().Should().BeOfType<ConnectionPoolClosingEvent>();
+            _capturedEvents.Next().Should().BeOfType<ConnectionPoolClosedEvent>();
+            _capturedEvents.Next().Should().BeOfType<ConnectionPoolCheckingOutConnectionEvent>();
+            var connectionPoolCheckingOutConnectionFailedEvent = _capturedEvents.Next();
+            var e = connectionPoolCheckingOutConnectionFailedEvent.Should().BeOfType<ConnectionPoolCheckingOutConnectionFailedEvent>().Subject;
+            e.Reason.Should().Be(ConnectionCheckOutFailedReason.PoolClosed);
+            _capturedEvents.Any().Should().BeFalse();
         }
 
         [Theory]
@@ -209,6 +230,7 @@ namespace MongoDB.Driver.Core.ConnectionPools
             {
                 _capturedEvents.Next().Should().BeOfType<ConnectionPoolCheckingOutConnectionEvent>();
                 _capturedEvents.Next().Should().BeOfType<ConnectionPoolAddingConnectionEvent>();
+                _capturedEvents.Next().Should().BeOfType<ConnectionCreatedEvent>();
                 _capturedEvents.Next().Should().BeOfType<ConnectionPoolAddedConnectionEvent>();
                 _capturedEvents.Next().Should().BeOfType<ConnectionPoolCheckedOutConnectionEvent>();
             }
@@ -281,9 +303,9 @@ namespace MongoDB.Driver.Core.ConnectionPools
             _subject.DormantCount.Should().Be(_settings.MinConnections - 1);
 
             _capturedEvents.Next().Should().BeOfType<ConnectionPoolCheckingInConnectionEvent>();
+            _capturedEvents.Next().Should().BeOfType<ConnectionPoolCheckedInConnectionEvent>();
             _capturedEvents.Next().Should().BeOfType<ConnectionPoolRemovingConnectionEvent>();
             _capturedEvents.Next().Should().BeOfType<ConnectionPoolRemovedConnectionEvent>();
-            _capturedEvents.Next().Should().BeOfType<ConnectionPoolCheckedInConnectionEvent>();
             _capturedEvents.Any().Should().BeFalse();
         }
 
@@ -323,7 +345,9 @@ namespace MongoDB.Driver.Core.ConnectionPools
             act.ShouldThrow<TimeoutException>();
 
             _capturedEvents.Next().Should().BeOfType<ConnectionPoolCheckingOutConnectionEvent>();
-            _capturedEvents.Next().Should().BeOfType<ConnectionPoolCheckingOutConnectionFailedEvent>();
+            var connectionPoolCheckingOutConnectionFailedEvent = _capturedEvents.Next();
+            var e = connectionPoolCheckingOutConnectionFailedEvent.Should().BeOfType<ConnectionPoolCheckingOutConnectionFailedEvent>().Subject;
+            e.Reason.Should().Be(ConnectionCheckOutFailedReason.Timeout);
             _capturedEvents.Any().Should().BeFalse();
         }
 
@@ -338,8 +362,8 @@ namespace MongoDB.Driver.Core.ConnectionPools
             IConnectionHandle connection2;
             if (async)
             {
-               connection1 = _subject.AcquireConnectionAsync(CancellationToken.None).GetAwaiter().GetResult();
-               connection2 = _subject.AcquireConnectionAsync(CancellationToken.None).GetAwaiter().GetResult();
+                connection1 = _subject.AcquireConnectionAsync(CancellationToken.None).GetAwaiter().GetResult();
+                connection2 = _subject.AcquireConnectionAsync(CancellationToken.None).GetAwaiter().GetResult();
             }
             else
             {
@@ -360,7 +384,10 @@ namespace MongoDB.Driver.Core.ConnectionPools
             _capturedEvents.Next().Should().BeOfType<ConnectionPoolRemovingConnectionEvent>();
             _capturedEvents.Next().Should().BeOfType<ConnectionPoolRemovedConnectionEvent>();
             _capturedEvents.Next().Should().BeOfType<ConnectionPoolClosedEvent>();
-            // no connection pool events exist for the disposed connection2
+            _capturedEvents.Next().Should().BeOfType<ConnectionPoolCheckingInConnectionEvent>();
+            _capturedEvents.Next().Should().BeOfType<ConnectionPoolCheckedInConnectionEvent>();
+            _capturedEvents.Next().Should().BeOfType<ConnectionPoolRemovingConnectionEvent>();
+            _capturedEvents.Next().Should().BeOfType<ConnectionPoolRemovedConnectionEvent>();
             _capturedEvents.Any().Should().BeFalse();
         }
 
@@ -423,12 +450,74 @@ namespace MongoDB.Driver.Core.ConnectionPools
             InitializeAndWait();
 
             _capturedEvents.Next().Should().BeOfType<ConnectionPoolOpeningEvent>();
+            _capturedEvents.Next().Should().BeOfType<ConnectionPoolOpenedEvent>();
+
             for (int i = 0; i < _settings.MinConnections; i++)
             {
                 _capturedEvents.Next().Should().BeOfType<ConnectionPoolAddingConnectionEvent>();
+                _capturedEvents.Next().Should().BeOfType<ConnectionCreatedEvent>();
                 _capturedEvents.Next().Should().BeOfType<ConnectionPoolAddedConnectionEvent>();
             }
-            _capturedEvents.Next().Should().BeOfType<ConnectionPoolOpenedEvent>();
+        }
+
+        [Fact]
+        public void MaintainSizeAsync_should_call_connection_dispose_when_connection_authentication_fail()
+        {
+            var authenticationFailedConnection = new Mock<IConnection>();
+            authenticationFailedConnection
+                .Setup(c => c.OpenAsync(It.IsAny<CancellationToken>())) // an authentication exception is thrown from _connectionInitializer.InitializeConnection
+                                                                        // that in turn is called from OpenAsync
+                .Throws(new MongoAuthenticationException(new ConnectionId(_serverId), "test message"));
+
+            using (var subject = CreateSubject())
+            {
+                _mockConnectionFactory
+                    .Setup(f => f.CreateConnection(_serverId, _endPoint))
+                    .Returns(() =>
+                    {
+                        subject._maintenanceCancellationTokenSource().Cancel(); // Task.Delay will be canceled 
+                        return authenticationFailedConnection.Object;
+                    });
+
+                var _ = Record.Exception(() => subject.MaintainSizeAsync().GetAwaiter().GetResult());
+                authenticationFailedConnection.Verify(conn => conn.Dispose(), Times.Once);
+            }
+        }
+
+        [Fact]
+        public void MaintainSizeAsync_should_not_try_new_attempt_after_failing_without_delay()
+        {
+            var settings = _settings.With(maintenanceInterval: TimeSpan.FromSeconds(10));
+
+            using (var subject = CreateSubject(settings))
+            {
+                _mockConnectionFactory
+                    .SetupSequence(f => f.CreateConnection(_serverId, _endPoint))
+                    .Throws<Exception>()    // failed attempt
+                    .Returns(() =>          // successful attempt which should be delayed
+                    {
+                        // break the loop. With this line the MaintainSizeAsync will contain only 2 iterations
+                        subject._maintenanceCancellationTokenSource().Cancel();
+                        return new MockConnection(_serverId);
+                    });
+
+                var testResult = Task.WaitAny(
+                    subject.MaintainSizeAsync(),            // if this task is completed first, it will mean that there was no delay (10 sec) 
+                    Task.Delay(TimeSpan.FromSeconds(1)));   // time to be sure that delay is happening,
+                                                            // if the method is running more than 1 second, then delay is happening
+                testResult.Should().Be(1);
+            }
+        }
+
+        // private methods
+        private ExclusiveConnectionPool CreateSubject(ConnectionPoolSettings connectionPoolSettings = null)
+        {
+            return new ExclusiveConnectionPool(
+                _serverId,
+                _endPoint,
+                connectionPoolSettings ?? _settings,
+                _mockConnectionFactory.Object,
+                _capturedEvents);
         }
 
         private void InitializeAndWait()
@@ -447,6 +536,19 @@ namespace MongoDB.Driver.Core.ConnectionPools
             _subject.CreatedCount.Should().Be(_settings.MinConnections);
             _subject.DormantCount.Should().Be(_settings.MinConnections);
             _subject.UsedCount.Should().Be(0);
+        }
+    }
+
+    internal static class ExclusiveConnectionPoolReflector
+    {
+        public static CancellationTokenSource _maintenanceCancellationTokenSource(this ExclusiveConnectionPool obj)
+        {
+            return (CancellationTokenSource)Reflector.GetFieldValue(obj, nameof(_maintenanceCancellationTokenSource));
+        }
+
+        public static Task MaintainSizeAsync(this ExclusiveConnectionPool obj)
+        {
+            return (Task)Reflector.Invoke(obj, nameof(MaintainSizeAsync));
         }
     }
 }

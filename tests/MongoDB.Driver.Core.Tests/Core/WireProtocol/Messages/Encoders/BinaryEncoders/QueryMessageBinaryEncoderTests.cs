@@ -48,7 +48,9 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
         // static constructor
         static QueryMessageBinaryEncoderTests()
         {
+#pragma warning disable 618
             __testMessage = new QueryMessage(__requestId, __collectionNamespace, __query, __fields, __queryValidator, __skip, __batchSize, __slaveOk, __partialOk, __noCursorTimeout, __oplogReplay, __tailableCursor, __awaitData);
+#pragma warning restore 618
 
             __testMessageBytes = new byte[]
             {
@@ -105,7 +107,9 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
                 message.TailableCursor.Should().Be(tailableCursor);
                 message.SlaveOk.Should().Be(slaveOk);
                 message.NoCursorTimeout.Should().Be(noCursorTimeout);
+#pragma warning disable 618
                 message.OplogReplay.Should().Be(oplogReplay);
+#pragma warning restore 618
                 message.AwaitData.Should().Be(awaitData);
                 message.PartialOk.Should().Be(partialOk);
             }
@@ -123,13 +127,30 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
                 message.BatchSize.Should().Be(__batchSize);
                 message.Fields.Should().Be(__fields);
                 message.NoCursorTimeout.Should().Be(__noCursorTimeout);
+#pragma warning disable 618
                 message.OplogReplay.Should().Be(__oplogReplay);
+#pragma warning restore 618
                 message.PartialOk.Should().Be(__partialOk);
                 message.Query.Should().Be(__query);
                 message.RequestId.Should().Be(__requestId);
                 message.Skip.Should().Be(__skip);
                 message.SlaveOk.Should().Be(__slaveOk);
                 message.TailableCursor.Should().Be(__tailableCursor);
+            }
+        }
+
+        [Fact]
+        public void ReadMessage_should_throw_when_opcode_is_invalid()
+        {
+            var bytes = (byte[])__testMessageBytes.Clone();
+            bytes[12]++;
+
+            using (var stream = new MemoryStream(bytes))
+            {
+                var subject = new QueryMessageBinaryEncoder(stream, __messageEncoderSettings);
+                var exception = Record.Exception(() => subject.ReadMessage());
+                exception.Should().BeOfType<FormatException>();
+                exception.Message.Should().Be("Query message opcode is not OP_QUERY.");
             }
         }
 
@@ -143,7 +164,9 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
         [InlineData(128, false, false, false, false, false, true)]
         public void WriteMessage_should_encode_flags_correctly(int flags, bool tailableCursor, bool slaveOk, bool noCursorTimeout, bool oplogReplay, bool awaitData, bool partialOk)
         {
+#pragma warning disable 618
             var message = new QueryMessage(__requestId, __collectionNamespace, __query, __fields, __queryValidator, __skip, __batchSize, slaveOk, partialOk, noCursorTimeout, oplogReplay, tailableCursor, awaitData);
+#pragma warning restore 618
 
             using (var stream = new MemoryStream())
             {
@@ -187,11 +210,13 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
             var collectionNamespace = new CollectionNamespace(new DatabaseNamespace("databaseName"), "collectionName");
             var command = BsonDocument.Parse("{ command : \"x\", writeConcern : { w : 0 } }");
             var query = wrapped ? new BsonDocument("$query", command) : command;
+#pragma warning disable 618
             var message = new QueryMessage(0, collectionNamespace, query, null, NoOpElementNameValidator.Instance, 0, 0, false, false, false, false, false, false, null)
             {
                 PostWriteAction = encoder => encoder.ChangeWriteConcernFromW0ToW1(),
                 ResponseHandling = CommandResponseHandling.Ignore
             };
+#pragma warning restore 618
 
             subject.WriteMessage(message);
 

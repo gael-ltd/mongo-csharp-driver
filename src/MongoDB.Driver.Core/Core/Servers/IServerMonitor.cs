@@ -23,6 +23,9 @@ namespace MongoDB.Driver.Core.Servers
     /// <seealso cref="System.IDisposable" />
     internal interface IServerMonitor : IDisposable
     {
+        /// <summary>
+        /// The monitor's view of the server, which could be considered stale relative to the <see cref="Server"/>'s view.
+        /// </summary>
         ServerDescription Description { get; }
 
         /// <summary>
@@ -34,11 +37,6 @@ namespace MongoDB.Driver.Core.Servers
         /// Initializes this instance.
         /// </summary>
         void Initialize();
-
-        /// <summary>
-        /// Instructs the monitor to refresh its description immediately.
-        /// </summary>
-        void Invalidate();
 
         /// <summary>
         /// Requests a heartbeat as soon as possible.

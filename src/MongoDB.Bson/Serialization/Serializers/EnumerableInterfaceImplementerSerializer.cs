@@ -49,7 +49,7 @@ namespace MongoDB.Bson.Serialization.Serializers
         /// <summary>
         /// Initializes a new instance of the <see cref="EnumerableInterfaceImplementerSerializer{TValue}" /> class.
         /// </summary>
-        /// <param name="serializerRegistry"></param>
+        /// <param name="serializerRegistry">The serializer registry.</param>
         public EnumerableInterfaceImplementerSerializer(IBsonSerializerRegistry serializerRegistry)
             : base(serializerRegistry)
         {
@@ -93,7 +93,7 @@ namespace MongoDB.Bson.Serialization.Serializers
     /// </summary>
     /// <typeparam name="TValue">The type of the value.</typeparam>
     /// <typeparam name="TItem">The type of the item.</typeparam>
-    public class EnumerableInterfaceImplementerSerializer<TValue, TItem> : 
+    public class EnumerableInterfaceImplementerSerializer<TValue, TItem> :
         EnumerableInterfaceImplementerSerializerBase<TValue, TItem>,
         IChildSerializerConfigurable
             where TValue : class, IEnumerable<TItem>

@@ -13,11 +13,11 @@
 * limitations under the License.
 */
 
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver.Core.Clusters;
+using MongoDB.Driver.Core.Operations;
 
 namespace MongoDB.Driver
 {
@@ -96,11 +96,33 @@ namespace MongoDB.Driver
         /// <summary>
         /// Returns the names of the databases on the server.
         /// </summary>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <param name="options">The options.</param>
+        /// <returns>The database names.</returns>
+        IAsyncCursor<string> ListDatabaseNames(
+            ListDatabaseNamesOptions options,
+            CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Returns the names of the databases on the server.
+        /// </summary>
         /// <param name="session">The session.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns>The database names.</returns>
         IAsyncCursor<string> ListDatabaseNames(
-            IClientSessionHandle session,                                              
+            IClientSessionHandle session,
+            CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Returns the names of the databases on the server.
+        /// </summary>
+        /// <param name="session">The session.</param>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>The database names.</returns>
+        IAsyncCursor<string> ListDatabaseNames(
+            IClientSessionHandle session,
+            ListDatabaseNamesOptions options,
             CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
@@ -109,6 +131,16 @@ namespace MongoDB.Driver
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns>The database names.</returns>
         Task<IAsyncCursor<string>> ListDatabaseNamesAsync(
+            CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Returns the names of the databases on the server.
+        /// </summary>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>The database names.</returns>
+        Task<IAsyncCursor<string>> ListDatabaseNamesAsync(
+            ListDatabaseNamesOptions options,
             CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
@@ -118,7 +150,19 @@ namespace MongoDB.Driver
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns>The database names.</returns>
         Task<IAsyncCursor<string>> ListDatabaseNamesAsync(
-            IClientSessionHandle session,                                              
+            IClientSessionHandle session,
+            CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Returns the names of the databases on the server.
+        /// </summary>
+        /// <param name="session">The session.</param>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>The database names.</returns>
+        Task<IAsyncCursor<string>> ListDatabaseNamesAsync(
+            IClientSessionHandle session,
+            ListDatabaseNamesOptions options,
             CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
@@ -127,8 +171,8 @@ namespace MongoDB.Driver
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns>A cursor.</returns>
         IAsyncCursor<BsonDocument> ListDatabases(
-            CancellationToken cancellationToken = default(CancellationToken));        
-        
+            CancellationToken cancellationToken = default(CancellationToken));
+
         /// <summary>
         /// Lists the databases on the server.
         /// </summary>
@@ -193,7 +237,7 @@ namespace MongoDB.Driver
         /// A Task whose result is a cursor.
         /// </returns>
         Task<IAsyncCursor<BsonDocument>> ListDatabasesAsync(
-            IClientSessionHandle session,        
+            IClientSessionHandle session,
             CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
@@ -229,6 +273,70 @@ namespace MongoDB.Driver
         /// A Task whose result is a client session.
         /// </returns>
         Task<IClientSessionHandle> StartSessionAsync(ClientSessionOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Watches changes on all collections in all databases.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the result.</typeparam>
+        /// <param name="pipeline">The pipeline.</param>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>
+        /// A change stream.
+        /// </returns>
+        IChangeStreamCursor<TResult> Watch<TResult>(
+            PipelineDefinition<ChangeStreamDocument<BsonDocument>, TResult> pipeline,
+            ChangeStreamOptions options = null,
+            CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Watches changes on all collections in all databases.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the result.</typeparam>
+        /// <param name="session">The session.</param>
+        /// <param name="pipeline">The pipeline.</param>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>
+        /// A change stream.
+        /// </returns>
+        IChangeStreamCursor<TResult> Watch<TResult>(
+            IClientSessionHandle session,
+            PipelineDefinition<ChangeStreamDocument<BsonDocument>, TResult> pipeline,
+            ChangeStreamOptions options = null,
+            CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Watches changes on all collections in all databases.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the result.</typeparam>
+        /// <param name="pipeline">The pipeline.</param>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>
+        /// A change stream.
+        /// </returns>
+        Task<IChangeStreamCursor<TResult>> WatchAsync<TResult>(
+            PipelineDefinition<ChangeStreamDocument<BsonDocument>, TResult> pipeline,
+            ChangeStreamOptions options = null,
+            CancellationToken cancellationToken = default(CancellationToken));
+
+        /// <summary>
+        /// Watches changes on all collections in all databases.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the result.</typeparam>
+        /// <param name="session">The session.</param>
+        /// <param name="pipeline">The pipeline.</param>
+        /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>
+        /// A change stream.
+        /// </returns>
+        Task<IChangeStreamCursor<TResult>> WatchAsync<TResult>(
+            IClientSessionHandle session,
+            PipelineDefinition<ChangeStreamDocument<BsonDocument>, TResult> pipeline,
+            ChangeStreamOptions options = null,
+            CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
         /// Returns a new IMongoClient instance with a different read concern setting.

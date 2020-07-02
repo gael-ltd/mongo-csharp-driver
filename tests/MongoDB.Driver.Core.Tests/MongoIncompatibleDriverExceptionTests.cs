@@ -15,7 +15,7 @@
 
 using System.IO;
 using System.Net;
-#if NET45
+#if NET452
 using System.Runtime.Serialization.Formatters.Binary;
 #endif
 using FluentAssertions;
@@ -37,7 +37,7 @@ namespace MongoDB.Driver
             var clusterType = ClusterType.Standalone;
             var endPoint = new DnsEndPoint("localhost", 27017);
             var serverId = new ServerId(clusterId, endPoint);
-            var server = new ServerDescription(serverId, endPoint, wireVersionRange: new Range<int>(0, 0));
+            var server = new ServerDescription(serverId, endPoint, wireVersionRange: new Range<int>(0, 0), type: ServerType.Standalone);
             var servers = new[] { server };
             _clusterDescription = new ClusterDescription(clusterId, connectionMode, clusterType, servers);
         }
@@ -51,7 +51,7 @@ namespace MongoDB.Driver
             subject.InnerException.Should().BeNull();
         }
 
-#if NET45
+#if NET452
         [Fact]
         public void Serialization_should_work()
         {

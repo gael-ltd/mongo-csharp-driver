@@ -49,10 +49,10 @@ namespace MongoDB.Driver.Core.Authentication.Sspi
 
             Password = IntPtr.Zero;
             PasswordLength = 0;
-            
+
             if (password != null && password.Length > 0)
             {
-#if NET45
+#if NET452
                 Password = Marshal.SecureStringToGlobalAllocUnicode(password);
 #else
                 Password = SecureStringMarshal.SecureStringToGlobalAllocUnicode(password);

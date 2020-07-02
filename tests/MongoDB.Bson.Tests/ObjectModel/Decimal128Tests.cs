@@ -14,13 +14,11 @@
 */
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using MongoDB.Bson;
 using FluentAssertions;
 using System.Globalization;
+#if !NETCOREAPP1_1
+using System.Threading;
+#endif
 using Xunit;
 
 namespace MongoDB.Bson.Tests
@@ -40,27 +38,30 @@ namespace MongoDB.Bson.Tests
         [InlineData("-1.01", "-1.01")]
         [InlineData("-1", "-1")]
         [InlineData("0", "0")]
+        [InlineData("0.000", "0.000")]
         [InlineData("1", "1")]
         [InlineData("1.01", "1.01")]
+        [InlineData("1.000", "1.000")]
         [InlineData("79228162514264337593543950335", "79228162514264337593543950335")]
         [InlineData("-79228162514264337593543950335", "-79228162514264337593543950335")]
-        public void Decimal(string valueString, string s)
+        public void Decimal(string valueString, string expectedResult)
         {
-            var value = decimal.Parse(valueString);
+            var value = decimal.Parse(valueString, CultureInfo.InvariantCulture);
             var subject = new Decimal128(value);
 
-            subject.ToString().Should().Be(s);
+            subject.ToString().Should().Be(expectedResult);
             AssertSpecialProperties(subject);
 
             var result = Decimal128.ToDecimal(subject);
-            result.Should().Be(value);
+            result.ToString().Should().Be(value.ToString());
 
             result = (decimal)subject;
-            result.Should().Be(value);
+            result.ToString().Should().Be(value.ToString());
         }
 
         [Theory]
         [InlineData("0", "0")]
+        [InlineData("0.00", "0.00")]
         [InlineData("79228162514264337593543950335", "79228162514264337593543950335")]
         [InlineData("1E1", "10")]
         [InlineData("1E2", "100")]
@@ -76,11 +77,23 @@ namespace MongoDB.Bson.Tests
         [InlineData("1E-57", "0")]
         [InlineData("1E-99", "0")]
         [InlineData("1E-6111", "0")]
-        [InlineData("10000.0000000000000000000000001", "10000")] // see: CSHARP-2001
+        [InlineData("10000.0000000000000000000000001", "10000.000000000000000000000000")] // see: CSHARP-2001
         public void ToDecimal_should_return_expected_result(string valueString, string expectedResultString)
         {
             var subject = Decimal128.Parse(valueString);
             var expectedResult = decimal.Parse(expectedResultString);
+
+            var result = Decimal128.ToDecimal(subject);
+
+            result.ToString().Should().Be(expectedResult.ToString());
+        }
+
+        [Theory]
+        [InlineData(0xE000_0000_0000_0000UL, 0)]
+        [InlineData(0xE000_2000_0000_0000UL, 0)]
+        public void ToDecimal_should_return_expected_result_for_second_form(ulong highBits, ulong expectedResult)
+        {
+            var subject = Decimal128.FromIEEEBits(highBits, 0x0);
 
             var result = Decimal128.ToDecimal(subject);
 
@@ -110,6 +123,48 @@ namespace MongoDB.Bson.Tests
 
             exception.Should().BeOfType<OverflowException>();
         }
+
+#if !NETCOREAPP1_1
+        [Theory]
+        [InlineData("123.456", 123.456)]
+        public void ToDouble_should_not_depend_on_current_culture(string valueString, double expectedDouble)
+        {
+            var currentCulture = Thread.CurrentThread.CurrentCulture;
+            try
+            {
+                Thread.CurrentThread.CurrentCulture = new CultureInfo("fr-FR");
+                var subject = Decimal128.Parse(valueString);
+
+                var result = Decimal128.ToDouble(subject);
+
+                result.Should().Be(expectedDouble);
+            }
+            finally
+            {
+                Thread.CurrentThread.CurrentCulture = currentCulture;
+            }
+        }
+
+        [Theory]
+        [InlineData("123.456", 123.456)]
+        public void ToSingle_should_not_depend_on_current_culture(string valueString, float expectedFloat)
+        {
+            var currentCulture = Thread.CurrentThread.CurrentCulture;
+            try
+            {
+                Thread.CurrentThread.CurrentCulture = new CultureInfo("fr-FR");
+                var subject = Decimal128.Parse(valueString);
+
+                var result = Decimal128.ToSingle(subject);
+
+                result.Should().Be(expectedFloat);
+            }
+            finally
+            {
+                Thread.CurrentThread.CurrentCulture = currentCulture;
+            }
+        }
+#endif
 
         [Theory]
         [InlineData((byte)0, "0")]

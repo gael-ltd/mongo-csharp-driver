@@ -89,7 +89,9 @@ namespace MongoDB.Driver.Linq.Translators
 
         protected internal override Expression VisitField(FieldExpression node)
         {
-            if (!_fields.Any(x => x.FieldName == node.FieldName
+            var dottedFieldExpression = GetDottedFieldExpression(node);
+
+            if (!_fields.Any(x => x.FieldName == dottedFieldExpression.FieldName
                 && x.Serializer.ValueType == node.Serializer.ValueType))
             {
                 // we need to unwind this call...
@@ -100,7 +102,7 @@ namespace MongoDB.Driver.Linq.Translators
                 _parameterExpression,
                 "GetValue",
                 new[] { node.Type },
-                Expression.Constant(node.FieldName),
+                Expression.Constant(dottedFieldExpression.FieldName),
                 Expression.Constant(node.Serializer.ValueType.GetDefaultValue(), typeof(object)));
         }
 
@@ -156,6 +158,30 @@ namespace MongoDB.Driver.Linq.Translators
             return base.VisitDocument(node);
         }
 
+        private FieldExpression GetDottedFieldExpression(FieldExpression node)
+        {
+            var fieldNames = new List<string> { node.FieldName };
+            var document = node.Document as FieldExpression;
+            while (document != null)
+            {
+                fieldNames.Add(document.FieldName);
+                document = document.Document as FieldExpression;
+            }
+
+            string dottedFieldName;
+            if (fieldNames.Count > 1)
+            {
+                fieldNames.Reverse();
+                dottedFieldName = string.Join(".", fieldNames);
+            }
+            else
+            {
+                dottedFieldName = fieldNames[0];
+            }
+
+            return new FieldExpression(null, dottedFieldName, node.Serializer, node.Original);
+        }
+
         private static BsonDocument GetProjectionDocument(IEnumerable<BsonSerializationInfo> used)
         {
             var includeId = false;
@@ -192,7 +218,8 @@ namespace MongoDB.Driver.Linq.Translators
                 var referenceGroup = referenceGroups.Dequeue();
                 if (!skippedFields.Contains(referenceGroup.Key))
                 {
-                    var hierarchicalReferenceGroups = referenceGroups.Where(x => x.Key.StartsWith(referenceGroup.Key));
+                    var prefix = referenceGroup.Key + '.';
+                    var hierarchicalReferenceGroups = referenceGroups.Where(x => x.Key.StartsWith(prefix, StringComparison.Ordinal));
                     uniqueFields.AddRange(referenceGroup);
                     skippedFields.AddRange(hierarchicalReferenceGroups.Select(x => x.Key));
                 }
@@ -234,7 +261,7 @@ namespace MongoDB.Driver.Linq.Translators
                 if (source != null)
                 {
                     var fields = Gather(node.Arguments[1]);
-                    if (fields.Any(x => x.FieldName.StartsWith(source.FieldName)))
+                    if (fields.Any(x => x.FieldName.StartsWith(source.FieldName, StringComparison.Ordinal)))
                     {
                         _fieldExpressions.AddRange(fields);
                         return node;
@@ -269,7 +296,7 @@ namespace MongoDB.Driver.Linq.Translators
 
                 var currentKey = (string)((ConstantExpression)node.Arguments[0]).Value;
 
-                if (!currentKey.StartsWith(_keyPrefix))
+                if (!currentKey.StartsWith(_keyPrefix, StringComparison.Ordinal))
                 {
                     return base.VisitMethodCall(node);
                 }

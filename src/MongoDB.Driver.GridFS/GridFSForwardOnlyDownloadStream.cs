@@ -36,7 +36,6 @@ namespace MongoDB.Driver.GridFS
         private List<BsonDocument> _batch;
         private long _batchPosition;
         private readonly bool _checkMD5;
-        private bool _closed;
         private IAsyncCursor<BsonDocument> _cursor;
         private bool _disposed;
         private readonly BsonValue _idAsBsonValue;
@@ -45,6 +44,7 @@ namespace MongoDB.Driver.GridFS
         private readonly IncrementalMD5 _md5;
         private int _nextChunkNumber;
         private long _position;
+        private bool _retryReads;
 
         // constructors
         public GridFSForwardOnlyDownloadStream(
@@ -91,19 +91,13 @@ namespace MongoDB.Driver.GridFS
             }
         }
 
+        public bool RetryReads
+        {
+            get => _retryReads;
+            set => _retryReads = value;
+        }
+
         // methods
-        public override void Close(CancellationToken cancellationToken)
-        {
-            CloseHelper();
-            base.Close(cancellationToken);
-        }
-
-        public override Task CloseAsync(CancellationToken cancellationToken = default(CancellationToken))
-        {
-            CloseHelper();
-            return base.CloseAsync(cancellationToken);
-        }
-
         public override int Read(byte[] buffer, int offset, int count)
         {
             Ensure.IsNotNull(buffer, nameof(buffer));
@@ -158,8 +152,24 @@ namespace MongoDB.Driver.GridFS
         }
 
         // protected methods
+        protected override void CloseImplementation(CancellationToken cancellationToken)
+        {
+            if (_checkMD5 && _position == FileInfo.Length)
+            {
+                var md5 = BsonUtils.ToHexString(_md5.GetHashAndReset());
+                if (!md5.Equals(FileInfo.MD5, StringComparison.OrdinalIgnoreCase))
+                {
+#pragma warning disable 618
+                    throw new GridFSMD5Exception(_idAsBsonValue);
+#pragma warning restore
+                }
+            }
+        }
+
         protected override void Dispose(bool disposing)
         {
+            CloseIfNotAlreadyClosedFromDispose(disposing);
+
             if (!_disposed)
             {
                 if (disposing)
@@ -190,25 +200,6 @@ namespace MongoDB.Driver.GridFS
         }
 
         // private methods
-        private void CloseHelper()
-        {
-            if (!_closed)
-            {
-                _closed = true;
-
-                if (_checkMD5 && _position == FileInfo.Length)
-                {
-                    var md5 = BsonUtils.ToHexString(_md5.GetHashAndReset());
-                    if (!md5.Equals(FileInfo.MD5, StringComparison.OrdinalIgnoreCase))
-                    {
-#pragma warning disable 618
-                        throw new GridFSMD5Exception(_idAsBsonValue);
-#pragma warning restore
-                    }
-                }
-            }
-        }
-
         private FindOperation<BsonDocument> CreateFirstBatchOperation()
         {
             var chunksCollectionNamespace = Bucket.GetChunksCollectionNamespace();
@@ -224,7 +215,8 @@ namespace MongoDB.Driver.GridFS
                 messageEncoderSettings)
             {
                 Filter = filter,
-                Sort = sort
+                Sort = sort,
+                RetryRequested = _retryReads
             };
         }
 

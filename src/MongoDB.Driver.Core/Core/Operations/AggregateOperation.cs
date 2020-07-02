@@ -35,7 +35,7 @@ namespace MongoDB.Driver.Core.Operations
     /// Represents an aggregate operation.
     /// </summary>
     /// <typeparam name="TResult">The type of the result values.</typeparam>
-    public class AggregateOperation<TResult> : IReadOperation<IAsyncCursor<TResult>>
+    public class AggregateOperation<TResult> : IReadOperation<IAsyncCursor<TResult>>, IExecutableInRetryableReadContext<IAsyncCursor<TResult>>
     {
         // fields
         private bool? _allowDiskUse;
@@ -43,6 +43,7 @@ namespace MongoDB.Driver.Core.Operations
         private Collation _collation;
         private readonly CollectionNamespace _collectionNamespace;
         private string _comment;
+        private readonly DatabaseNamespace _databaseNamespace;
         private BsonValue _hint;
         private TimeSpan? _maxAwaitTime;
         private TimeSpan? _maxTime;
@@ -50,9 +51,23 @@ namespace MongoDB.Driver.Core.Operations
         private readonly IReadOnlyList<BsonDocument> _pipeline;
         private ReadConcern _readConcern = ReadConcern.Default;
         private readonly IBsonSerializer<TResult> _resultSerializer;
+        private bool _retryRequested;
         private bool? _useCursor;
 
         // constructors
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AggregateOperation{TResult}"/> class.
+        /// </summary>
+        /// <param name="databaseNamespace">The database namespace.</param>
+        /// <param name="pipeline">The pipeline.</param>
+        /// <param name="resultSerializer">The result value serializer.</param>
+        /// <param name="messageEncoderSettings">The message encoder settings.</param>
+        public AggregateOperation(DatabaseNamespace databaseNamespace, IEnumerable<BsonDocument> pipeline, IBsonSerializer<TResult> resultSerializer, MessageEncoderSettings messageEncoderSettings)
+            : this(pipeline, resultSerializer, messageEncoderSettings)
+        {
+            _databaseNamespace = Ensure.IsNotNull(databaseNamespace, nameof(databaseNamespace));
+        }
+
         /// <summary>
         /// Initializes a new instance of the <see cref="AggregateOperation{TResult}"/> class.
         /// </summary>
@@ -61,8 +76,13 @@ namespace MongoDB.Driver.Core.Operations
         /// <param name="resultSerializer">The result value serializer.</param>
         /// <param name="messageEncoderSettings">The message encoder settings.</param>
         public AggregateOperation(CollectionNamespace collectionNamespace, IEnumerable<BsonDocument> pipeline, IBsonSerializer<TResult> resultSerializer, MessageEncoderSettings messageEncoderSettings)
+            : this(pipeline, resultSerializer, messageEncoderSettings)
         {
             _collectionNamespace = Ensure.IsNotNull(collectionNamespace, nameof(collectionNamespace));
+        }
+
+        private AggregateOperation(IEnumerable<BsonDocument> pipeline, IBsonSerializer<TResult> resultSerializer, MessageEncoderSettings messageEncoderSettings)
+        {
             _pipeline = Ensure.IsNotNull(pipeline, nameof(pipeline)).ToList();
             _resultSerializer = Ensure.IsNotNull(resultSerializer, nameof(resultSerializer));
             _messageEncoderSettings = Ensure.IsNotNull(messageEncoderSettings, nameof(messageEncoderSettings));
@@ -123,6 +143,17 @@ namespace MongoDB.Driver.Core.Operations
         {
             get { return _comment; }
             set { _comment = value; }
+        }
+
+        /// <summary>
+        /// Gets the database namespace.
+        /// </summary>
+        /// <value>
+        /// The database namespace.
+        /// </value>
+        public DatabaseNamespace DatabaseNamespace
+        {
+            get { return _databaseNamespace; }
         }
 
         /// <summary>
@@ -207,11 +238,22 @@ namespace MongoDB.Driver.Core.Operations
         }
 
         /// <summary>
+        /// Gets or sets a value indicating whether to retry.
+        /// </summary>
+        /// <value>Whether to retry.</value>
+        public bool RetryRequested
+        {
+            get => _retryRequested;
+            set => _retryRequested = value;
+        }
+
+        /// <summary>
         /// Gets or sets a value indicating whether the server should use a cursor to return the results.
         /// </summary>
         /// <value>
         /// A value indicating whether the server should use a cursor to return the results.
         /// </value>
+        [Obsolete("Server versions 3.6 and newer always use a cursor.")]
         public bool? UseCursor
         {
             get { return _useCursor; }
@@ -223,16 +265,24 @@ namespace MongoDB.Driver.Core.Operations
         public IAsyncCursor<TResult> Execute(IReadBinding binding, CancellationToken cancellationToken)
         {
             Ensure.IsNotNull(binding, nameof(binding));
+
+            using (var context = RetryableReadContext.Create(binding, _retryRequested, cancellationToken))
+            {
+                return Execute(context, cancellationToken);
+            }
+        }
+
+        /// <inheritdoc/>
+        public IAsyncCursor<TResult> Execute(RetryableReadContext context, CancellationToken cancellationToken)
+        {
+            Ensure.IsNotNull(context, nameof(context));
             EnsureIsReadOnlyPipeline();
 
             using (EventContext.BeginOperation())
-            using (var channelSource = binding.GetReadChannelSource(cancellationToken))
-            using (var channel = channelSource.GetChannel(cancellationToken))
-            using (var channelBinding = new ChannelReadBinding(channelSource.Server, channel, binding.ReadPreference, binding.Session.Fork()))
             {
-                var operation = CreateOperation(channel, channelBinding);
-                var result = operation.Execute(channelBinding, cancellationToken);
-                return CreateCursor(channelSource, channel, operation.Command, result);
+                var operation = CreateOperation(context);
+                var result = operation.Execute(context, cancellationToken);
+                return CreateCursor(context.ChannelSource, context.Channel, operation.Command, result);
             }
         }
 
@@ -240,16 +290,24 @@ namespace MongoDB.Driver.Core.Operations
         public async Task<IAsyncCursor<TResult>> ExecuteAsync(IReadBinding binding, CancellationToken cancellationToken)
         {
             Ensure.IsNotNull(binding, nameof(binding));
+
+            using (var context = await RetryableReadContext.CreateAsync(binding, _retryRequested, cancellationToken).ConfigureAwait(false))
+            {
+                return await ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task<IAsyncCursor<TResult>> ExecuteAsync(RetryableReadContext context, CancellationToken cancellationToken)
+        {
+            Ensure.IsNotNull(context, nameof(context));
             EnsureIsReadOnlyPipeline();
 
             using (EventContext.BeginOperation())
-            using (var channelSource = await binding.GetReadChannelSourceAsync(cancellationToken).ConfigureAwait(false))
-            using (var channel = await channelSource.GetChannelAsync(cancellationToken).ConfigureAwait(false))
-            using (var channelBinding = new ChannelReadBinding(channelSource.Server, channel, binding.ReadPreference, binding.Session.Fork()))
             {
-                var operation = CreateOperation(channel, channelBinding);
-                var result = await operation.ExecuteAsync(channelBinding, cancellationToken).ConfigureAwait(false);
-                return CreateCursor(channelSource, channel, operation.Command, result);
+                var operation = CreateOperation(context);
+                var result = await operation.ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
+                return CreateCursor(context.ChannelSource, context.Channel, operation.Command, result);
             }
         }
 
@@ -276,7 +334,7 @@ namespace MongoDB.Driver.Core.Operations
             var readConcern = ReadConcernHelper.GetReadConcernForCommand(session, connectionDescription, _readConcern);
             var command = new BsonDocument
             {
-                { "aggregate", _collectionNamespace.CollectionName },
+                { "aggregate", _collectionNamespace == null ? (BsonValue)1 : _collectionNamespace.CollectionName },
                 { "pipeline", new BsonArray(_pipeline) },
                 { "allowDiskUse", () => _allowDiskUse.Value, _allowDiskUse.HasValue },
                 { "maxTimeMS", () => MaxTimeHelper.ToMaxTimeMS(_maxTime.Value), _maxTime.HasValue },
@@ -286,26 +344,27 @@ namespace MongoDB.Driver.Core.Operations
                 { "readConcern", readConcern, readConcern != null }
             };
 
-            if (Feature.AggregateCursorResult.IsSupported(connectionDescription.ServerVersion))
+            var useCursor = _useCursor.GetValueOrDefault(true) || connectionDescription.ServerVersion >= new SemanticVersion(3, 6, 0);
+            if (useCursor)
             {
-                var useCursor = _useCursor.GetValueOrDefault(true) || connectionDescription.ServerVersion >= new SemanticVersion(3, 5, 0);
-                if (useCursor)
+                command["cursor"] = new BsonDocument
                 {
-                    command["cursor"] = new BsonDocument
-                    {
-                        { "batchSize", () => _batchSize.Value, _batchSize.HasValue }
-                    };
-                }
+                    { "batchSize", () => _batchSize.Value, _batchSize.HasValue }
+                };
             }
 
             return command;
         }
 
-        private ReadCommandOperation<AggregateResult> CreateOperation(IChannel channel, IBinding binding)
+        private ReadCommandOperation<AggregateResult> CreateOperation(RetryableReadContext context)
         {
-            var command = CreateCommand(channel.ConnectionDescription, binding.Session);
+            var databaseNamespace = _collectionNamespace == null ? _databaseNamespace : _collectionNamespace.DatabaseNamespace;
+            var command = CreateCommand(context.Channel.ConnectionDescription, context.Binding.Session);
             var serializer = new AggregateResultDeserializer(_resultSerializer);
-            return new ReadCommandOperation<AggregateResult>(CollectionNamespace.DatabaseNamespace, command, serializer, MessageEncoderSettings);
+            return new ReadCommandOperation<AggregateResult>(databaseNamespace, command, serializer, MessageEncoderSettings)
+            {
+                RetryRequested = _retryRequested // might be overridden by retryable read context
+            };
         }
 
         private AsyncCursor<TResult> CreateCursor(IChannelSourceHandle channelSource, IChannelHandle channel, BsonDocument command, AggregateResult result)
@@ -325,10 +384,11 @@ namespace MongoDB.Driver.Core.Operations
             var getMoreChannelSource = new ServerChannelSource(channelSource.Server, channelSource.Session.Fork());
             return new AsyncCursor<TResult>(
                 getMoreChannelSource,
-                CollectionNamespace,
+                result.CollectionNamespace,
                 command,
                 result.Results,
                 result.CursorId.GetValueOrDefault(0),
+                result.PostBatchResumeToken,
                 _batchSize,
                 null, // limit
                 _resultSerializer,
@@ -344,6 +404,7 @@ namespace MongoDB.Driver.Core.Operations
                 command,
                 result.Results,
                 0, // cursorId
+                null, // postBatchResumeToken
                 null, // batchSize
                 null, // limit
                 _resultSerializer,
@@ -353,15 +414,17 @@ namespace MongoDB.Driver.Core.Operations
 
         private void EnsureIsReadOnlyPipeline()
         {
-            if (Pipeline.Any(s => s.GetElement(0).Name == "$out"))
+            if (Pipeline.Any(s => { var n = s.GetElement(0).Name; return n == "$out" || n == "$merge"; }))
             {
-                throw new ArgumentException("The pipeline for an AggregateOperation contains a $out operator. Use AggregateOutputToCollectionOperation instead.", "pipeline");
+                throw new ArgumentException("The pipeline for an AggregateOperation contains a $out or $merge operator. Use AggregateOutputToCollectionOperation instead.", "pipeline");
             }
         }
 
         private class AggregateResult
         {
             public long? CursorId;
+            public CollectionNamespace CollectionNamespace;
+            public BsonDocument PostBatchResumeToken;
             public TResult[] Results;
         }
 
@@ -420,18 +483,29 @@ namespace MongoDB.Driver.Core.Operations
                 while (reader.ReadBsonType() != 0)
                 {
                     var elementName = reader.ReadName();
-                    if (elementName == "id")
+                    switch (elementName)
                     {
-                        result.CursorId = new Int64Serializer().Deserialize(context);
-                    }
-                    else if (elementName == "firstBatch")
-                    {
-                        var arraySerializer = new ArraySerializer<TResult>(_resultSerializer);
-                        result.Results = arraySerializer.Deserialize(context);
-                    }
-                    else
-                    {
-                        reader.SkipValue();
+                        case "id":
+                            result.CursorId = new Int64Serializer().Deserialize(context);
+                            break;
+
+                        case "ns":
+                            var ns = reader.ReadString();
+                            result.CollectionNamespace = CollectionNamespace.FromFullName(ns);
+                            break;
+
+                        case "firstBatch":
+                            var arraySerializer = new ArraySerializer<TResult>(_resultSerializer);
+                            result.Results = arraySerializer.Deserialize(context);
+                            break;
+
+                        case "postBatchResumeToken":
+                            result.PostBatchResumeToken = BsonDocumentSerializer.Instance.Deserialize(context);
+                            break;
+
+                        default:
+                            reader.SkipValue();
+                            break;
                     }
                 }
                 reader.ReadEndDocument();

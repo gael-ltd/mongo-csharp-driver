@@ -33,6 +33,9 @@ namespace MongoDB.Driver.Tests.Specifications.crud
                 case "filter":
                     _filter = (BsonDocument)value;
                     return true;
+                case "allowDiskUse":
+                    _options.AllowDiskUse = value.ToBoolean();
+                    return true;
                 case "sort":
                     _options.Sort = value.ToBsonDocument();
                     return true;
@@ -58,7 +61,7 @@ namespace MongoDB.Driver.Tests.Specifications.crud
             return ((BsonArray)expectedResult).Select(x => x.ToBsonDocument()).ToList();
         }
 
-        protected override List<BsonDocument> ExecuteAndGetResult(IMongoCollection<BsonDocument> collection, bool async)
+        protected override List<BsonDocument> ExecuteAndGetResult(IMongoDatabase database, IMongoCollection<BsonDocument> collection, bool async)
         {
             if (async)
             {

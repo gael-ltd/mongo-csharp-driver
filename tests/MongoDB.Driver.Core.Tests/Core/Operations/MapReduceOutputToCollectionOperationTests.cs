@@ -58,10 +58,14 @@ namespace MongoDB.Driver.Core.Operations
             subject.Collation.Should().BeNull();
             subject.Filter.Should().BeNull();
             subject.FinalizeFunction.Should().BeNull();
+#pragma warning disable 618
             subject.JavaScriptMode.Should().NotHaveValue();
+#pragma warning restore 618
             subject.Limit.Should().NotHaveValue();
             subject.MaxTime.Should().NotHaveValue();
+#pragma warning disable 618
             subject.NonAtomicOutput.Should().NotHaveValue();
+#pragma warning restore 618
             subject.OutputMode.Should().Be(MapReduceOutputMode.Replace);
             subject.Scope.Should().BeNull();
             subject.Sort.Should().BeNull();
@@ -114,8 +118,10 @@ namespace MongoDB.Driver.Core.Operations
         {
             var subject = new MapReduceOutputToCollectionOperation(_collectionNamespace, _outputCollectionNamespace, _mapFunction, _reduceFunction, _messageEncoderSettings);
 
+#pragma warning disable 618
             subject.NonAtomicOutput = value;
             var result = subject.NonAtomicOutput;
+#pragma warning restore 618
 
             result.Should().Be(value);
         }
@@ -156,8 +162,10 @@ namespace MongoDB.Driver.Core.Operations
         {
             var subject = new MapReduceOutputToCollectionOperation(_collectionNamespace, _outputCollectionNamespace, _mapFunction, _reduceFunction, _messageEncoderSettings);
 
+#pragma warning disable 618
             subject.ShardedOutput = value;
             var result = subject.ShardedOutput;
+#pragma warning restore 618
 
             result.Should().Be(value);
         }
@@ -199,7 +207,7 @@ namespace MongoDB.Driver.Core.Operations
 
             var expectedResult = new BsonDocument
             {
-                { "mapreduce", _collectionNamespace.CollectionName },
+                { "mapReduce", _collectionNamespace.CollectionName },
                 { "map", _mapFunction },
                 { "reduce", _reduceFunction },
                 { "out", new BsonDocument { {"replace", _outputCollectionNamespace.CollectionName }, { "db", _databaseNamespace.DatabaseName } } },
@@ -231,7 +239,7 @@ namespace MongoDB.Driver.Core.Operations
 
             var expectedResult = new BsonDocument
             {
-                { "mapreduce", _collectionNamespace.CollectionName },
+                { "mapReduce", _collectionNamespace.CollectionName },
                 { "map", _mapFunction },
                 { "reduce", _reduceFunction },
                 { "out", new BsonDocument { {"replace", _outputCollectionNamespace.CollectionName }, { "db", _databaseNamespace.DatabaseName } } },
@@ -264,7 +272,9 @@ namespace MongoDB.Driver.Core.Operations
         {
             var subject = new MapReduceOutputToCollectionOperation(_collectionNamespace, _outputCollectionNamespace, _mapFunction, _reduceFunction, _messageEncoderSettings)
             {
+#pragma warning disable 618
                 ShardedOutput = shardedOutput
+#pragma warning restore 618
             };
             var subjectReflector = new Reflector(subject);
 
@@ -287,7 +297,9 @@ namespace MongoDB.Driver.Core.Operations
         {
             var subject = new MapReduceOutputToCollectionOperation(_collectionNamespace, _outputCollectionNamespace, _mapFunction, _reduceFunction, _messageEncoderSettings)
             {
+#pragma warning disable 618
                 NonAtomicOutput = nonAtomicOutput
+#pragma warning restore 618
             };
             var subjectReflector = new Reflector(subject);
             var expectedResult = new BsonDocument
@@ -314,7 +326,7 @@ namespace MongoDB.Driver.Core.Operations
 
             ExecuteOperation(subject, async);
 
-            ReadAllFromCollection(_outputCollectionNamespace).Should().Equal(
+            ReadAllFromCollection(_outputCollectionNamespace).Should().BeEquivalentTo(
                 BsonDocument.Parse("{ _id : 1, value : 3 }"),
                 BsonDocument.Parse("{ _id : 2, value : 4 }"));
         }
@@ -356,7 +368,7 @@ namespace MongoDB.Driver.Core.Operations
                     BsonDocument.Parse("{ _id : 2, value : 4 }")
                 };
             }
-            ReadAllFromCollection(_outputCollectionNamespace).Should().Equal(expectedResults);
+            ReadAllFromCollection(_outputCollectionNamespace).Should().BeEquivalentTo(expectedResults);
         }
 
         [SkippableTheory]
@@ -375,7 +387,7 @@ namespace MongoDB.Driver.Core.Operations
 
             ExecuteOperation(subject, async);
 
-            ReadAllFromCollection(_outputCollectionNamespace).Should().Equal(
+            ReadAllFromCollection(_outputCollectionNamespace).Should().BeEquivalentTo(
                 BsonDocument.Parse("{ _id : 1, value : 1 }"),
                 BsonDocument.Parse("{ _id : 2, value : 4 }"));
         }
@@ -396,7 +408,7 @@ namespace MongoDB.Driver.Core.Operations
 
             ExecuteOperation(subject, async);
 
-            ReadAllFromCollection(_outputCollectionNamespace).Should().Equal(
+            ReadAllFromCollection(_outputCollectionNamespace).Should().BeEquivalentTo(
                 BsonDocument.Parse("{ _id : 1, value : -3 }"),
                 BsonDocument.Parse("{ _id : 2, value : -4 }"));
         }
@@ -458,7 +470,7 @@ namespace MongoDB.Driver.Core.Operations
             [Values(false, true)]
             bool async)
         {
-            RequireServer.Check().ClusterTypes(ClusterType.Standalone, ClusterType.ReplicaSet).Supports(Feature.MaxTime);
+            RequireServer.Check().ClusterTypes(ClusterType.Standalone, ClusterType.ReplicaSet);
             EnsureTestData();
             var maxTime = seconds.HasValue ? TimeSpan.FromSeconds(seconds.Value) : (TimeSpan?)null;
             var subject = new MapReduceOutputToCollectionOperation(_collectionNamespace, _outputCollectionNamespace, _mapFunction, _reduceFunction, _messageEncoderSettings)
@@ -469,7 +481,7 @@ namespace MongoDB.Driver.Core.Operations
             ExecuteOperation(subject, async);
 
             // results should be the same whether MaxTime was used or not
-            ReadAllFromCollection(_outputCollectionNamespace).Should().Equal(
+            ReadAllFromCollection(_outputCollectionNamespace).Should().BeEquivalentTo(
                 BsonDocument.Parse("{ _id : 1, value : 3 }"),
                 BsonDocument.Parse("{ _id : 2, value : 4 }"));
         }
@@ -492,7 +504,7 @@ namespace MongoDB.Driver.Core.Operations
 
             ExecuteOperation(subject, async);
 
-            ReadAllFromCollection(_outputCollectionNamespace).Should().Equal(
+            ReadAllFromCollection(_outputCollectionNamespace).Should().BeEquivalentTo(
                 BsonDocument.Parse("{ _id : 1, value : 3 }"),
                 BsonDocument.Parse("{ _id : 2, value : 4 }"));
         }
@@ -532,7 +544,7 @@ namespace MongoDB.Driver.Core.Operations
                     BsonDocument.Parse("{ _id : 2, value : 4 }")
                 };
             }
-            ReadAllFromCollection(_outputCollectionNamespace).Should().Equal(expectedResults);
+            ReadAllFromCollection(_outputCollectionNamespace).Should().BeEquivalentTo(expectedResults);
         }
 
         [Theory]
@@ -575,7 +587,7 @@ namespace MongoDB.Driver.Core.Operations
             EnsureTestData();
             var subject = new MapReduceOutputToCollectionOperation(_collectionNamespace, _outputCollectionNamespace, _mapFunction, _reduceFunction, _messageEncoderSettings);
 
-            VerifySessionIdWasSentWhenSupported(subject, "mapreduce", async);
+            VerifySessionIdWasSentWhenSupported(subject, "mapReduce", async);
         }
 
         // helper methods

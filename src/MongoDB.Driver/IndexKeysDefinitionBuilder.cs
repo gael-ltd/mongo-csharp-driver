@@ -129,6 +129,7 @@ namespace MongoDB.Driver
         /// <returns>
         /// A combined index keys definition.
         /// </returns>
+        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public static IndexKeysDefinition<TDocument> GeoHaystack<TDocument>(this IndexKeysDefinition<TDocument> keys, FieldDefinition<TDocument> field, FieldDefinition<TDocument> additionalFieldName = null)
         {
             var builder = Builders<TDocument>.IndexKeys;
@@ -145,6 +146,7 @@ namespace MongoDB.Driver
         /// <returns>
         /// A combined index keys definition.
         /// </returns>
+        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public static IndexKeysDefinition<TDocument> GeoHaystack<TDocument>(this IndexKeysDefinition<TDocument> keys, Expression<Func<TDocument, object>> field, Expression<Func<TDocument, object>> additionalFieldName = null)
         {
             var builder = Builders<TDocument>.IndexKeys;
@@ -336,6 +338,7 @@ namespace MongoDB.Driver
         /// <returns>
         /// A geo haystack index key definition.
         /// </returns>
+        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public IndexKeysDefinition<TDocument> GeoHaystack(FieldDefinition<TDocument> field, FieldDefinition<TDocument> additionalFieldName = null)
         {
             return new GeoHaystackIndexKeyDefinition<TDocument>(field, additionalFieldName);
@@ -349,6 +352,7 @@ namespace MongoDB.Driver
         /// <returns>
         /// A geo haystack index key definition.
         /// </returns>
+        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public IndexKeysDefinition<TDocument> GeoHaystack(Expression<Func<TDocument, object>> field, Expression<Func<TDocument, object>> additionalFieldName = null)
         {
             FieldDefinition<TDocument> additional = additionalFieldName == null ? null : new ExpressionFieldDefinition<TDocument>(additionalFieldName);
@@ -413,6 +417,26 @@ namespace MongoDB.Driver
         public IndexKeysDefinition<TDocument> Text(Expression<Func<TDocument, object>> field)
         {
             return Text(new ExpressionFieldDefinition<TDocument>(field));
+        }
+
+        /// <summary>
+        /// Creates a wildcard index key definition. The method doesn't expect to specify a wildcard key explicitly.
+        /// </summary>
+        /// <param name="field">The wildcard key name. If the wildcard name is empty, the generated key will be `All field paths`, otherwise `A single field path`.</param>
+        /// <returns>A wildcard index key definition.</returns>
+        public IndexKeysDefinition<TDocument> Wildcard(FieldDefinition<TDocument> field = null)
+        {
+            return new WildcardIndexKeyDefinition<TDocument>(field);
+        }
+
+        /// <summary>
+        /// Creates a wildcard index key definition.
+        /// </summary>
+        /// <param name="field">The field expression representing the wildcard key name.</param>
+        /// <returns>A wildcard index key definition.</returns>
+        public IndexKeysDefinition<TDocument> Wildcard(Expression<Func<TDocument, object>> field)
+        {
+            return Wildcard(new ExpressionFieldDefinition<TDocument>(field));
         }
     }
 
@@ -482,6 +506,7 @@ namespace MongoDB.Driver
         }
     }
 
+    [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
     internal sealed class GeoHaystackIndexKeyDefinition<TDocument> : IndexKeysDefinition<TDocument>
     {
         private readonly FieldDefinition<TDocument> _field;
@@ -523,6 +548,33 @@ namespace MongoDB.Driver
         {
             var renderedField = _field.Render(documentSerializer, serializerRegistry);
             return new BsonDocument(renderedField.FieldName, _type);
+        }
+    }
+
+    internal sealed class WildcardIndexKeyDefinition<TDocument> : IndexKeysDefinition<TDocument>
+    {
+        private readonly FieldDefinition<TDocument> _field;
+
+        public WildcardIndexKeyDefinition(FieldDefinition<TDocument> field = null)
+        {
+            _field = field;
+        }
+
+        public override BsonDocument Render(IBsonSerializer<TDocument> documentSerializer, IBsonSerializerRegistry serializerRegistry)
+        {
+            string fieldName;
+            if (_field == null)
+            {
+                fieldName = "$**";
+            }
+            else
+            {
+                var renderedField = _field.Render(documentSerializer, serializerRegistry);
+                fieldName = renderedField.FieldName;
+                fieldName += ".$**";
+            }
+
+            return new BsonDocument(fieldName, 1);
         }
     }
 }

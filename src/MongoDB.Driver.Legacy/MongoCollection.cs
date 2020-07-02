@@ -144,8 +144,9 @@ namespace MongoDB.Driver
 
             var messageEncoderSettings = GetMessageEncoderSettings();
 
-            var last = args.Pipeline.LastOrDefault();
-            if (last != null && last.GetElement(0).Name == "$out")
+            var lastStage = args.Pipeline.LastOrDefault();
+            var lastStageName = lastStage?.GetElement(0).Name;
+            if (lastStage != null && (lastStageName == "$out" || lastStageName == "$merge"))
             {
                 var aggregateOperation = new AggregateToCollectionOperation(_collectionNamespace, args.Pipeline, messageEncoderSettings)
                 {
@@ -153,18 +154,63 @@ namespace MongoDB.Driver
                     BypassDocumentValidation = args.BypassDocumentValidation,
                     Collation = args.Collation,
                     MaxTime = args.MaxTime,
+                    ReadConcern = _settings.ReadConcern,
                     WriteConcern = _settings.WriteConcern
                 };
                 ExecuteWriteOperation(session, aggregateOperation);
 
-                var outputCollectionName = last[0].AsString;
-                var outputCollectionNamespace = new CollectionNamespace(_collectionNamespace.DatabaseNamespace, outputCollectionName);
+                CollectionNamespace outputCollectionNamespace;
+                var stageName = lastStage.GetElement(0).Name;
+                switch (stageName)
+                {
+                    case "$out":
+                        {
+                            var outValue = lastStage[0];
+                            DatabaseNamespace outputDatabaseNamespace;
+                            string outputCollectionName;
+                            if (outValue.IsString)
+                            {
+                                outputDatabaseNamespace = _collectionNamespace.DatabaseNamespace;
+                                outputCollectionName = outValue.AsString;
+                            }
+                            else
+                            {
+                                outputDatabaseNamespace = new DatabaseNamespace(outValue["db"].AsString);
+                                outputCollectionName = outValue["coll"].AsString;
+                            }
+                            outputCollectionNamespace = new CollectionNamespace(outputDatabaseNamespace, outputCollectionName);
+                        }
+                        break;
+                    case "$merge":
+                        {
+                            var mergeArguments = lastStage[0].AsBsonDocument;
+                            DatabaseNamespace outputDatabaseNamespace;
+                            string outputCollectionName;
+                            var into = mergeArguments["into"];
+                            if (into.IsString)
+                            {
+                                outputDatabaseNamespace = _collectionNamespace.DatabaseNamespace;
+                                outputCollectionName = into.AsString;
+                            }
+                            else
+                            {
+                                outputDatabaseNamespace = new DatabaseNamespace(into["db"].AsString);
+                                outputCollectionName = into["coll"].AsString;
+                            }
+                            outputCollectionNamespace = new CollectionNamespace(outputDatabaseNamespace, outputCollectionName);
+                        }
+                        break;
+                    default:
+                        throw new ArgumentException($"Unexpected stage name: {stageName}.");
+                }
+
                 var resultSerializer = BsonDocumentSerializer.Instance;
                 var findOperation = new FindOperation<BsonDocument>(outputCollectionNamespace, resultSerializer, messageEncoderSettings)
                 {
                     BatchSize = args.BatchSize,
                     Collation = args.Collation,
-                    MaxTime = args.MaxTime
+                    MaxTime = args.MaxTime,
+                    RetryRequested = _server.Settings.RetryReads
                 };
 
                 return new AggregateEnumerable(this, findOperation, ReadPreference.Primary);
@@ -179,7 +225,10 @@ namespace MongoDB.Driver
                     Collation = args.Collation,
                     MaxTime = args.MaxTime,
                     ReadConcern = _settings.ReadConcern,
+                    RetryRequested = _server.Settings.RetryReads,
+#pragma warning disable 618
                     UseCursor = args.OutputMode == AggregateOutputMode.Cursor
+#pragma warning restore 618
                 };
                 return new AggregateEnumerable(this, operation, _settings.ReadPreference);
             }
@@ -243,6 +292,7 @@ namespace MongoDB.Driver
                 Limit = args.Limit,
                 MaxTime = args.MaxTime,
                 ReadConcern = _settings.ReadConcern,
+                RetryRequested = _server.Settings.RetryReads,
                 Skip = args.Skip
             };
 
@@ -334,7 +384,8 @@ namespace MongoDB.Driver
                 Collation = args.Collation,
                 Filter = args.Query == null ? null : new BsonDocumentWrapper(args.Query),
                 MaxTime = args.MaxTime,
-                ReadConcern = _settings.ReadConcern
+                ReadConcern = _settings.ReadConcern,
+                RetryRequested = _server.Settings.RetryReads
             };
 
             return ExecuteReadOperation(session, operation).ToList();
@@ -626,7 +677,7 @@ namespace MongoDB.Driver
             var sort = args.SortBy == null ? null : new BsonDocumentWrapper(args.SortBy);
 
             FindAndModifyOperationBase<BsonDocument> operation;
-            if (updateDocument.ElementCount > 0 && updateDocument.GetElement(0).Name.StartsWith("$"))
+            if (updateDocument.ElementCount > 0 && updateDocument.GetElement(0).Name.StartsWith("$", StringComparison.Ordinal))
             {
                 operation = new FindOneAndUpdateOperation<BsonDocument>(_collectionNamespace, filter, updateDocument, resultSerializer, messageEncoderSettings)
                 {
@@ -807,6 +858,7 @@ namespace MongoDB.Driver
                 Limit = -1,
                 MaxTime = args.MaxTime,
                 Projection = fields,
+                RetryRequested = _server.Settings.RetryReads,
                 Skip = args.Skip,
                 Sort = args.SortBy.ToBsonDocument()
             };
@@ -935,11 +987,13 @@ namespace MongoDB.Driver
         /// <typeparam name="TDocument">The type of the found documents.</typeparam>
         /// <param name="args">The args.</param>
         /// <returns>A <see cref="GeoNearResult{TDocument}"/>.</returns>
+        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public virtual GeoHaystackSearchResult<TDocument> GeoHaystackSearchAs<TDocument>(GeoHaystackSearchArgs args)
         {
             return UsingImplicitSession(session => GeoHaystackSearchAs<TDocument>(session, args));
         }
 
+#pragma warning disable 618
         private GeoHaystackSearchResult<TDocument> GeoHaystackSearchAs<TDocument>(IClientSessionHandle session, GeoHaystackSearchArgs args)
         {
             if (args == null) { throw new ArgumentNullException("args"); }
@@ -966,6 +1020,7 @@ namespace MongoDB.Driver
 
             return ExecuteReadOperation(session, operation);
         }
+#pragma warning restore 618
 
         /// <summary>
         /// Runs a geoHaystack search command on this collection.
@@ -993,6 +1048,7 @@ namespace MongoDB.Driver
         /// <param name="documentType">The type to deserialize the documents as.</param>
         /// <param name="args">The args.</param>
         /// <returns>A <see cref="GeoNearResult{TDocument}"/>.</returns>
+        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public virtual GeoHaystackSearchResult GeoHaystackSearchAs(Type documentType, GeoHaystackSearchArgs args)
         {
             var methodDefinition = GetType().GetTypeInfo().GetMethod("GeoHaystackSearchAs", new Type[] { typeof(GeoHaystackSearchArgs) });
@@ -1154,7 +1210,10 @@ namespace MongoDB.Driver
 
         private GetIndexesResult GetIndexes(IClientSessionHandle session)
         {
-            var operation = new ListIndexesOperation(_collectionNamespace, GetMessageEncoderSettings());
+            var operation = new ListIndexesOperation(_collectionNamespace, GetMessageEncoderSettings())
+            {
+                RetryRequested = _server.Settings.RetryReads
+            };
             var cursor = ExecuteReadOperation(session, operation, ReadPreference.Primary);
             var list = cursor.ToList();
             return new GetIndexesResult(list.ToArray());
@@ -1192,11 +1251,13 @@ namespace MongoDB.Driver
         /// </summary>
         /// <param name="args">The args.</param>
         /// <returns>A list of results as BsonDocuments.</returns>
+        [Obsolete("The group command was deprecated in server version 3.4.")]
         public virtual IEnumerable<BsonDocument> Group(GroupArgs args)
         {
             return UsingImplicitSession(session => Group(session, args));
         }
 
+        [Obsolete("The group command was deprecated in server version 3.4.")]
         private IEnumerable<BsonDocument> Group(IClientSessionHandle session, GroupArgs args)
         {
             if (args == null) { throw new ArgumentNullException("args"); }
@@ -1246,6 +1307,7 @@ namespace MongoDB.Driver
         /// <param name="reduce">A JavaScript function that is called for each matching document in a group.</param>
         /// <param name="finalize">A JavaScript function that is called at the end of the group command.</param>
         /// <returns>A list of results as BsonDocuments.</returns>
+        [Obsolete("The group command was deprecated in server version 3.4.")]
         public virtual IEnumerable<BsonDocument> Group(
             IMongoQuery query,
             BsonJavaScript keyFunction,
@@ -1272,6 +1334,7 @@ namespace MongoDB.Driver
         /// <param name="reduce">A JavaScript function that is called for each matching document in a group.</param>
         /// <param name="finalize">A JavaScript function that is called at the end of the group command.</param>
         /// <returns>A list of results as BsonDocuments.</returns>
+        [Obsolete("The group command was deprecated in server version 3.4.")]
         public virtual IEnumerable<BsonDocument> Group(
             IMongoQuery query,
             IMongoGroupBy keys,
@@ -1298,6 +1361,7 @@ namespace MongoDB.Driver
         /// <param name="reduce">A JavaScript function that is called for each matching document in a group.</param>
         /// <param name="finalize">A JavaScript function that is called at the end of the group command.</param>
         /// <returns>A list of results as BsonDocuments.</returns>
+        [Obsolete("The group command was deprecated in server version 3.4.")]
         public virtual IEnumerable<BsonDocument> Group(
             IMongoQuery query,
             string key,
@@ -1349,7 +1413,10 @@ namespace MongoDB.Driver
 
         private bool IndexExistsByName(IClientSessionHandle session, string indexName)
         {
-            var operation = new ListIndexesOperation(_collectionNamespace, GetMessageEncoderSettings());
+            var operation = new ListIndexesOperation(_collectionNamespace, GetMessageEncoderSettings())
+            {
+                RetryRequested = _server.Settings.RetryReads
+            };
             var indexes = ExecuteReadOperation(session, operation, ReadPreference.Primary).ToList();
             return indexes.Any(index => index["name"].AsString == indexName);
         }
@@ -1635,7 +1702,9 @@ namespace MongoDB.Driver
                     Collation = args.Collation,
                     Filter = query,
                     FinalizeFunction = args.FinalizeFunction,
+#pragma warning disable 618
                     JavaScriptMode = args.JsMode,
+#pragma warning restore 618
                     Limit = args.Limit,
                     MaxTime = args.MaxTime,
                     ReadConcern = _settings.ReadConcern,
@@ -1663,13 +1732,19 @@ namespace MongoDB.Driver
                     Collation = args.Collation,
                     Filter = query,
                     FinalizeFunction = args.FinalizeFunction,
+#pragma warning disable 618
                     JavaScriptMode = args.JsMode,
+#pragma warning restore 618
                     Limit = args.Limit,
                     MaxTime = args.MaxTime,
+#pragma warning disable 618
                     NonAtomicOutput = args.OutputIsNonAtomic,
+#pragma warning restore 618
                     OutputMode = outputMode,
                     Scope = scope,
+#pragma warning disable 618
                     ShardedOutput = args.OutputIsSharded,
+#pragma warning restore 618
                     Sort = sort,
                     Verbose = args.Verbose,
                     WriteConcern = _settings.WriteConcern
@@ -1690,11 +1765,13 @@ namespace MongoDB.Driver
         /// <typeparam name="TDocument">The type of the document.</typeparam>
         /// <param name="args">The args.</param>
         /// <returns>Multiple enumerators, one for each cursor.</returns>
+        [Obsolete("ParallelScanAs was deprecated in server version 4.1.")]
         public ReadOnlyCollection<IEnumerator<TDocument>> ParallelScanAs<TDocument>(ParallelScanArgs<TDocument> args)
         {
             return UsingImplicitSession(session => ParallelScanAs(session, args));
         }
 
+        [Obsolete("ParallelScanAs was deprecated in server version 4.1.")]
         private ReadOnlyCollection<IEnumerator<TDocument>> ParallelScanAs<TDocument>(IClientSessionHandle session, ParallelScanArgs<TDocument> args)
         {
             var batchSize = args.BatchSize;
@@ -1718,6 +1795,7 @@ namespace MongoDB.Driver
         /// <param name="documentType">Type of the document.</param>
         /// <param name="args">The args.</param>
         /// <returns>Multiple enumerators, one for each cursor.</returns>
+        [Obsolete("ParallelScanAs was deprecated in server version 4.1.")]
         public ReadOnlyCollection<IEnumerator> ParallelScanAs(Type documentType, ParallelScanArgs args)
         {
             var parallelScanArgsDefinition = typeof(ParallelScanArgs<>);
@@ -1755,6 +1833,7 @@ namespace MongoDB.Driver
         /// Runs the ReIndex command on this collection.
         /// </summary>
         /// <returns>A CommandResult.</returns>
+        [Obsolete("This method will be removed in a later version of the driver.")]
         public virtual CommandResult ReIndex()
         {
             return UsingImplicitSession(session => ReIndex(session));
@@ -1762,7 +1841,9 @@ namespace MongoDB.Driver
 
         private CommandResult ReIndex(IClientSessionHandle session)
         {
+#pragma warning disable 618
             var operation = new ReIndexOperation(_collectionNamespace, GetMessageEncoderSettings());
+#pragma warning restore 618
             var result = ExecuteWriteOperation(session, operation);
             return new CommandResult(result);
         }
@@ -1958,7 +2039,13 @@ namespace MongoDB.Driver
             // since we can't determine for sure whether it's a new document or not upsert it
             // the only safe way to get the serialized _id value needed for the query is to serialize the entire document
             var bsonDocument = new BsonDocument();
-            var writerSettings = new BsonDocumentWriterSettings { GuidRepresentation = _settings.GuidRepresentation };
+#pragma warning disable 618
+            var writerSettings = new BsonDocumentWriterSettings();
+            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
+            {
+                writerSettings.GuidRepresentation = _settings.GuidRepresentation;
+            }
+#pragma warning restore 618
             using (var bsonWriter = new BsonDocumentWriter(bsonDocument, writerSettings))
             {
                 var context = BsonSerializationContext.CreateRoot(bsonWriter);
@@ -2148,12 +2235,18 @@ namespace MongoDB.Driver
         // internal methods
         internal MessageEncoderSettings GetMessageEncoderSettings()
         {
-            return new MessageEncoderSettings
+            var messageEncoderSettings = new MessageEncoderSettings
             {
-                { MessageEncoderSettingsName.GuidRepresentation, _settings.GuidRepresentation },
                 { MessageEncoderSettingsName.ReadEncoding, _settings.ReadEncoding ?? Utf8Encodings.Strict },
                 { MessageEncoderSettingsName.WriteEncoding, _settings.WriteEncoding ?? Utf8Encodings.Strict }
             };
+#pragma warning disable 618
+            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
+            {
+                messageEncoderSettings.Add(MessageEncoderSettingsName.GuidRepresentation, _settings.GuidRepresentation);
+            }
+#pragma warning restore 618
+            return messageEncoderSettings;
         }
 
         // private methods
@@ -2207,7 +2300,7 @@ namespace MongoDB.Driver
 #pragma warning disable 618
             return MongoCursor.Create(documentType, this, query, _settings.ReadConcern, _settings.ReadPreference, serializer);
 #pragma warning restore
-        
+
         }
 
         private MongoCursor<TDocument> FindAs<TDocument>(IMongoQuery query, IBsonSerializer serializer)
@@ -2324,6 +2417,7 @@ namespace MongoDB.Driver
         /// </summary>
         /// <param name="args">The args.</param>
         /// <returns>A <see cref="GeoHaystackSearchResult{TDocument}"/>.</returns>
+        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public virtual GeoHaystackSearchResult<TDefaultDocument> GeoHaystackSearch(GeoHaystackSearchArgs args)
         {
             return GeoHaystackSearchAs<TDefaultDocument>(args);
@@ -2470,6 +2564,7 @@ namespace MongoDB.Driver
         /// </summary>
         /// <param name="args">The args.</param>
         /// <returns>Multiple enumerators, one for each cursor.</returns>
+        [Obsolete("ParallelScan was deprecated in server version 4.1.")]
         public virtual ReadOnlyCollection<IEnumerator<TDefaultDocument>> ParallelScan(ParallelScanArgs<TDefaultDocument> args)
         {
             return ParallelScanAs<TDefaultDocument>(args);

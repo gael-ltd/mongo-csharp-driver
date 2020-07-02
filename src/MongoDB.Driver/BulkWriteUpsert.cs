@@ -27,7 +27,7 @@ namespace MongoDB.Driver
     /// <summary>
     /// Represents the information about one Upsert.
     /// </summary>
-#if NET45
+#if NET452
     [Serializable]
 #endif
     public class BulkWriteUpsert
@@ -60,6 +60,30 @@ namespace MongoDB.Driver
         public int Index
         {
             get { return _index; }
+        }
+
+        // public methods
+        /// <inheritdoc />
+        public override bool Equals(object obj)
+        {
+            if (object.ReferenceEquals(obj, null) || obj.GetType() != typeof(BulkWriteUpsert))
+            {
+                return false;
+            }
+
+            var other = (BulkWriteUpsert)obj;
+            return
+                _index == other._index &&
+                _id.Equals(other._id);
+        }
+
+        /// <inheritdoc />
+        public override int GetHashCode()
+        {
+            return new Hasher()
+                .Hash(_index)
+                .Hash(_id)
+                .GetHashCode();
         }
 
         // internal static methods

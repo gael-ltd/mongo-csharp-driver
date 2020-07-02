@@ -14,25 +14,29 @@
 */
 
 using System;
-using System.Threading.Tasks;
 using FluentAssertions;
 using MongoDB.Bson;
 using MongoDB.Driver.Core.Clusters;
-using MongoDB.Driver.Core.Misc;
 
 namespace MongoDB.Driver.Tests.Specifications.crud
 {
     public abstract class CrudOperationTestBase : ICrudOperationTest
     {
+        public Exception ActualException { get; set; }
         protected ClusterDescription ClusterDescription { get; private set; }
 
-        public virtual bool CanExecute(ClusterDescription clusterDescription, BsonDocument arguments, out string reason)
+        public virtual void SkipIfNotSupported(BsonDocument arguments)
         {
-            reason = null;
-            return true;
         }
 
-        public void Execute(ClusterDescription clusterDescription, IMongoDatabase database, IMongoCollection<BsonDocument> collection, BsonDocument arguments, BsonDocument outcome, bool async)
+        public void Execute(
+            ClusterDescription clusterDescription,
+            IMongoDatabase database,
+            IMongoCollection<BsonDocument> collection,
+            BsonDocument arguments,
+            BsonDocument outcome,
+            bool isErrorExpected,
+            bool async)
         {
             ClusterDescription = clusterDescription;
 
@@ -44,9 +48,21 @@ namespace MongoDB.Driver.Tests.Specifications.crud
                 }
             }
 
-            Execute(collection, outcome, async);
+            try
+            {
+                Execute(database, collection, outcome, async);
+            }
+            catch (Exception ex) when (isErrorExpected)
+            {
+                ActualException = ex;
+            }
 
-            if (outcome.Contains("collection"))
+            AssertOutcome(outcome, database, collection);
+        }
+
+        protected virtual void AssertOutcome(BsonDocument outcome, IMongoDatabase database, IMongoCollection<BsonDocument> collection)
+        {
+            if (outcome != null && outcome.Contains("collection"))
             {
                 var collectionToVerify = collection;
                 if (outcome["collection"].AsBsonDocument.Contains("name"))
@@ -57,9 +73,12 @@ namespace MongoDB.Driver.Tests.Specifications.crud
             }
         }
 
-        protected abstract bool TrySetArgument(string name, BsonValue value);
+        protected virtual bool TrySetArgument(string name, BsonValue value)
+        {
+            return false;
+        }
 
-        protected abstract void Execute(IMongoCollection<BsonDocument> collection, BsonDocument outcome, bool async);
+        protected abstract void Execute(IMongoDatabase database, IMongoCollection<BsonDocument> collection, BsonDocument outcome, bool async);
 
         protected virtual void VerifyCollection(IMongoCollection<BsonDocument> collection, BsonArray expectedData)
         {
@@ -70,18 +89,28 @@ namespace MongoDB.Driver.Tests.Specifications.crud
 
     public abstract class CrudOperationWithResultTestBase<TResult> : CrudOperationTestBase
     {
-        protected sealed override void Execute(IMongoCollection<BsonDocument> collection, BsonDocument outcome, bool async)
+        private TResult _result;
+
+        protected sealed override void Execute(IMongoDatabase database, IMongoCollection<BsonDocument> collection, BsonDocument outcome, bool async)
         {
-            var actualResult = ExecuteAndGetResult(collection, async);
-            var expectedResult = ConvertExpectedResult(outcome["result"]);
-            VerifyResult(actualResult, expectedResult);
+            _result = ExecuteAndGetResult(database, collection, async);
+        }
+
+        protected override void AssertOutcome(BsonDocument outcome, IMongoDatabase database, IMongoCollection<BsonDocument> collection)
+        {
+            if (outcome != null && outcome.Contains("result") && ActualException == null)
+            {
+                var expectedResult = ConvertExpectedResult(outcome["result"]);
+                VerifyResult(_result, expectedResult);
+            }
+
+            base.AssertOutcome(outcome, database, collection);
         }
 
         protected abstract TResult ConvertExpectedResult(BsonValue expectedResult);
 
-        protected abstract TResult ExecuteAndGetResult(IMongoCollection<BsonDocument> collection, bool async);
+        protected abstract TResult ExecuteAndGetResult(IMongoDatabase database, IMongoCollection<BsonDocument> collection, bool async);
 
         protected abstract void VerifyResult(TResult actualResult, TResult expectedResult);
     }
-
 }

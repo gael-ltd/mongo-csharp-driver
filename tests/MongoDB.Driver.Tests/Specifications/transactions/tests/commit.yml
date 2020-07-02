@@ -1,3 +1,11 @@
+runOn:
+    -
+        minServerVersion: "4.0"
+        topology: ["replicaset"]
+    -
+        minServerVersion: "4.1.8"
+        topology: ["sharded"]
+
 database_name: &database_name "transaction-tests"
 collection_name: &collection_name "test"
 
@@ -7,32 +15,30 @@ tests:
 
     operations:
       - name: startTransaction
+        object: session0
+      - name: insertOne
+        object: collection
         arguments:
           session: session0
-      - name: insertOne
-        arguments:
           document:
             _id: 1
-          session: session0
         result:
           insertedId: 1
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
       # Again, to verify that txnNumber is incremented.
       - name: startTransaction
+        object: session0
+      - name: insertOne
+        object: collection
         arguments:
           session: session0
-      - name: insertOne
-        arguments:
           document:
             _id: 2
-          session: session0
         result:
           insertedId: 2
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
 
     expectations:
       - command_started_event:
@@ -99,33 +105,29 @@ tests:
 
     operations:
       - name: startTransaction
-        arguments:
-          session: session0
+        object: session0
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
       # Rerun the commit (which does not increment the txnNumber).
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
       - name: startTransaction
+        object: session0
+      - name: insertOne
+        object: collection
         arguments:
           session: session0
-      - name: insertOne
-        arguments:
           document:
             _id: 1
-          session: session0
         result:
           insertedId: 1
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
 
     expectations:
       - command_started_event:
           command:
-            insert: test
+            insert: *collection_name
             documents:
               - _id: 1
             ordered: true
@@ -137,7 +139,7 @@ tests:
             autocommit: false
             writeConcern:
           command_name: insert
-          database_name: transaction-tests
+          database_name: *database_name
       - command_started_event:
           command:
             commitTransaction: 1
@@ -159,24 +161,21 @@ tests:
 
     operations:
       - name: startTransaction
+        object: session0
+      - name: insertOne
+        object: collection
         arguments:
           session: session0
-      - name: insertOne
-        arguments:
           document:
             _id: 1
-          session: session0
         result:
           insertedId: 1
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
 
     expectations:
       - command_started_event:
@@ -213,7 +212,8 @@ tests:
               $numberLong: "1"
             startTransaction:
             autocommit: false
-            writeConcern:
+            # commitTransaction applies w:majority on retries
+            writeConcern: { w: majority, wtimeout: 10000 }
           command_name: commitTransaction
           database_name: admin
       - command_started_event:
@@ -224,7 +224,7 @@ tests:
               $numberLong: "1"
             startTransaction:
             autocommit: false
-            writeConcern:
+            writeConcern: { w: majority, wtimeout: 10000 }
           command_name: commitTransaction
           database_name: admin
 
@@ -234,34 +234,33 @@ tests:
           - _id: 1
 
   - description: write concern error on commit
-
     operations:
       - name: startTransaction
+        object: session0
         arguments:
-          session: session0
           options:
             writeConcern:
               w: 10
       - name: insertOne
+        object: collection
         arguments:
+          session: session0
           document:
             _id: 1
-          session: session0
         result:
           insertedId: 1
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
         result:
           # {
           #   'ok': 1.0,
           #   'writeConcernError': {
           #     'code': 100,
-          #     'codeName': 'CannotSatisfyWriteConcern',
+          #     'codeName': 'UnsatisfiableWriteConcern',
           #     'errmsg': 'Not enough data-bearing nodes'
           #   }
           # }
-          errorCodeName: CannotSatisfyWriteConcern
+          errorLabelsOmit: ["TransientTransactionError", "UnknownTransactionCommitResult"]
 
     outcome:
       collection:
@@ -272,8 +271,7 @@ tests:
 
     operations:
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
         result:
           errorContains: no transaction started
 
@@ -287,14 +285,11 @@ tests:
 
     operations:
       - name: startTransaction
-        arguments:
-          session: session0
+        object: session0
       - name: abortTransaction
-        arguments:
-          session: session0
+        object: session0
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
         result:
           errorContains: Cannot call commitTransaction after calling abortTransaction
 
@@ -308,28 +303,26 @@ tests:
 
     operations:
       - name: startTransaction
+        object: session0
+      - name: insertOne
+        object: collection
         arguments:
           session: session0
-      - name: insertOne
-        arguments:
           document:
             _id: 1
-          session: session0
         result:
           insertedId: 1
       - name: abortTransaction
-        arguments:
-          session: session0
+        object: session0
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
         result:
           errorContains: Cannot call commitTransaction after calling abortTransaction
 
     expectations:
       - command_started_event:
           command:
-            insert: test
+            insert: *collection_name
             documents:
               - _id: 1
             ordered: true
@@ -341,7 +334,7 @@ tests:
             autocommit: false
             writeConcern:
           command_name: insert
-          database_name: transaction-tests
+          database_name: *database_name
       - command_started_event:
           command:
             abortTransaction: 1
@@ -358,48 +351,43 @@ tests:
 
     operations:
       - name: startTransaction
+        object: session0
+      - name: insertOne
+        object: collection
         arguments:
           session: session0
-      - name: insertOne
-        arguments:
           document:
             _id: 1
-          session: session0
         result:
           insertedId: 1
       - name: abortTransaction
-        arguments:
-          session: session0
+        object: session0
       # Increments txnNumber.
       - name: startTransaction
-        arguments:
-          session: session0
+        object: session0
       # These commits aren't sent to server, transaction is empty.
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
       # Verify that previous, empty transaction incremented txnNumber.
       - name: startTransaction
+        object: session0
+      - name: insertOne
+        object: collection
         arguments:
           session: session0
-      - name: insertOne
-        arguments:
           document:
             _id: 1
-          session: session0
         result:
           insertedId: 1
       - name: abortTransaction
-        arguments:
-          session: session0
+        object: session0
 
     expectations:
       - command_started_event:
           command:
-            insert: test
+            insert: *collection_name
             documents:
               - _id: 1
             ordered: true
@@ -411,7 +399,7 @@ tests:
             autocommit: false
             writeConcern:
           command_name: insert
-          database_name: transaction-tests
+          database_name: *database_name
       - command_started_event:
           command:
             abortTransaction: 1
@@ -425,7 +413,7 @@ tests:
           database_name: admin
       - command_started_event:
           command:
-            insert: test
+            insert: *collection_name
             documents:
               - _id: 1
             ordered: true
@@ -439,7 +427,7 @@ tests:
             autocommit: false
             writeConcern:
           command_name: insert
-          database_name: transaction-tests
+          database_name: *database_name
       - command_started_event:
           command:
             abortTransaction: 1
@@ -457,34 +445,34 @@ tests:
         data: []
 
   - description: reset session state commit
-
+    clientOptions:
+      retryWrites: false
     operations:
       - name: startTransaction
+        object: session0
+      - name: insertOne
+        object: collection
         arguments:
           session: session0
-      - name: insertOne
-        arguments:
           document:
             _id: 1
-          session: session0
         result:
           insertedId: 1
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
       # Running any operation after an ended transaction resets the session
       # state to "no transaction".
       - name: insertOne
+        object: collection
         arguments:
+          session: session0
           document:
             _id: 2
-          session: session0
         result:
           insertedId: 2
       # Calling commit again should error instead of re-running the commit.
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
         result:
           errorContains: no transaction started
 
@@ -536,35 +524,35 @@ tests:
           - _id: 2
 
   - description: reset session state abort
-
+    clientOptions:
+      retryWrites: false
     operations:
       - name: startTransaction
+        object: session0
+      - name: insertOne
+        object: collection
         arguments:
           session: session0
-      - name: insertOne
-        arguments:
           document:
             _id: 1
-          session: session0
         result:
           insertedId: 1
       - name: abortTransaction
-        arguments:
-          session: session0
+        object: session0
       # Running any operation after an ended transaction resets the session
       # state to "no transaction".
       - name: insertOne
+        object: collection
         arguments:
+          session: session0
           document:
             _id: 2
-          session: session0
         result:
           insertedId: 2
       # Calling abort should error with "no transaction started" instead of
       # "cannot call abortTransaction twice".
       - name: abortTransaction
-        arguments:
-          session: session0
+        object: session0
         result:
           errorContains: no transaction started
 

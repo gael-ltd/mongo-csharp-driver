@@ -143,7 +143,6 @@ namespace MongoDB.Driver.Core.Operations
         {
             Ensure.IsNotNull(binding, nameof(binding));
 
-            using (EventContext.BeginOperation())
             using (var context = RetryableWriteContext.Create(binding, false, cancellationToken))
             {
                 return Execute(context, cancellationToken);
@@ -153,14 +152,17 @@ namespace MongoDB.Driver.Core.Operations
         /// <inheritdoc/>
         public WriteConcernResult Execute(RetryableWriteContext context, CancellationToken cancellationToken)
         {
-            if (Feature.WriteCommands.IsSupported(context.Channel.ConnectionDescription.ServerVersion) && _writeConcern.IsAcknowledged)
+            using (EventContext.BeginOperation())
             {
-                var emulator = CreateEmulator();
-                return emulator.Execute(context, cancellationToken);
-            }
-            else
-            {
-                return ExecuteProtocol(context.Channel, cancellationToken);
+                if (_writeConcern.IsAcknowledged)
+                {
+                    var emulator = CreateEmulator();
+                    return emulator.Execute(context, cancellationToken);
+                }
+                else
+                {
+                    return ExecuteProtocol(context.Channel, cancellationToken);
+                }
             }
         }
 
@@ -169,7 +171,6 @@ namespace MongoDB.Driver.Core.Operations
         {
             Ensure.IsNotNull(binding, nameof(binding));
 
-            using (EventContext.BeginOperation())
             using (var context = await RetryableWriteContext.CreateAsync(binding, false, cancellationToken).ConfigureAwait(false))
             {
                 return await ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
@@ -179,14 +180,17 @@ namespace MongoDB.Driver.Core.Operations
         /// <inheritdoc/>
         public async Task<WriteConcernResult> ExecuteAsync(RetryableWriteContext context, CancellationToken cancellationToken)
         {
-            if (Feature.WriteCommands.IsSupported(context.Channel.ConnectionDescription.ServerVersion) && _writeConcern.IsAcknowledged)
+            using (EventContext.BeginOperation())
             {
-                var emulator = CreateEmulator();
-                return await emulator.ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                return await ExecuteProtocolAsync(context.Channel, cancellationToken).ConfigureAwait(false);
+                if (_writeConcern.IsAcknowledged)
+                {
+                    var emulator = CreateEmulator();
+                    return await emulator.ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    return await ExecuteProtocolAsync(context.Channel, cancellationToken).ConfigureAwait(false);
+                }
             }
         }
 
@@ -212,13 +216,17 @@ namespace MongoDB.Driver.Core.Operations
             {
                 throw new NotSupportedException("OP_UPDATE does not support arrayFilters.");
             }
+            if (_request.Hint != null)
+            {
+                throw new NotSupportedException("OP_UPDATE does not support hints.");
+            }
 
             return channel.Update(
                 _collectionNamespace,
                 _messageEncoderSettings,
                 _writeConcern,
                 _request.Filter,
-                _request.Update,
+                _request.Update.AsBsonDocument,
                 ElementNameValidatorFactory.ForUpdateType(_request.UpdateType),
                 _request.IsMulti,
                 _request.IsUpsert,
@@ -235,13 +243,17 @@ namespace MongoDB.Driver.Core.Operations
             {
                 throw new NotSupportedException("OP_UPDATE does not support arrayFilters.");
             }
+            if (_request.Hint != null)
+            {
+                throw new NotSupportedException("OP_UPDATE does not support hints.");
+            }
 
             return channel.UpdateAsync(
                 _collectionNamespace,
                 _messageEncoderSettings,
                 _writeConcern,
                 _request.Filter,
-                _request.Update,
+                _request.Update.AsBsonDocument,
                 ElementNameValidatorFactory.ForUpdateType(_request.UpdateType),
                 _request.IsMulti,
                 _request.IsUpsert,

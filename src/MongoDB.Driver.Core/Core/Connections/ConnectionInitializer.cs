@@ -13,11 +13,13 @@
 * limitations under the License.
 */
 
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver.Core.Authentication;
+using MongoDB.Driver.Core.Configuration;
 using MongoDB.Driver.Core.Misc;
 using MongoDB.Driver.Core.WireProtocol;
 
@@ -29,18 +31,20 @@ namespace MongoDB.Driver.Core.Connections
     internal class ConnectionInitializer : IConnectionInitializer
     {
         private readonly BsonDocument _clientDocument;
+        private readonly IReadOnlyList<CompressorConfiguration> _compressors;
 
-        public ConnectionInitializer(string applicationName)
+        public ConnectionInitializer(string applicationName, IReadOnlyList<CompressorConfiguration> compressors)
         {
             _clientDocument = ClientDocumentHelper.CreateClientDocument(applicationName);
+            _compressors = Ensure.IsNotNull(compressors, nameof(compressors));
         }
 
         public ConnectionDescription InitializeConnection(IConnection connection, CancellationToken cancellationToken)
         {
             Ensure.IsNotNull(connection, nameof(connection));
-
-            var isMasterProtocol = CreateIsMasterProtocol();
-            var isMasterResult = new IsMasterResult(isMasterProtocol.Execute(connection, cancellationToken));
+            var isMasterCommand = CreateInitialIsMasterCommand(connection.Settings.Authenticators);
+            var isMasterProtocol = IsMasterHelper.CreateProtocol(isMasterCommand);
+            var isMasterResult = IsMasterHelper.GetResult(connection, isMasterProtocol, cancellationToken);
 
             var buildInfoProtocol = CreateBuildInfoProtocol();
             var buildInfoResult = new BuildInfoResult(buildInfoProtocol.Execute(connection, cancellationToken));
@@ -49,16 +53,24 @@ namespace MongoDB.Driver.Core.Connections
 
             AuthenticationHelper.Authenticate(connection, description, cancellationToken);
 
-            try
+            var connectionIdServerValue = isMasterResult.ConnectionIdServerValue;
+            if (connectionIdServerValue.HasValue)
             {
-                var getLastErrorProtocol = CreateGetLastErrorProtocol();
-                var getLastErrorResult = getLastErrorProtocol.Execute(connection, cancellationToken);
-
-                description = UpdateConnectionIdWithServerValue(description, getLastErrorResult);
+                description = UpdateConnectionIdWithServerValue(description, connectionIdServerValue.Value);
             }
-            catch
+            else
             {
-                // if we couldn't get the server's connection id, so be it.
+                try
+                {
+                    var getLastErrorProtocol = CreateGetLastErrorProtocol();
+                    var getLastErrorResult = getLastErrorProtocol.Execute(connection, cancellationToken);
+
+                    description = UpdateConnectionIdWithServerValue(description, getLastErrorResult);
+                }
+                catch
+                {
+                    // if we couldn't get the server's connection id, so be it.
+                }
             }
 
             return description;
@@ -67,9 +79,9 @@ namespace MongoDB.Driver.Core.Connections
         public async Task<ConnectionDescription> InitializeConnectionAsync(IConnection connection, CancellationToken cancellationToken)
         {
             Ensure.IsNotNull(connection, nameof(connection));
-
-            var isMasterProtocol = CreateIsMasterProtocol();
-            var isMasterResult = new IsMasterResult(await isMasterProtocol.ExecuteAsync(connection, cancellationToken).ConfigureAwait(false));
+            var isMasterCommand = CreateInitialIsMasterCommand(connection.Settings.Authenticators);
+            var isMasterProtocol = IsMasterHelper.CreateProtocol(isMasterCommand);
+            var isMasterResult = await IsMasterHelper.GetResultAsync(connection, isMasterProtocol, cancellationToken).ConfigureAwait(false);
 
             var buildInfoProtocol = CreateBuildInfoProtocol();
             var buildInfoResult = new BuildInfoResult(await buildInfoProtocol.ExecuteAsync(connection, cancellationToken).ConfigureAwait(false));
@@ -78,16 +90,26 @@ namespace MongoDB.Driver.Core.Connections
 
             await AuthenticationHelper.AuthenticateAsync(connection, description, cancellationToken).ConfigureAwait(false);
 
-            try
+            var connectionIdServerValue = isMasterResult.ConnectionIdServerValue;
+            if (connectionIdServerValue.HasValue)
             {
-                var getLastErrorProtocol = CreateGetLastErrorProtocol();
-                var getLastErrorResult = await getLastErrorProtocol.ExecuteAsync(connection, cancellationToken).ConfigureAwait(false);
-
-                description = UpdateConnectionIdWithServerValue(description, getLastErrorResult);
+                description = UpdateConnectionIdWithServerValue(description, connectionIdServerValue.Value);
             }
-            catch
+            else
             {
-                // if we couldn't get the server's connection id, so be it.
+                try
+                {
+                    var getLastErrorProtocol = CreateGetLastErrorProtocol();
+                    var getLastErrorResult = await getLastErrorProtocol
+                        .ExecuteAsync(connection, cancellationToken)
+                        .ConfigureAwait(false);
+
+                    description = UpdateConnectionIdWithServerValue(description, getLastErrorResult);
+                }
+                catch
+                {
+                    // if we couldn't get the server's connection id, so be it.
+                }
             }
 
             return description;
@@ -98,11 +120,11 @@ namespace MongoDB.Driver.Core.Connections
         {
             var buildInfoCommand = new BsonDocument("buildInfo", 1);
             var buildInfoProtocol = new CommandWireProtocol<BsonDocument>(
-                DatabaseNamespace.Admin,
-                buildInfoCommand,
-                true,
-                BsonDocumentSerializer.Instance,
-               null);
+                databaseNamespace: DatabaseNamespace.Admin,
+                command: buildInfoCommand,
+                slaveOk: true,
+                resultSerializer: BsonDocumentSerializer.Instance,
+                messageEncoderSettings: null);
             return buildInfoProtocol;
         }
 
@@ -110,48 +132,36 @@ namespace MongoDB.Driver.Core.Connections
         {
             var getLastErrorCommand = new BsonDocument("getLastError", 1);
             var getLastErrorProtocol = new CommandWireProtocol<BsonDocument>(
-                DatabaseNamespace.Admin,
-                getLastErrorCommand,
-                true,
-                BsonDocumentSerializer.Instance,
-                null);
+                databaseNamespace: DatabaseNamespace.Admin,
+                command: getLastErrorCommand,
+                slaveOk: true,
+                resultSerializer: BsonDocumentSerializer.Instance,
+                messageEncoderSettings: null);
             return getLastErrorProtocol;
         }
 
-        internal BsonDocument CreateIsMasterCommand()
+        private BsonDocument CreateInitialIsMasterCommand(IReadOnlyList<IAuthenticator> authenticators)
         {
-            return CreateIsMasterCommand(_clientDocument);
-        }
-
-        internal BsonDocument CreateIsMasterCommand(BsonDocument clientDocument)
-        {
-            return new BsonDocument
-            {
-                { "isMaster", 1 },
-                { "client", clientDocument, clientDocument != null }
-            };
-        }
-
-        private CommandWireProtocol<BsonDocument> CreateIsMasterProtocol()
-        {
-            var isMasterCommand = CreateIsMasterCommand();
-            var isMasterProtocol = new CommandWireProtocol<BsonDocument>(
-                DatabaseNamespace.Admin,
-                isMasterCommand,
-                true,
-                BsonDocumentSerializer.Instance,
-                null);
-            return isMasterProtocol;
+            var command = IsMasterHelper.CreateCommand();
+            IsMasterHelper.AddClientDocumentToCommand(command, _clientDocument);
+            IsMasterHelper.AddCompressorsToCommand(command, _compressors);
+            return IsMasterHelper.CustomizeCommand(command, authenticators);
         }
 
         private ConnectionDescription UpdateConnectionIdWithServerValue(ConnectionDescription description, BsonDocument getLastErrorResult)
         {
-            BsonValue connectionIdBsonValue;
-            if (getLastErrorResult.TryGetValue("connectionId", out connectionIdBsonValue))
+            if (getLastErrorResult.TryGetValue("connectionId", out var connectionIdBsonValue))
             {
-                var connectionId = description.ConnectionId.WithServerValue(connectionIdBsonValue.ToInt32());
-                description = description.WithConnectionId(connectionId);
+                description = UpdateConnectionIdWithServerValue(description, connectionIdBsonValue.ToInt32());
             }
+
+            return description;
+        }
+
+        private ConnectionDescription UpdateConnectionIdWithServerValue(ConnectionDescription description, int serverValue)
+        {
+            var connectionId = description.ConnectionId.WithServerValue(serverValue);
+            description = description.WithConnectionId(connectionId);
 
             return description;
         }

@@ -17,7 +17,6 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using MongoDB.Bson;
-using MongoDB.Driver.Core.Clusters;
 
 namespace MongoDB.Driver.Core.Bindings
 {
@@ -63,6 +62,9 @@ namespace MongoDB.Driver.Core.Bindings
 
         /// <inheritdoc />
         public bool IsCausallyConsistent => false;
+
+        /// <inheritdoc />
+        public bool IsDirty => false;
 
         /// <inheritdoc />
         public bool IsImplicit => true;
@@ -127,6 +129,11 @@ namespace MongoDB.Driver.Core.Bindings
 
         /// <inheritdoc />
         public void Dispose()
+        {
+        }
+
+        /// <inheritdoc />
+        public void MarkDirty()
         {
         }
 

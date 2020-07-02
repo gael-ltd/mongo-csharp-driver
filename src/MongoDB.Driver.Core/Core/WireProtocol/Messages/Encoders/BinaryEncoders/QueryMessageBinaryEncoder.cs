@@ -47,10 +47,12 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
             {
                 flags |= QueryFlags.NoCursorTimeout;
             }
+#pragma warning disable 618
             if (message.OplogReplay)
             {
                 flags |= QueryFlags.OplogReplay;
             }
+#pragma warning restore 618
             if (message.PartialOk)
             {
                 flags |= QueryFlags.Partial;
@@ -89,7 +91,8 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
             var messageSize = stream.ReadInt32();
             var requestId = stream.ReadInt32();
             stream.ReadInt32(); // responseTo
-            stream.ReadInt32(); // opcode
+            var opcode = (Opcode)stream.ReadInt32();
+            EnsureOpcodeIsValid(opcode);
             var flags = (QueryFlags)stream.ReadInt32();
             var fullCollectionName = stream.ReadCString(Encoding);
             var skip = stream.ReadInt32();
@@ -106,9 +109,12 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
             var slaveOk = (flags & QueryFlags.SlaveOk) == QueryFlags.SlaveOk;
             var partialOk = (flags & QueryFlags.Partial) == QueryFlags.Partial;
             var noCursorTimeout = (flags & QueryFlags.NoCursorTimeout) == QueryFlags.NoCursorTimeout;
+#pragma warning disable 618
             var oplogReplay = (flags & QueryFlags.OplogReplay) == QueryFlags.OplogReplay;
+#pragma warning restore 618
             var tailableCursor = (flags & QueryFlags.TailableCursor) == QueryFlags.TailableCursor;
 
+#pragma warning disable 618
             return new QueryMessage(
                 requestId,
                 CollectionNamespace.FromFullName(fullCollectionName),
@@ -123,6 +129,7 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
                 oplogReplay,
                 tailableCursor,
                 awaitData);
+#pragma warning restore 618
         }
 
         /// <summary>
@@ -153,6 +160,14 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
         }
 
         // private methods
+        private void EnsureOpcodeIsValid(Opcode opcode)
+        {
+            if (opcode != Opcode.Query)
+            {
+                throw new FormatException("Query message opcode is not OP_QUERY.");
+            }
+        }
+
         private void WriteOptionalFields(BsonBinaryWriter binaryWriter, BsonDocument fields)
         {
             if (fields != null)
@@ -277,7 +292,7 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
                     reader.SkipValue();
                 }
 
-                notFound:
+            notFound:
                 throw new InvalidOperationException("{ w : <Int32> } not found.");
             }
         }
@@ -288,6 +303,7 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
             None = 0,
             TailableCursor = 2,
             SlaveOk = 4,
+            [Obsolete("OplogReplay is ignored by server versions 4.4.0 and newer.")]
             OplogReplay = 8,
             NoCursorTimeout = 16,
             AwaitData = 32,

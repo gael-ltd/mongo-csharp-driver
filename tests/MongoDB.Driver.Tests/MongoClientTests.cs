@@ -163,7 +163,7 @@ namespace MongoDB.Driver.Tests
             }";
             var operationResult = BsonDocument.Parse(listDatabaseNamesResult);
             operationExecutor.EnqueueResult(CreateListDatabasesOperationCursor(operationResult));
-            
+
             IList<string> databaseNames;
             if (async)
             {
@@ -230,7 +230,7 @@ namespace MongoDB.Driver.Tests
                 Filter = filterDefinition,
                 NameOnly = nameOnly
             };
-            
+
             if (usingSession)
             {
                 if (async)
@@ -268,6 +268,80 @@ namespace MongoDB.Driver.Tests
             var operation = call.Operation.Should().BeOfType<ListDatabasesOperation>().Subject;
             operation.Filter.Should().Be(filterDocument);
             operation.NameOnly.Should().Be(nameOnly);
+        }
+
+        [Theory]
+        [ParameterAttributeData]
+        public void Watch_should_invoke_the_correct_operation(
+            [Values(false, true)] bool usingSession,
+            [Values(false, true)] bool async)
+        {
+            var operationExecutor = new MockOperationExecutor();
+            var clientSettings = DriverTestConfiguration.GetClientSettings();
+            var subject = new MongoClient(operationExecutor, clientSettings);
+            var session = usingSession ? CreateClientSession() : null;
+            var pipeline = new EmptyPipelineDefinition<ChangeStreamDocument<BsonDocument>>().Limit(1);
+            var options = new ChangeStreamOptions
+            {
+                BatchSize = 123,
+                Collation = new Collation("en-us"),
+                FullDocument = ChangeStreamFullDocumentOption.UpdateLookup,
+                MaxAwaitTime = TimeSpan.FromSeconds(123),
+                ResumeAfter = new BsonDocument(),
+                StartAfter = new BsonDocument(),
+                StartAtOperationTime = new BsonTimestamp(1, 2)
+            };
+            var cancellationToken = new CancellationTokenSource().Token;
+            var renderedPipeline = new[] { BsonDocument.Parse("{ $limit : 1 }") };
+
+            if (usingSession)
+            {
+                if (async)
+                {
+                    subject.WatchAsync(session, pipeline, options, cancellationToken).GetAwaiter().GetResult();
+                }
+                else
+                {
+                    subject.Watch(session, pipeline, options, cancellationToken);
+                }
+            }
+            else
+            {
+                if (async)
+                {
+                    subject.WatchAsync(pipeline, options, cancellationToken).GetAwaiter().GetResult();
+                }
+                else
+                {
+                    subject.Watch(pipeline, options, cancellationToken);
+                }
+            }
+
+            var call = operationExecutor.GetReadCall<IChangeStreamCursor<ChangeStreamDocument<BsonDocument>>>();
+            if (usingSession)
+            {
+                call.SessionId.Should().BeSameAs(session.ServerSession.Id);
+            }
+            else
+            {
+                call.UsedImplicitSession.Should().BeTrue();
+            }
+            call.CancellationToken.Should().Be(cancellationToken);
+
+            var changeStreamOperation = call.Operation.Should().BeOfType<ChangeStreamOperation<ChangeStreamDocument<BsonDocument>>>().Subject;
+            changeStreamOperation.BatchSize.Should().Be(options.BatchSize);
+            changeStreamOperation.Collation.Should().BeSameAs(options.Collation);
+            changeStreamOperation.CollectionNamespace.Should().BeNull();
+            changeStreamOperation.DatabaseNamespace.Should().BeNull();
+            changeStreamOperation.FullDocument.Should().Be(options.FullDocument);
+            changeStreamOperation.MaxAwaitTime.Should().Be(options.MaxAwaitTime);
+            changeStreamOperation.MessageEncoderSettings.Should().NotBeNull();
+            changeStreamOperation.Pipeline.Should().Equal(renderedPipeline);
+            changeStreamOperation.ReadConcern.Should().Be(clientSettings.ReadConcern);
+            changeStreamOperation.ResultSerializer.Should().BeOfType<ChangeStreamDocumentSerializer<BsonDocument>>();
+            changeStreamOperation.ResumeAfter.Should().Be(options.ResumeAfter);
+            changeStreamOperation.StartAfter.Should().Be(options.StartAfter);
+            changeStreamOperation.StartAtOperationTime.Should().Be(options.StartAtOperationTime);
         }
 
         [Fact]

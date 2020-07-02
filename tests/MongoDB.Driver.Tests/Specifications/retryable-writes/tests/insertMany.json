@@ -1,17 +1,21 @@
 {
+  "runOn": [
+    {
+      "minServerVersion": "3.6",
+      "topology": [
+        "replicaset"
+      ]
+    }
+  ],
   "data": [
     {
       "_id": 1,
       "x": 11
     }
   ],
-  "minServerVersion": "3.6",
   "tests": [
     {
       "description": "InsertMany succeeds after one network error",
-      "clientOptions": {
-        "retryWrites": true
-      },
       "failPoint": {
         "configureFailPoint": "onPrimaryTransactionalWrite",
         "mode": {
@@ -63,9 +67,6 @@
     },
     {
       "description": "InsertMany with unordered execution",
-      "clientOptions": {
-        "retryWrites": true
-      },
       "failPoint": {
         "configureFailPoint": "onPrimaryTransactionalWrite",
         "mode": {
@@ -117,9 +118,6 @@
     },
     {
       "description": "InsertMany fails after multiple network errors",
-      "clientOptions": {
-        "retryWrites": true
-      },
       "failPoint": {
         "configureFailPoint": "onPrimaryTransactionalWrite",
         "mode": "alwaysOn",

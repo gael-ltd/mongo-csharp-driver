@@ -1,3 +1,11 @@
+runOn:
+    -
+        minServerVersion: "4.0"
+        topology: ["replicaset"]
+    -
+        minServerVersion: "4.1.8"
+        topology: ["sharded"]
+
 database_name: &database_name "transaction-tests"
 collection_name: &collection_name "test"
 
@@ -8,16 +16,17 @@ tests:
 
     operations:
       - name: startTransaction
+        object: session0
+      - name: insertOne
+        object: collection
         arguments:
           session: session0
-      - name: insertOne
-        arguments:
           document:
             _id: 1
-          session: session0
         result:
           insertedId: 1
       - name: insertMany
+        object: collection
         arguments:
           documents:
             - _id: 2
@@ -26,28 +35,27 @@ tests:
         result:
           insertedIds: {0: 2, 1: 3}
       - name: insertOne
+        object: collection
         arguments:
+          session: session0
           document:
             _id: 4
-          session: session0
         result:
           insertedId: 4
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
       - name: startTransaction
+        object: session0
+      - name: insertOne
+        object: collection
         arguments:
           session: session0
-      - name: insertOne
-        arguments:
           document:
             _id: 5
-          session: session0
         result:
           insertedId: 5
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
 
     expectations:
       - command_started_event:
@@ -141,36 +149,194 @@ tests:
           - _id: 4
           - _id: 5
 
-  - description: operation writeConcern ignored for insert
+  # This test proves that the driver uses "session1" correctly in operations
+  # and APM expectations.
+  - description: insert with session1
+
     operations:
       - name: startTransaction
+        object: session1
+      - name: insertOne
+        object: collection
+        arguments:
+          session: session1
+          document:
+            _id: 1
+        result:
+          insertedId: 1
+      - name: insertMany
+        object: collection
+        arguments:
+          documents:
+            - _id: 2
+            - _id: 3
+          session: session1
+        result:
+          insertedIds: {0: 2, 1: 3}
+      - name: commitTransaction
+        object: session1
+      - name: startTransaction
+        object: session1
+      - name: insertOne
+        object: collection
+        arguments:
+          session: session1
+          document:
+            _id: 4
+        result:
+          insertedId: 4
+      - name: abortTransaction
+        object: session1
+
+    expectations:
+      - command_started_event:
+          command:
+            insert: *collection_name
+            documents:
+              - _id: 1
+            ordered: true
+            readConcern:
+            lsid: session1
+            txnNumber:
+              $numberLong: "1"
+            startTransaction: true
+            autocommit: false
+            writeConcern:
+          command_name: insert
+          database_name: *database_name
+      - command_started_event:
+          command:
+            insert: *collection_name
+            documents:
+              - _id: 2
+              - _id: 3
+            ordered: true
+            lsid: session1
+            txnNumber:
+              $numberLong: "1"
+            startTransaction:
+            autocommit: false
+            writeConcern:
+          command_name: insert
+          database_name: *database_name
+      - command_started_event:
+          command:
+            commitTransaction: 1
+            lsid: session1
+            txnNumber:
+              $numberLong: "1"
+            startTransaction:
+            autocommit: false
+            writeConcern:
+          command_name: commitTransaction
+          database_name: admin
+      - command_started_event:
+          command:
+            insert: *collection_name
+            documents:
+              - _id: 4
+            ordered: true
+            readConcern:
+              afterClusterTime: 42
+            lsid: session1
+            txnNumber:
+              $numberLong: "2"
+            startTransaction: true
+            autocommit: false
+            writeConcern:
+          command_name: insert
+          database_name: *database_name
+      - command_started_event:
+          command:
+            abortTransaction: 1
+            lsid: session1
+            txnNumber:
+              $numberLong: "2"
+            startTransaction:
+            autocommit: false
+            writeConcern:
+          command_name: abortTransaction
+          database_name: admin
+
+    outcome:
+      collection:
+        data:
+          - _id: 1
+          - _id: 2
+          - _id: 3
+
+  # This test proves that the driver parses the collectionOptions writeConcern.
+  - description: collection writeConcern without transaction
+    clientOptions:
+      retryWrites: false
+    operations:
+      - name: insertOne
+        object: collection
+        collectionOptions:
+          writeConcern:
+            w: majority
         arguments:
           session: session0
+          document:
+            _id: 1
+        result:
+          insertedId: 1
+
+    expectations:
+      - command_started_event:
+          command:
+            insert: *collection_name
+            documents:
+              - _id: 1
+            ordered: true
+            readConcern:
+            lsid: session0
+            txnNumber:
+            startTransaction:
+            autocommit:
+            writeConcern:
+              w: majority
+          command_name: insert
+          database_name: *database_name
+
+    outcome:
+      collection:
+        data:
+          - _id: 1
+
+  - description: collection writeConcern ignored for insert
+    operations:
+      - name: startTransaction
+        object: session0
+        arguments:
           options:
             writeConcern:
               w: majority
       - name: insertOne
-        arguments:
-          document:
-            _id: 1
-          session: session0
+        object: collection
+        collectionOptions:
           writeConcern:
             w: majority
+        arguments:
+          session: session0
+          document:
+            _id: 1
         result:
           insertedId: 1
       - name: insertMany
+        object: collection
+        collectionOptions:
+          writeConcern:
+            w: majority
         arguments:
           documents:
             - _id: 2
             - _id: 3
           session: session0
-          writeConcern:
-            w: majority
         result:
           insertedIds: {0: 2, 1: 3}
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
 
     expectations:
       - command_started_event:
@@ -215,3 +381,10 @@ tests:
               w: majority
           command_name: commitTransaction
           database_name: admin
+
+    outcome:
+      collection:
+        data:
+          - _id: 1
+          - _id: 2
+          - _id: 3

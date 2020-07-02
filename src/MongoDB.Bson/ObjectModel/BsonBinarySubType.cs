@@ -20,7 +20,7 @@ namespace MongoDB.Bson
     /// <summary>
     /// Represents the binary data subtype of a BsonBinaryData.
     /// </summary>
-#if NET45
+#if NET452
     [Serializable]
 #endif
     public enum BsonBinarySubType
@@ -50,6 +50,10 @@ namespace MongoDB.Bson
         /// An MD5 hash.
         /// </summary>
         MD5 = 0x05,
+        /// <summary>
+        /// Encrypted binary data.
+        /// </summary>
+        Encrypted = 0x06,
         /// <summary>
         /// User defined binary data.
         /// </summary>

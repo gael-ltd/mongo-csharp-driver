@@ -702,6 +702,76 @@ namespace MongoDB.Driver
         }
 
         /// <summary>
+        /// Appends a $lookup stage to the pipeline.
+        /// </summary>
+        /// <typeparam name="TInput">The type of the input documents.</typeparam>
+        /// <typeparam name="TIntermediate">The type of the intermediate documents.</typeparam>
+        /// <typeparam name="TForeignDocument">The type of the foreign collection documents.</typeparam>
+        /// <typeparam name="TAsElement">The type of the as field elements.</typeparam>
+        /// <typeparam name="TAs">The type of the as field.</typeparam>
+        /// <typeparam name="TOutput">The type of the output documents.</typeparam>
+        /// <param name="pipeline">The pipeline.</param>
+        /// <param name="foreignCollection">The foreign collection.</param>
+        /// <param name="let">The "let" definition.</param>
+        /// <param name="lookupPipeline">The lookup pipeline.</param>
+        /// <param name="as">The as field in <typeparamref name="TOutput" /> in which to place the results of the lookup pipeline.</param>
+        /// <param name="options">The options.</param>
+        /// <returns>The stage.</returns>
+        public static PipelineDefinition<TInput, TOutput> Lookup<TInput, TIntermediate, TForeignDocument, TAsElement, TAs, TOutput>(
+            this PipelineDefinition<TInput, TIntermediate> pipeline,
+            IMongoCollection<TForeignDocument> foreignCollection,
+            BsonDocument let,
+            PipelineDefinition<TForeignDocument, TAsElement> lookupPipeline,
+            FieldDefinition<TOutput, TAs> @as,
+            AggregateLookupOptions<TForeignDocument, TOutput> options = null)
+            where TAs : IEnumerable<TAsElement>
+        {
+            Ensure.IsNotNull(pipeline, nameof(pipeline));
+            return pipeline.AppendStage(PipelineStageDefinitionBuilder.Lookup<TIntermediate, TForeignDocument, TAsElement, TAs, TOutput>(
+                foreignCollection,
+                let,
+                lookupPipeline,
+                @as,
+                options
+            ));
+        }
+
+        /// <summary>
+        /// Appends a $lookup stage to the pipeline.
+        /// </summary>
+        /// <typeparam name="TInput">The type of the input documents.</typeparam>
+        /// <typeparam name="TIntermediate">The type of the intermediate documents.</typeparam>
+        /// <typeparam name="TForeignDocument">The type of the foreign collection documents.</typeparam>
+        /// <typeparam name="TAsElement">The type of the as field elements.</typeparam>
+        /// <typeparam name="TAs">The type of the as field.</typeparam>
+        /// <typeparam name="TOutput">The type of the output documents.</typeparam>
+        /// <param name="pipeline">The pipeline.</param>
+        /// <param name="foreignCollection">The foreign collection.</param>
+        /// <param name="let">The "let" definition.</param>
+        /// <param name="lookupPipeline">The lookup pipeline.</param>
+        /// <param name="as">The as field in <typeparamref name="TOutput" /> in which to place the results of the lookup pipeline.</param>
+        /// <param name="options">The options.</param>
+        /// <returns>The stage.</returns>
+        public static PipelineDefinition<TInput, TOutput> Lookup<TInput, TIntermediate, TForeignDocument, TAsElement, TAs, TOutput>(
+            this PipelineDefinition<TInput, TIntermediate> pipeline,
+            IMongoCollection<TForeignDocument> foreignCollection,
+            BsonDocument let,
+            PipelineDefinition<TForeignDocument, TAsElement> lookupPipeline,
+            Expression<Func<TOutput, TAs>> @as,
+            AggregateLookupOptions<TForeignDocument, TOutput> options = null)
+            where TAs : IEnumerable<TAsElement>
+        {
+            Ensure.IsNotNull(pipeline, nameof(pipeline));
+            return pipeline.AppendStage(PipelineStageDefinitionBuilder.Lookup<TIntermediate, TForeignDocument, TAsElement, TAs, TOutput>(
+                foreignCollection,
+                let,
+                lookupPipeline,
+                @as,
+                options
+            ));
+        }
+
+        /// <summary>
         /// Appends a $match stage to the pipeline.
         /// </summary>
         /// <typeparam name="TInput">The type of the input documents.</typeparam>
@@ -756,6 +826,28 @@ namespace MongoDB.Driver
         {
             Ensure.IsNotNull(pipeline, nameof(pipeline));
             return pipeline.AppendStage(PipelineStageDefinitionBuilder.OfType<TIntermediate, TOutput>(outputSerializer));
+        }
+
+        /// <summary>
+        /// Appends a $merge stage to the pipeline.
+        /// </summary>
+        /// <typeparam name="TInput">The type of the input documents.</typeparam>
+        /// <typeparam name="TIntermediate">The type of the intermediate documents.</typeparam>
+        /// <typeparam name="TOutput">The type of the output documents.</typeparam>
+        /// <param name="pipeline">The pipeline.</param>
+        /// <param name="outputCollection">The output collection.</param>
+        /// <param name="mergeOptions">The merge options.</param>
+        /// <returns>
+        /// A new pipeline with an additional stage.
+        /// </returns>
+        /// <exception cref="System.NotSupportedException"></exception>
+        public static PipelineDefinition<TInput, TOutput> Merge<TInput, TIntermediate, TOutput>(
+            this PipelineDefinition<TInput, TIntermediate> pipeline,
+            IMongoCollection<TOutput> outputCollection,
+            MergeStageOptions<TOutput> mergeOptions)
+        {
+            Ensure.IsNotNull(pipeline, nameof(pipeline));
+            return pipeline.AppendStage(PipelineStageDefinitionBuilder.Merge<TIntermediate, TOutput>(outputCollection, mergeOptions));
         }
 
         /// <summary>
@@ -877,6 +969,46 @@ namespace MongoDB.Driver
         }
 
         /// <summary>
+        /// Appends a $replaceWith stage to the pipeline.
+        /// </summary>
+        /// <typeparam name="TInput">The type of the input documents.</typeparam>
+        /// <typeparam name="TIntermediate">The type of the intermediate documents.</typeparam>
+        /// <typeparam name="TOutput">The type of the output documents.</typeparam>
+        /// <param name="pipeline">The pipeline.</param>
+        /// <param name="newRoot">The new root.</param>
+        /// <returns>
+        /// A new pipeline with an additional stage.
+        /// </returns>
+        public static PipelineDefinition<TInput, TOutput> ReplaceWith<TInput, TIntermediate, TOutput>(
+            this PipelineDefinition<TInput, TIntermediate> pipeline,
+            AggregateExpressionDefinition<TIntermediate, TOutput> newRoot)
+        {
+            Ensure.IsNotNull(pipeline, nameof(pipeline));
+            return pipeline.AppendStage(PipelineStageDefinitionBuilder.ReplaceWith(newRoot));
+        }
+
+        /// <summary>
+        /// Appends a $replaceWith stage to the pipeline.
+        /// </summary>
+        /// <typeparam name="TInput">The type of the input documents.</typeparam>
+        /// <typeparam name="TIntermediate">The type of the intermediate documents.</typeparam>
+        /// <typeparam name="TOutput">The type of the output documents.</typeparam>
+        /// <param name="pipeline">The pipeline.</param>
+        /// <param name="newRoot">The new root.</param>
+        /// <param name="translationOptions">The translation options.</param>
+        /// <returns>
+        /// The fluent aggregate interface.
+        /// </returns>
+        public static PipelineDefinition<TInput, TOutput> ReplaceWith<TInput, TIntermediate, TOutput>(
+            this PipelineDefinition<TInput, TIntermediate> pipeline,
+            Expression<Func<TIntermediate, TOutput>> newRoot,
+            ExpressionTranslationOptions translationOptions = null)
+        {
+            Ensure.IsNotNull(pipeline, nameof(pipeline));
+            return pipeline.AppendStage(PipelineStageDefinitionBuilder.ReplaceWith(newRoot, translationOptions));
+        }
+
+        /// <summary>
         /// Appends a $skip stage to the pipeline.
         /// </summary>
         /// <typeparam name="TInput">The type of the input documents.</typeparam>
@@ -950,6 +1082,27 @@ namespace MongoDB.Driver
         {
             Ensure.IsNotNull(pipeline, nameof(pipeline));
             return pipeline.AppendStage(PipelineStageDefinitionBuilder.SortByCount(value, translationOptions));
+        }
+
+        /// <summary>
+        /// Appends a $unionWith stage to the pipeline.
+        /// </summary>
+        /// <typeparam name="TInput">The type of the input documents.</typeparam>
+        /// <typeparam name="TWith">The type of the with collection documents.</typeparam>
+        /// <typeparam name="TOutput">The type of the output documents.</typeparam>
+        /// <param name="pipeline">The pipeline.</param>
+        /// <param name="withCollection">The with collection.</param>
+        /// <param name="withPipeline">The with pipeline.</param>
+        /// <returns>The stage.</returns>
+        public static PipelineDefinition<TInput, TOutput> UnionWith<TInput, TWith, TOutput>(
+            this PipelineDefinition<TInput, TOutput> pipeline,
+            IMongoCollection<TWith> withCollection,
+            PipelineDefinition<TWith, TOutput> withPipeline = null)
+        {
+            Ensure.IsNotNull(pipeline, nameof(pipeline));
+            return pipeline.AppendStage<TInput, TOutput, TOutput>(
+                PipelineStageDefinitionBuilder.UnionWith<TOutput, TWith>(withCollection, withPipeline),
+                pipeline.OutputSerializer);
         }
 
         /// <summary>

@@ -99,7 +99,7 @@ namespace MongoDB.Driver.GridFS.Tests.Specifications.gridfs
                         _options.ContentType = option.Value.AsString;
 #pragma warning restore
                         break;
-                    
+
                     case "disableMD5":
                         _options.DisableMD5 = option.Value.AsBoolean;
                         break;
@@ -118,6 +118,7 @@ namespace MongoDB.Driver.GridFS.Tests.Specifications.gridfs
     public class GridFSUploadFromBytesTest : GridFSUploadFromBytesTestBase
     {
         // fields
+        private DateTime _endTime;
         private ObjectId _referenceObjectId;
         private ObjectId _result;
         private DateTime _startTime;
@@ -141,22 +142,29 @@ namespace MongoDB.Driver.GridFS.Tests.Specifications.gridfs
             {
                 _result = InvokeMethod(bucket);
             }
+            _endTime = DateTime.UtcNow;
         }
 
         protected override void Assert(List<BsonDocument> filesCollectionDocuments, List<BsonDocument> chunks, List<BsonDocument> expectedFilesCollectionDocuments, List<BsonDocument> expectedChunks)
         {
             var filesCollectionDocument = filesCollectionDocuments.Single(e => e["_id"] == _result);
-            var uploadDate = filesCollectionDocument["uploadDate"].ToUniversalTime();
-            uploadDate.Should().BeCloseTo(_startTime, precision: 1000);
+            var actualUploadDate = filesCollectionDocument["uploadDate"].AsBsonDateTime;
+            var expectedUploadDateMin = new BsonDateTime(_startTime);
+            var expectedUploadDateMax = new BsonDateTime(_endTime);
+            actualUploadDate.MillisecondsSinceEpoch.Should().BeInRange(expectedUploadDateMin.MillisecondsSinceEpoch, expectedUploadDateMax.MillisecondsSinceEpoch);
 
             base.Assert(filesCollectionDocuments, chunks, expectedFilesCollectionDocuments, expectedChunks);
         }
 
         protected override void Assert(GridFSBucket bucket)
         {
-            _result.Timestamp.Should().BeInRange(_referenceObjectId.Timestamp, _referenceObjectId.Timestamp + 1);
+#pragma warning disable 618
+            var expectedTimestampMin = new ObjectId(_startTime, 0, 0, 0).Timestamp;
+            var expectedTimestampMax = new ObjectId(_endTime, 0, 0, 0).Timestamp;
+            _result.Timestamp.Should().BeInRange(expectedTimestampMin, expectedTimestampMax);
             _result.Machine.Should().Be(_referenceObjectId.Machine);
             _result.Pid.Should().Be(_referenceObjectId.Pid);
+#pragma warning restore 618
 
             base.Assert(bucket);
         }

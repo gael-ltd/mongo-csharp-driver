@@ -52,6 +52,7 @@ namespace MongoDB.Driver.Core.Operations
         /// <param name="numberOfCursors">The number of cursors.</param>
         /// <param name="serializer">The serializer.</param>
         /// <param name="messageEncoderSettings">The message encoder settings.</param>
+        [Obsolete("ParallelScanOperation was deprecated in server version 4.1.")]
         public ParallelScanOperation(
             CollectionNamespace collectionNamespace,
             int numberOfCursors,
@@ -150,7 +151,10 @@ namespace MongoDB.Driver.Core.Operations
         private ReadCommandOperation<BsonDocument> CreateOperation(IChannel channel, IBinding binding)
         {
             var command = CreateCommand(channel.ConnectionDescription, binding.Session);
-            return new ReadCommandOperation<BsonDocument>(_collectionNamespace.DatabaseNamespace, command, BsonDocumentSerializer.Instance, _messageEncoderSettings);
+            return new ReadCommandOperation<BsonDocument>(_collectionNamespace.DatabaseNamespace, command, BsonDocumentSerializer.Instance, _messageEncoderSettings)
+            {
+                RetryRequested = false
+            };
         }
 
         private IReadOnlyList<IAsyncCursor<TDocument>> CreateCursors(IChannelSourceHandle channelSource, BsonDocument command, BsonDocument result)

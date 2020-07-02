@@ -16,11 +16,13 @@
 using System;
 using FluentAssertions;
 using MongoDB.Bson;
-using MongoDB.Bson.TestHelpers.XunitExtensions;
 using MongoDB.Driver.Core;
+using MongoDB.Driver.Core.Bindings;
 using MongoDB.Driver.Core.Clusters;
 using MongoDB.Driver.Core.Configuration;
 using MongoDB.Driver.Core.Events;
+using MongoDB.Driver.Core.Misc;
+using MongoDB.Driver.Core.TestHelpers;
 using MongoDB.Driver.Core.TestHelpers.XunitExtensions;
 using MongoDB.Driver.TestHelpers;
 using Xunit;
@@ -40,6 +42,68 @@ namespace MongoDB.Driver.Tests
                 var collection = database.GetCollection<BsonDocument>(DriverTestConfiguration.CollectionNamespace.CollectionName);
                 var document = new BsonDocument("x", 1);
                 collection.InsertOne(document);
+            }
+        }
+
+        [SkippableFact]
+        public void Retryable_write_errorlabel_should_not_be_added_with_retryWrites_false()
+        {
+            if (CoreTestConfiguration.Cluster.Description.Type == ClusterType.Sharded)
+            {
+                RequireServer
+                    .Check()
+                    .Supports(Feature.RetryableWrites, Feature.FailPointsFailCommandForSharded)
+                    .ClusterTypes(ClusterType.Sharded);
+            }
+            else
+            {
+                RequireServer
+                    .Check()
+                    .Supports(Feature.RetryableWrites, Feature.FailPointsFailCommand)
+                    .ClusterTypes(ClusterType.ReplicaSet);
+            }
+
+            var failPointWithRetryableError = @"
+            {
+                configureFailPoint : 'failCommand',
+                mode : { times : 1 },
+                data : {
+                    failCommands : ['insert'],
+                    errorCode : 262
+                }
+            }"; // no error label
+
+            using (var client = GetClient(retryWrites: false))
+            using (ConfigureFailPoint(failPointWithRetryableError))
+            {
+                var database = client.GetDatabase(DriverTestConfiguration.DatabaseNamespace.DatabaseName);
+                var collection = database.GetCollection<BsonDocument>(DriverTestConfiguration.CollectionNamespace.CollectionName);
+                var document = new BsonDocument("x", 1);
+
+                var exception = Record.Exception(() => collection.InsertOne(document));
+
+                var e = exception.Should().BeOfType<MongoCommandException>().Subject;
+                e.HasErrorLabel("RetryableWriteError").Should().BeFalse();
+            }
+        }
+
+        [SkippableFact]
+        public void Retryable_write_operation_should_throw_custom_exception_on_servers_using_mmapv1()
+        {
+            RequireSupportForRetryableWrites();
+            RequireServer.Check().ClusterType(ClusterType.ReplicaSet).StorageEngine("mmapv1");
+
+            using (var client = GetClient())
+            using (var session = client.StartSession())
+            {
+                var database = client.GetDatabase(DriverTestConfiguration.DatabaseNamespace.DatabaseName);
+                var collection = database.GetCollection<BsonDocument>(DriverTestConfiguration.CollectionNamespace.CollectionName);
+                var document = new BsonDocument("x", 1);
+                var exception = Record.Exception(() => collection.InsertOne(document));
+
+                exception.Message.Should().Contain(
+                    "This MongoDB deployment does not support retryable writes. " +
+                    "Please add retryWrites=false to your connection string.");
             }
         }
 
@@ -176,23 +240,31 @@ namespace MongoDB.Driver.Tests
             }
         }
 
-        private DisposableMongoClient GetClient()
+        // private methods
+        private DisposableMongoClient GetClient(bool retryWrites = true)
         {
-            return GetClient(cb => { });
+            return GetClient(cb => { }, retryWrites);
         }
 
-        private DisposableMongoClient GetClient(Action<ClusterBuilder> clusterConfigurator)
+        private DisposableMongoClient GetClient(Action<ClusterBuilder> clusterConfigurator, bool retryWrites = true)
         {
             return DriverTestConfiguration.CreateDisposableClient((MongoClientSettings clientSettings) =>
             {
                 clientSettings.ClusterConfigurator = clusterConfigurator;
-                clientSettings.RetryWrites = true;
+                clientSettings.RetryWrites = retryWrites;
             });
         }
 
         private DisposableMongoClient GetClient(EventCapturer capturer)
         {
             return GetClient(cb => cb.Subscribe(capturer));
+        }
+
+        private FailPoint ConfigureFailPoint(string failpointCommand)
+        {
+            var cluster = DriverTestConfiguration.Client.Cluster;
+            var session = NoCoreSession.NewHandle();
+            return FailPoint.Configure(cluster, session, BsonDocument.Parse(failpointCommand));
         }
 
         private void RequireSupportForRetryableWrites()

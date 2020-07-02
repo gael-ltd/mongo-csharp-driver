@@ -16,6 +16,8 @@
 using MongoDB.Driver.Core.Misc;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using MongoDB.Bson;
 
 namespace MongoDB.Driver
 {
@@ -23,7 +25,7 @@ namespace MongoDB.Driver
     /// Model for updating many documents.
     /// </summary>
     /// <typeparam name="TDocument">The type of the document.</typeparam>
-#if NET45
+#if NET452
     [Serializable]
 #endif
     public sealed class UpdateManyModel<TDocument> : WriteModel<TDocument>
@@ -32,6 +34,7 @@ namespace MongoDB.Driver
         private IEnumerable<ArrayFilterDefinition> _arrayFilters;
         private Collation _collation;
         private readonly FilterDefinition<TDocument> _filter;
+        private BsonValue _hint;
         private bool _isUpsert;
         private readonly UpdateDefinition<TDocument> _update;
 
@@ -78,6 +81,15 @@ namespace MongoDB.Driver
         }
 
         /// <summary>
+        /// Gets or sets the hint.
+        /// </summary>
+        public BsonValue Hint
+        {
+            get { return _hint; }
+            set { _hint = value; }
+        }
+
+        /// <summary>
         /// Gets or sets a value indicating whether to insert the document if it doesn't already exist.
         /// </summary>
         public bool IsUpsert
@@ -98,6 +110,15 @@ namespace MongoDB.Driver
         public override WriteModelType ModelType
         {
             get { return WriteModelType.UpdateMany; }
+        }
+
+        /// <inheritdoc />
+        public override void ThrowIfNotValid()
+        {
+            if (_update is PipelineUpdateDefinition<TDocument> && (_arrayFilters != null && _arrayFilters.Any()))
+            {
+                throw new NotSupportedException("An arrayfilter is not supported in the pipeline-style update.");
+            }
         }
     }
 }

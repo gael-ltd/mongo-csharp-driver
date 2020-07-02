@@ -20,7 +20,6 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
-using MongoDB.Bson;
 using MongoDB.Bson.IO;
 using MongoDB.Bson.TestHelpers.XunitExtensions;
 using Moq;
@@ -54,7 +53,7 @@ namespace MongoDB.Bson.Tests
             action.ShouldThrow<ObjectDisposedException>().And.ObjectName.Should().Be("BsonStreamAdapter");
         }
 
-#if NET45
+#if NET452
         [Fact]
         public void BeginRead_should_call_wrapped_stream()
         {
@@ -75,7 +74,7 @@ namespace MongoDB.Bson.Tests
         }
 #endif
 
-#if NET45
+#if NET452
         [Fact]
         public void BeginRead_should_throw_when_subject_is_diposed()
         {
@@ -94,7 +93,7 @@ namespace MongoDB.Bson.Tests
         }
 #endif
 
-#if NET45
+#if NET452
         [Fact]
         public void BeginWrite_should_call_wrapped_stream()
         {
@@ -115,7 +114,7 @@ namespace MongoDB.Bson.Tests
         }
 #endif
 
-#if NET45
+#if NET452
         [Fact]
         public void BeginWrite_should_throw_when_subject_is_disposed()
         {
@@ -246,7 +245,7 @@ namespace MongoDB.Bson.Tests
             action.ShouldThrow<ObjectDisposedException>().And.ObjectName.Should().Be("BsonStreamAdapter");
         }
 
-#if NET45
+#if NET452
         [Fact]
         public void Close_can_be_called_multiple_times()
         {
@@ -261,7 +260,7 @@ namespace MongoDB.Bson.Tests
         }
 #endif
 
-#if NET45
+#if NET452
         [Fact]
         public void Close_should_dispose_subject()
         {
@@ -357,7 +356,7 @@ namespace MongoDB.Bson.Tests
             subjectReflector._disposed.Should().BeTrue();
         }
 
-#if NET45
+#if NET452
         [Fact]
         public void Dispose_should_dispose_stream_once_when_Disposed_is_called_more_than_once()
         {
@@ -371,7 +370,7 @@ namespace MongoDB.Bson.Tests
         }
 #endif
 
-#if NET45
+#if NET452
        [Theory]
         [ParameterAttributeData]
         public void Dispose_should_dispose_stream_only_when_it_owns_it(
@@ -399,7 +398,7 @@ namespace MongoDB.Bson.Tests
             subjectReflector._disposed.Should().BeTrue();
         }
 
-#if NET45
+#if NET452
         [Fact]
         public void EndRead_should_call_wrapped_stream()
         {
@@ -416,7 +415,7 @@ namespace MongoDB.Bson.Tests
         }
 #endif
 
-#if NET45
+#if NET452
         [Fact]
         public void EndRead_should_throw_when_subject_is_disposed()
         {
@@ -431,7 +430,7 @@ namespace MongoDB.Bson.Tests
         }
 #endif
 
-#if NET45
+#if NET452
         [Fact]
         public void EndWrite_should_call_wrapped_stream()
         {
@@ -445,7 +444,7 @@ namespace MongoDB.Bson.Tests
         }
 #endif
 
-#if NET45
+#if NET452
         [Fact]
         public void EndWrite_should_throw_when_subject_is_disposed()
         {
@@ -912,11 +911,12 @@ namespace MongoDB.Bson.Tests
             var bytes = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
             var stream = new MemoryStream(bytes);
             var subject = new BsonStreamAdapter(stream);
-            var expectedResult = new ObjectId(0x01020304, 0x050607, 0x0809, 0x0a0b0c);
 
             var result = subject.ReadObjectId();
 
-            result.Should().Be(expectedResult);
+            result._a().Should().Be(0x01020304);
+            result._b().Should().Be(0x05060708);
+            result._c().Should().Be(0x090a0b0c);
         }
 
         [Fact]
@@ -1529,7 +1529,7 @@ namespace MongoDB.Bson.Tests
         {
             var stream = new MemoryStream();
             var subject = new BsonStreamAdapter(stream);
-            var value = new ObjectId(0x01020304, 0x050607, 0x0809, 0x0a0b0c);
+            var value = ObjectIdReflector.Create(0x01020304, 0x0506070809, 0x0a0b0c);
             var expectedBytes = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
 
             subject.WriteObjectId(value);

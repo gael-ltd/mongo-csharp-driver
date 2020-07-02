@@ -21,9 +21,22 @@ namespace MongoDB.Driver
     /// <summary>
     /// Options for creating a single index.
     /// </summary>
-    public class CreateOneIndexOptions 
+    public class CreateOneIndexOptions
     {
+        // private fields
+        private CreateIndexCommitQuorum _commitQuorum;
         private TimeSpan? _maxTime;
+
+        // public properties
+        /// <summary>
+        /// Gets or sets the commit quorum.
+        /// </summary>
+        /// <value>The commit quorum.</value>
+        public CreateIndexCommitQuorum CommitQuorum
+        {
+            get { return _commitQuorum; }
+            set { _commitQuorum = value; }
+        }
 
         /// <summary>
         /// Gets or sets the maximum time.

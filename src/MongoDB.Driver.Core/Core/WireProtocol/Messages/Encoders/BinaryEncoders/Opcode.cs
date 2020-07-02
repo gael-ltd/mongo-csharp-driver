@@ -13,12 +13,6 @@
 * limitations under the License.
 */
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
 namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
 {
     internal enum Opcode
@@ -31,6 +25,7 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
         GetMore = 2005,
         Delete = 2006,
         KillCursors = 2007,
+        Compressed = 2012,
         OpMsg = 2013
     }
 }

@@ -18,12 +18,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using FluentAssertions;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
-using MongoDB.Bson.TestHelpers.XunitExtensions;
-using MongoDB.Driver.Core;
 using MongoDB.Driver.Core.TestHelpers.XunitExtensions;
 using MongoDB.Driver.Linq;
 using MongoDB.Driver.Linq.Translators;
@@ -115,12 +112,275 @@ namespace MongoDB.Driver.Tests.Linq.Translators
             Assert(
                 x => x.G.Any(g => g.D == "Don't"),
                 1,
-                "{\"G.D\": \"Don't\"}");
+                "{ G : { $elemMatch : { D : \"Don't\" } } }");
 
             Assert(
                 x => x.G.Any(g => g.D == "Don't" && g.E.F == 33),
                 1,
-                "{G: {$elemMatch: {D: \"Don't\", 'E.F': 33}}}");
+                "{ G : { $elemMatch : { D : \"Don't\", 'E.F' : 33 } } }");
+        }
+
+        [Fact]
+        public void Any_with_a_predicate_on_document_itself()
+        {
+            Assert(
+                x => x.G.Any(g => g != null),
+                2,
+                "{ 'G' : { '$elemMatch' : { '$ne' : null } } }");
+
+            Assert(
+                x => x.G.Any(g => null != g),
+                2,
+                "{ 'G' : { '$elemMatch' : { '$ne' : null } } }");
+
+            Assert(
+                x => x.G.Any(g => g.E.I.Any(i => i == "insecure")),
+                1,
+                "{ \"G.E.I\" : { '$elemMatch' : { '$eq': 'insecure' } } }");
+        }
+
+        [Fact]
+        public void Any_with_a_predicate_on_document_itself_and_objectId()
+        {
+            Assert(
+                x => x.G.Any(g => g.Ids.Any(i => i == ObjectId.Parse("111111111111111111111111"))),
+                1,
+                "{ 'G.Ids' : { '$elemMatch' : { '$eq' : ObjectId('111111111111111111111111') } } }");
+        }
+
+        [Fact]
+        public void Any_with_a_predicate_on_documents_itself_and_ClassEquals()
+        {
+            var c1 = new C()
+            {
+                D = "Dolphin",
+                E = new E()
+                {
+                    F = 55,
+                    H = 66,
+                    I = new List<string>()
+                    {
+                        "insecure"
+                    }
+                }
+            };
+            Assert(
+                x => x.G.Any(g => g == c1),
+                1,
+                "{ \"G\" : { \"$elemMatch\" : { \"Ids\" : null, \"D\" : \"Dolphin\", \"E\" : { \"F\" : 55, \"H\" : 66, \"S\": null, \"I\" : [\"insecure\"], \"C\" : null }, \"S\" : null, \"X\" : null, \"Y\" : null, \"Z\" : null } } }");
+        }
+
+        [Fact]
+        public void Any_with_a_gte_predicate_on_documents()
+        {
+            Assert(
+                x => x.G.Any(g => g.E.F >= 100),
+                1,
+                "{ \"G\" : { \"$elemMatch\" : { \"E.F\" : { \"$gte\" : 100 } } } }");
+        }
+
+        [Fact]
+        public void Any_with_a_ne_and_Equal_predicate_on_documents()
+        {
+            Assert(
+                x => x.G.Any(g => !g.D.Equals("Don't")),
+                2,
+                "{ \"G\" : { \"$elemMatch\" : { \"D\" : { \"$ne\" : \"Don't\" } } } }");
+        }
+
+        [Fact]
+        public void Any_with_a_ne_predicate_on_documents()
+        {
+            Assert(
+                x => x.G.Any(g => g.S != null),
+                1,
+                "{ \"G\" : { \"$elemMatch\" : { \"S\" : { \"$ne\" : null } } } }");
+            Assert(
+                x => x.G.Any(g => !(g.S == null)),
+                1,
+                "{ \"G\" : { \"$elemMatch\" : { \"S\" : { \"$ne\" : null } } } }");
+        }
+
+        [Fact]
+        public void Any_with_a_multi_not_brackets_predicate_on_documents()
+        {
+            Assert(
+                x => x.G.Any(g => !(!(g.D == "Don't"))),
+                1,
+                "{ \"G\" : { \"$elemMatch\" : { \"D\" : \"Don't\" } } }");
+
+            Assert(
+                x => x.G.Any(g => !(!(!(!(g.D == "Don't"))))),
+                1,
+                "{ \"G\" : { \"$elemMatch\" : { \"D\" : \"Don't\" } } }");
+
+            Assert(
+                x => x.G.Any(g => !(g.S == null)),
+                1,
+                "{ \"G\" : { \"$elemMatch\" : { \"S\" : { \"$ne\" : null } } } }");
+
+            Assert(
+                x => x.G.Any(g => !(!(!(g.S == null)))),
+                1,
+                "{ \"G\" : { \"$elemMatch\" : { \"S\" : { \"$ne\" : null } } } }");
+        }
+
+        [Fact]
+        public void Any_with_a_multi_conditions_predicate_on_documents()
+        {
+            Assert(
+                x => x.G.Any(g => g.D != "Don't" && g.E.F == 333),
+                1,
+                "{ \"G\" : { \"$elemMatch\" : { \"D\" : { \"$ne\" : \"Don't\" }, \"E.F\" : 333 } } }");
+
+            Assert(
+                x => x.G.Any(g => g.D == "Don't" || g.E.F != 32),
+                2,
+                "{ \"G\" : { \"$elemMatch\" : { \"$or\" : [{ \"D\" : \"Don't\" }, { \"E.F\" : { \"$ne\" : 32 } }] } } }");
+        }
+
+        [Fact]
+        public void Any_with_advanced_nested_Anys()
+        {
+            Assert(
+                i => i.G.Any(g => g.Y.S.Any(s => s.Z.Any(z => z.C.E.C.X.Any()))),
+                1,
+                "{ \"G.Y.S.Z\" : { $elemMatch : { \"C.E.C.X\" : { $ne : null, $not : { $size : 0 } } } } }");
+
+            Assert(
+                i => i.G.Any(g => g.Y.S.Any(s => s.Z.Any(z => z.C.X.Any(x => x.F == 4)))),
+                1,
+                "{ \"G.Y.S.Z.C.X\" : { $elemMatch : { \"F\" : 4 } } }");
+
+            Assert(
+                i => i.G.Any(g => g.D == "Don't" && g.S.Any(s => s.Z.Any(x => x.H == 0))),
+                1,
+                "{ G : { $elemMatch : { \"D\" : \"Don't\", \"S.Z\" : { $elemMatch : { \"H\" : 0 } } } } }");
+
+            Assert(
+                i => i.G.Any(g => g.D == "Don't" && g.Y.S.Any(s => s.Z.Any(x => x.H == 0))),
+                1,
+                "{ G : { $elemMatch : { \"D\" : \"Don't\", \"Y.S.Z\" : { $elemMatch : { \"H\" : 0 } } } } }");
+
+            Assert(
+                i => i.G.Any(g => g.D == "Don't" && g.S.Any(s => s.E == null && s.Z.Any(x => x.H == 0))),
+                1,
+                "{ G : { $elemMatch : { \"D\" : \"Don't\", \"S\" : { $elemMatch : { \"E\" : null, \"Z\" : { $elemMatch : { \"H\" : 0 } } } } } } }");
+
+            Assert(
+                i => i.G.Any(g => g.D == "Don't" && g.Y.S.Any(s => s.E == null && s.Z.Any(x => x.H == 0))),
+                1,
+                "{ G : { $elemMatch : { \"D\" : \"Don't\", \"Y.S\" : { $elemMatch : { \"E\" : null, \"Z\" : { $elemMatch : { \"H\" : 0 } } } } } } }");
+
+            Assert(
+                i => i.G.Any(g => g.D == "Don't" && g.Y.S.Any(s => s.E == null && s.Z.Any(z => z.C.X.Any(x => x.F == 4)))),
+                1,
+                "{ G:  { $elemMatch : { \"D\" : \"Don't\", \"Y.S\" : { $elemMatch : { \"E\" : null, \"Z.C.X\" : { $elemMatch : { \"F\" : 4 } } } } } } }");
+
+            Assert(
+                i => i.G.Any(g => g.D == "Don't" && g.Y.S.Any(s => s.E == null && s.Z.Any(z => z.C.X.Any(x => x.F == 4 && x.H == 0)))),
+                1,
+                "{ G : { $elemMatch : { \"D\" : \"Don't\", \"Y.S\" : { $elemMatch : { \"E\" : null, \"Z.C.X\" : { $elemMatch : { \"F\" : 4, \"H\" : 0 } } } } } } }");
+
+            Assert(
+                i => i.G.Any(g => g.D == "Don't" && g.Y.S.Any(s => s.E == null && s.Z.Any(z => z.F == 1 && z.C.X.Any(x => x.F == 4 && x.H == 0)))),
+                1,
+                "{ G : { $elemMatch : { \"D\" : \"Don't\", \"Y.S\" : { $elemMatch : { \"E\" : null, \"Z\" : { $elemMatch : { \"F\" : 1, \"C.X\" : { $elemMatch : { \"F\" : 4, \"H\" : 0 } } } } } } } } }");
+
+            Assert(
+                i => i.G.Any(
+                    g => g.D == "Don't" &&
+                         g.Y.S.Any(s => s.Z.Any(z => z.C.X.Any(x => x.F == 4))) &&
+                         g.S.Any(s => s.D == "Delilah" && s.Z.Any(z => z.F == 1 && z.H == 0))),
+                1,
+                @"{ G : { $elemMatch : {
+                    ""D"" : ""Don't"",
+                    ""Y.S.Z.C.X"" : { $elemMatch : { ""F"" : 4 } },
+                    ""S"" : { $elemMatch : { ""D"" : ""Delilah"", ""Z"" : { $elemMatch : { ""F"" : 1, ""H"" : 0 } } } }
+                } } }");
+
+            Assert(
+                i => i.G.Any(
+                    g => g.D == "Don't" &&
+                         g.Y.S.Any(s => s.E == null && s.Z.Any(z => z.F == 1 && z.C.X.Any(x => x.F == 4 && x.H == 0))) &&
+                         g.S.Any(s => s.D == "Delilah" && s.Z.Any(z => z.F == 1 && z.H == 0))),
+                1,
+                @"{ G : { $elemMatch : {
+                    ""D"" : ""Don't"",
+                    ""Y.S"" : { $elemMatch : { ""E"" : null, ""Z"" : { $elemMatch : { ""F"" : 1, ""C.X"" : { $elemMatch : { ""F"" : 4, ""H"" : 0 } } } } } },
+                    ""S"" : { $elemMatch : { ""D"" : ""Delilah"", ""Z"" : { $elemMatch : { ""F"" : 1, ""H"" : 0 } } } }
+                } } }");
+        }
+
+        [Fact]
+        public void Any_with_advanced_nested_Anys_and_contains()
+        {
+            Assert(
+                r => r.G != null && r.G.Any(
+                    g => g.X != null && g.X.Any(
+                        x => x.I.Contains("value 3"))),
+                1,
+                "{ G : { '$ne' : null, '$elemMatch' : { 'X' : { '$ne' : null, '$elemMatch' : { 'I' : 'value 3' } } } } }");
+
+            Assert(
+                r => r.G != null && r.G.Any(
+                    g => g.X != null && g.X.Any(
+                        x => x.C.Ids.Contains(new ObjectId("222222222222222222222222")))),
+                1,
+                "{ G : { '$ne' : null, '$elemMatch' : { 'X' : { '$ne' : null, '$elemMatch' : { 'C.Ids' : ObjectId('222222222222222222222222') } } } } }");
+        }
+
+        [Fact]
+        public void Any_with_advanced_nested_Anys_and_endwith()
+        {
+            Assert(
+                r => r.G != null && r.G.Any(
+                    g => g.X != null && g.X.Any(
+                        x => x.S.EndsWith("lue 1"))),
+                1,
+                @"{ G : { '$ne' : null, '$elemMatch' : { 'X' : { '$ne' : null }, 'X.S' : /lue\ 1$/s } } }");
+
+            Assert(
+                r => r.G != null && r.G.Any(
+                    g => g.X != null && g.X.Any(
+                        x => x.C.D.EndsWith("lue 2"))),
+                1,
+                @"{ G : { '$ne' : null, '$elemMatch' : { 'X' : { '$ne' : null }, 'X.C.D' : /lue\ 2$/s } } }");
+        }
+
+        [Fact]
+        public void Any_with_advanced_nested_Anys_and_regex()
+        {
+            var regex = new Regex("^value");
+            Assert(
+                r => r.G != null && r.G.Any(
+                    g => g.X != null && g.X.Any(x => regex.IsMatch(x.S))),
+                1,
+                "{ G : { '$ne' : null, '$elemMatch' : { 'X' : { '$ne' : null, '$elemMatch' : { 'S' : /^value/ } } } } }");
+
+            Assert(
+                r => r.G != null && r.G.Any(
+                    g => g.X != null && g.X.Any(x => regex.IsMatch(x.C.D))),
+                1,
+                "{ G : { '$ne' : null, '$elemMatch' : { 'X' : { '$ne' : null, '$elemMatch' : { 'C.D' : /^value/ } } } } }");
+        }
+
+        [Fact]
+        public void Any_with_advanced_nested_Anys_and_startwith()
+        {
+            Assert(
+                r => r.G != null && r.G.Any(
+                    g => g.X != null && g.X.Any(
+                        x => x.S.StartsWith("value"))),
+                1,
+                "{ G : { '$ne' : null, '$elemMatch' : { 'X' : { '$ne' : null }, 'X.S' : /^value/s } } }");
+
+            Assert(
+                r => r.G != null && r.G.Any(
+                    g => g.X != null && g.X.Any(
+                        x => x.C.D.StartsWith("value"))),
+                1,
+                "{ G : { '$ne' : null, '$elemMatch' : { 'X' : { '$ne' : null }, 'X.C.D' : /^value/s } } }");
         }
 
         [Fact]
@@ -129,22 +389,64 @@ namespace MongoDB.Driver.Tests.Linq.Translators
             Assert(
                 x => x.G.Any(g => g.S.Any()),
                 1,
-                "{G: {$elemMatch: {S: {$ne: null, $not: {$size: 0}}}}}");
+                "{ G : { $elemMatch : { S : { $ne : null, $not : { $size : 0 } } } } }");
 
             Assert(
                 x => x.G.Any(g => g.S.Any(s => s.D == "Delilah")),
                 1,
-                "{\"G.S.D\": \"Delilah\"}");
+                "{ \"G.S\" : { $elemMatch : { \"D\" : \"Delilah\" } } }");
 
             Assert(
                 x => x.G.Any(g => g.D == "Don't" && g.S.Any(s => s.D == "Delilah")),
                 1,
-                "{G: {$elemMatch: {D: \"Don't\", \"S.D\": \"Delilah\" }}}");
+                "{ \"G\" : { \"$elemMatch\" : { \"D\" : \"Don't\", \"S\" : { \"$elemMatch\" : { \"D\" : \"Delilah\" } } } } }");
 
             Assert(
                 x => x.G.Any(g => g.D == "Don't" && g.S.Any(s => s.E == null && s.D == "Delilah")),
                 1,
-                "{G: {$elemMatch: {D: \"Don't\", \"S\": {$elemMatch: {E: null, D: \"Delilah\" }}}}}");
+                "{ G : { $elemMatch : { D : \"Don't\", \"S\" : { $elemMatch : { E : null, D : \"Delilah\" } } } } }");
+        }
+
+        [Fact]
+        public void Any_with_a_not_and_a_predicate_with_not_contains()
+        {
+            var x = new[] { 1, 2 };
+
+            AssertUsingCustomCollection(
+                c => !c.M.Any(a => !x.Contains(a)),
+                "{ M : { '$not' : { '$elemMatch' : { '$not' : { '$in' : [1, 2] } } } } }");
+        }
+
+        [Fact]
+        public void Any_with_a_not_and_a_predicate_with_contains()
+        {
+            var x = new[] { 1, 2 };
+
+            AssertUsingCustomCollection(
+                c => !c.M.Any(a => x.Contains(a)),
+                "{ M : { '$not' : { '$elemMatch' : { '$in' : [1, 2] } } } }");
+        }
+
+        [Fact]
+        public void Any_with_a_predicate_with_contains()
+        {
+            var x = new[] { 1, 2 };
+
+            AssertUsingCustomCollection(
+                c => c.M.Any(a => x.Contains(a)),
+                "{ M : { '$elemMatch' : { '$in' : [1, 2] } } }"
+                );
+        }
+
+        [Fact]
+        public void Any_with_a_predicate_with_not_contains()
+        {
+            var x = new[] { 1, 2 };
+
+            AssertUsingCustomCollection(
+                c => c.M.Any(a => !x.Contains(a)),
+                "{ M : { '$elemMatch' : { '$not' : { '$in' : [1, 2] } } } }"
+            );
         }
 
         [Fact]
@@ -153,12 +455,12 @@ namespace MongoDB.Driver.Tests.Linq.Translators
             Assert(
                 x => x.G.Any(g => !g.S.Any()),
                 2,
-                "{G: {$elemMatch: {$nor: [{S: {$ne: null, $not: {$size: 0}}}]}}}");
+                "{ G : { $elemMatch : { $nor : [{ S : { $ne : null, $not : { $size : 0 } } }] } } }");
 
             Assert(
                 x => x.G.Any(g => !g.S.Any(s => s.D == "Delilah")),
                 1,
-                "{\"G.S.D\": {$ne: \"Delilah\"}}");
+                "{\"G.S\" : { $not : { $elemMatch : { \"D\" : \"Delilah\" } } } }");
         }
 
         [Fact]
@@ -167,12 +469,12 @@ namespace MongoDB.Driver.Tests.Linq.Translators
             Assert(
                 x => x.M.Any(m => m > 5),
                 1,
-                "{M: {$gt: 5}}");
+                "{ M : { $elemMatch : { $gt : 5 } } }");
 
             Assert(
                 x => x.M.Any(m => m > 2 && m < 6),
                 2,
-                "{M: {$elemMatch: {$gt: 2, $lt: 6}}}");
+                "{ M : { $elemMatch : { $gt : 2, $lt : 6 } } }");
         }
 
         [SkippableFact]
@@ -185,7 +487,7 @@ namespace MongoDB.Driver.Tests.Linq.Translators
                 1,
                 "{\"C.E.I\": /^ick/s}");
 
-            // this isn't a legal query, as in, there isn't any 
+            // this isn't a legal query, as in, there isn't any
             // way to render this legally for the server...
             //Assert(
             //    x => x.C.E.I.Any(i => i.StartsWith("ick") && i == "Jack"),
@@ -218,7 +520,7 @@ namespace MongoDB.Driver.Tests.Linq.Translators
             Assert(
                 x => x.G.Any(g => local.Contains(g.D)),
                 1,
-                "{\"G.D\": { $in: [\"Delilah\", \"Dolphin\" ] } }");
+                "{ 'G' : { '$elemMatch' : { 'D' : { $in : ['Delilah', 'Dolphin'] } } } }");
         }
 
         [Fact]
@@ -240,7 +542,7 @@ namespace MongoDB.Driver.Tests.Linq.Translators
             Assert(
                 x => x.G.AsQueryable().Any(filter),
                 1,
-                "{ 'G.D': \"Don't\" }");
+                "{ 'G' : { '$elemMatch' : { 'D' : \"Don't\" } } }");
         }
 
         [SkippableFact]
@@ -477,7 +779,7 @@ namespace MongoDB.Driver.Tests.Linq.Translators
             Assert(
                 x => x.C == new C { D = "Dexter" },
                 0,
-                "{C: {D: 'Dexter', E: null, S: null, X: null}}");
+                "{ C : { Ids : null, D : 'Dexter', E : null, S : null, X : null, Y : null, Z : null } }");
         }
 
         [Fact]
@@ -486,7 +788,7 @@ namespace MongoDB.Driver.Tests.Linq.Translators
             Assert(
                 x => x.C.Equals(new C { D = "Dexter" }),
                 0,
-                "{C: {D: 'Dexter', E: null, S: null, X: null}}");
+                "{ C : { Ids : null, D : 'Dexter', E : null, S : null, X : null, Y : null, Z : null } }");
         }
 
         [Fact]
@@ -495,7 +797,7 @@ namespace MongoDB.Driver.Tests.Linq.Translators
             Assert(
                 x => x.C != new C { D = "Dexter" },
                 2,
-                "{C: {$ne: {D: 'Dexter', E: null, S: null, X: null}}}");
+                "{ C : { $ne : { Ids : null, D : 'Dexter', E : null, S : null, X : null, Y : null, Z : null } } }");
         }
 
         [Fact]
@@ -844,7 +1146,7 @@ namespace MongoDB.Driver.Tests.Linq.Translators
             Assert(collection, filter, expectedCount, BsonDocument.Parse(expectedFilter));
         }
 
-        public void Assert<T>(IMongoCollection<T> collection, Expression<Func<T, bool>> filter, int expectedCount, BsonDocument expectedFilter)
+        public List<T> Assert<T>(IMongoCollection<T> collection, Expression<Func<T, bool>> filter, int expectedCount, BsonDocument expectedFilter)
         {
             var serializer = BsonSerializer.SerializerRegistry.GetSerializer<T>();
             var filterDocument = PredicateTranslator.Translate(filter, serializer, BsonSerializer.SerializerRegistry);
@@ -853,6 +1155,7 @@ namespace MongoDB.Driver.Tests.Linq.Translators
 
             filterDocument.Should().Be(expectedFilter);
             list.Count.Should().Be(expectedCount);
+            return list;
         }
 
         public void Assert(Expression<Func<Root, bool>> filter, int expectedCount, string expectedFilter)
@@ -863,6 +1166,42 @@ namespace MongoDB.Driver.Tests.Linq.Translators
         public void Assert(Expression<Func<Root, bool>> filter, int expectedCount, BsonDocument expectedFilter)
         {
             Assert(__collection, filter, expectedCount, expectedFilter);
+        }
+
+        protected override void FillCustomDocuments(List<Root> customDocuments)
+        {
+            customDocuments.AddRange(
+                new[]
+                {
+                    new Root { Id = 1, M = new int[0] },
+                    new Root { Id = 2, M = new [] { 1 } },
+                    new Root { Id = 3, M = new [] { 2 } },
+                    new Root { Id = 4, M = new [] { 3 } },
+                    new Root { Id = 5, M = new [] { 4 } },
+                    new Root { Id = 6, M = new [] { 1, 2 } },
+                    new Root { Id = 7, M = new [] { 1, 3 } },
+                    new Root { Id = 8, M = new [] { 1, 4 } },
+                    new Root { Id = 9, M = new [] { 2, 3 } },
+                    new Root { Id = 10, M = new [] { 3, 4} },
+                    new Root { Id = 11, M = new [] { 1, 2, 3 } },
+                    new Root { Id = 12, M = new [] { 1, 2 ,4 } },
+                    new Root { Id = 13, M = new [] { 1, 3, 4 } },
+                    new Root { Id = 14, M = new [] { 1, 2, 3, 4 } }
+                });
+        }
+
+        public void AssertUsingCustomCollection(Expression<Func<Root, bool>> filter, string expectedFilter)
+        {
+            AssertUsingCustomCollection(filter, BsonDocument.Parse(expectedFilter));
+        }
+
+        public void AssertUsingCustomCollection(Expression<Func<Root, bool>> filter, BsonDocument expectedFilter)
+        {
+            var expectedResult = __customDocuments.Where(filter.Compile()).ToList();
+
+            var queryResult = Assert(__customCollection, filter, expectedResult.Count, expectedFilter);
+
+            queryResult.Select(r => r.Id).Should().Equal(expectedResult.Select(r => r.Id));
         }
     }
 }

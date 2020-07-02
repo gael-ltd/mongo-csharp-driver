@@ -31,7 +31,8 @@ namespace MongoDB.Driver.Core.Authentication
     public abstract class SaslAuthenticator : IAuthenticator
     {
         // fields
-        private readonly ISaslMechanism _mechanism;
+        private protected readonly ISaslMechanism _mechanism;
+        private protected ISaslStep _speculativeFirstStep;
 
         // constructors
         /// <summary>
@@ -67,10 +68,20 @@ namespace MongoDB.Driver.Core.Authentication
 
             using (var conversation = new SaslConversation(description.ConnectionId))
             {
-                var currentStep = _mechanism.Initialize(connection, description);
+                ISaslStep currentStep;
+                BsonDocument command;
+                var speculativeAuthenticateResult = description.IsMasterResult.SpeculativeAuthenticate;
+                if (_speculativeFirstStep != null && speculativeAuthenticateResult != null)
+                {
+                    currentStep = Transition(conversation, _speculativeFirstStep, speculativeAuthenticateResult, out command);
+                }
+                else
+                {
+                    currentStep = _mechanism.Initialize(connection, conversation, description);
+                    command = CreateStartCommand(currentStep);
+                }
 
-                var command = CreateStartCommand(currentStep);
-                while (true)
+                while (currentStep != null)
                 {
                     BsonDocument result;
                     try
@@ -83,13 +94,7 @@ namespace MongoDB.Driver.Core.Authentication
                         throw CreateException(connection, ex);
                     }
 
-                    currentStep = Transition(conversation, currentStep, result);
-                    if (currentStep == null)
-                    {
-                        return;
-                    }
-
-                    command = CreateContinueCommand(currentStep, result);
+                    currentStep = Transition(conversation, currentStep, result, out command);
                 }
             }
         }
@@ -102,10 +107,20 @@ namespace MongoDB.Driver.Core.Authentication
 
             using (var conversation = new SaslConversation(description.ConnectionId))
             {
-                var currentStep = _mechanism.Initialize(connection, description);
+                ISaslStep currentStep;
+                BsonDocument command;
+                var speculativeAuthenticateResult = description.IsMasterResult.SpeculativeAuthenticate;
+                if (_speculativeFirstStep != null && speculativeAuthenticateResult != null)
+                {
+                    currentStep = Transition(conversation, _speculativeFirstStep, speculativeAuthenticateResult, out command);
+                }
+                else
+                {
+                    currentStep = _mechanism.Initialize(connection, conversation, description);
+                    command = CreateStartCommand(currentStep);
+                }
 
-                var command = CreateStartCommand(currentStep);
-                while (true)
+                while (currentStep != null)
                 {
                     BsonDocument result;
                     try
@@ -118,15 +133,27 @@ namespace MongoDB.Driver.Core.Authentication
                         throw CreateException(connection, ex);
                     }
 
-                    currentStep = Transition(conversation, currentStep, result);
-                    if (currentStep == null)
-                    {
-                        return;
-                    }
-
-                    command = CreateContinueCommand(currentStep, result);
+                    currentStep = Transition(conversation, currentStep, result, out command);
                 }
             }
+        }
+
+        /// <inheritdoc/>
+        public virtual BsonDocument CustomizeInitialIsMasterCommand(BsonDocument isMasterCommand)
+        {
+            return isMasterCommand;
+        }
+
+        private protected virtual BsonDocument CreateStartCommand(ISaslStep currentStep)
+        {
+            var startCommand = new BsonDocument
+            {
+                { "saslStart", 1 },
+                { "mechanism", _mechanism.Name },
+                { "payload", currentStep.BytesToSendToServer }
+            };
+
+            return startCommand;
         }
 
         private CommandWireProtocol<BsonDocument> CreateCommandProtocol(BsonDocument command)
@@ -155,21 +182,16 @@ namespace MongoDB.Driver.Core.Authentication
             return new MongoAuthenticationException(connection.ConnectionId, message, ex);
         }
 
-        private BsonDocument CreateStartCommand(ISaslStep currentStep)
-        {
-            return new BsonDocument
-            {
-                { "saslStart", 1 },
-                { "mechanism", _mechanism.Name },
-                { "payload", currentStep.BytesToSendToServer }
-            };
-        }
-
-        private ISaslStep Transition(SaslConversation conversation, ISaslStep currentStep, BsonDocument result)
+        private ISaslStep Transition(
+            SaslConversation conversation,
+            ISaslStep currentStep,
+            BsonDocument result,
+            out BsonDocument command)
         {
             // we might be done here if the client is not expecting a reply from the server
             if (result.GetValue("done", false).ToBoolean() && currentStep.IsComplete)
             {
+                command = null;
                 return null;
             }
 
@@ -178,11 +200,14 @@ namespace MongoDB.Driver.Core.Authentication
             // we might be done here if the client had some final verification it needed to do
             if (result.GetValue("done", false).ToBoolean() && currentStep.IsComplete)
             {
+                command = null;
                 return null;
             }
 
+            command = CreateContinueCommand(currentStep, result);
             return currentStep;
         }
+
 
         // nested classes
         /// <summary>
@@ -275,9 +300,10 @@ namespace MongoDB.Driver.Core.Authentication
             /// Initializes the mechanism.
             /// </summary>
             /// <param name="connection">The connection.</param>
+            /// <param name="conversation">The SASL conversation.</param>
             /// <param name="description">The connection description.</param>
             /// <returns>The initial SASL step.</returns>
-            ISaslStep Initialize(IConnection connection, ConnectionDescription description);
+            ISaslStep Initialize(IConnection connection, SaslConversation conversation, ConnectionDescription description);
         }
 
         /// <summary>

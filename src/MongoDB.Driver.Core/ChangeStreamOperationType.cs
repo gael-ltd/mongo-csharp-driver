@@ -39,6 +39,14 @@ namespace MongoDB.Driver
         /// <summary>
         /// An invalidate operation type.
         /// </summary>
-        Invalidate
+        Invalidate,
+        /// <summary>
+        /// A rename operation type.
+        /// </summary>
+        Rename,
+        /// <summary>
+        /// A drop operation type.
+        /// </summary>
+        Drop
     }
 }

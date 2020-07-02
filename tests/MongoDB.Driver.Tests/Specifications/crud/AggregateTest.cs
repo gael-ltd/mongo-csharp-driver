@@ -15,11 +15,10 @@
 
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using FluentAssertions;
 using MongoDB.Bson;
-using MongoDB.Driver.Core.Clusters;
 using MongoDB.Driver.Core.Misc;
+using MongoDB.Driver.Core.TestHelpers.XunitExtensions;
 
 namespace MongoDB.Driver.Tests.Specifications.crud
 {
@@ -28,15 +27,14 @@ namespace MongoDB.Driver.Tests.Specifications.crud
         private List<BsonDocument> _stages;
         private AggregateOptions _options = new AggregateOptions();
 
-        public override bool CanExecute(ClusterDescription clusterDescription, BsonDocument arguments, out string reason)
+        public override void SkipIfNotSupported(BsonDocument arguments)
         {
-            var version = clusterDescription.Servers[0].Version;
-            reason = string.Format("Server must be at least 2.6.0. Current server is {0}.", version);
-            return !(version < new SemanticVersion(2, 6, 0) &&
-                ((BsonArray)arguments["pipeline"])
-                    .Cast<BsonDocument>()
-                    .Last()
-                    .Contains("$out"));
+            var lastStage = arguments["pipeline"].AsBsonArray.Last().AsBsonDocument;
+            var lastStageName = lastStage.GetElement(0).Name;
+            if (lastStageName == "$merge")
+            {
+                RequireServer.Check().Supports(Feature.AggregateMerge);
+            }
         }
 
         protected override bool TrySetArgument(string name, BsonValue value)
@@ -45,6 +43,9 @@ namespace MongoDB.Driver.Tests.Specifications.crud
             {
                 case "pipeline":
                     _stages = ((BsonArray)value).Cast<BsonDocument>().ToList();
+                    return true;
+                case "allowDiskUse":
+                    _options.AllowDiskUse = value.ToBoolean();
                     return true;
                 case "batchSize":
                     _options.BatchSize = (int)value;
@@ -62,16 +63,31 @@ namespace MongoDB.Driver.Tests.Specifications.crud
             return ((BsonArray)expectedResult).Select(x => (BsonDocument)x).ToList();
         }
 
-        protected override List<BsonDocument> ExecuteAndGetResult(IMongoCollection<BsonDocument> collection, bool async)
+        protected override List<BsonDocument> ExecuteAndGetResult(IMongoDatabase database, IMongoCollection<BsonDocument> collection, bool async)
         {
-            if (async)
+            if (collection == null)
             {
-                var cursor = collection.AggregateAsync<BsonDocument>(_stages, _options).GetAwaiter().GetResult();
-                return cursor.ToListAsync().GetAwaiter().GetResult();
+                if (async)
+                {
+                    var cursor = database.AggregateAsync<BsonDocument>(_stages, _options).GetAwaiter().GetResult();
+                    return cursor.ToListAsync().GetAwaiter().GetResult();
+                }
+                else
+                {
+                    return database.Aggregate<BsonDocument>(_stages, _options).ToList();
+                }
             }
             else
             {
-                return collection.Aggregate<BsonDocument>(_stages, _options).ToList();
+                if (async)
+                {
+                    var cursor = collection.AggregateAsync<BsonDocument>(_stages, _options).GetAwaiter().GetResult();
+                    return cursor.ToListAsync().GetAwaiter().GetResult();
+                }
+                else
+                {
+                    return collection.Aggregate<BsonDocument>(_stages, _options).ToList();
+                }
             }
         }
 

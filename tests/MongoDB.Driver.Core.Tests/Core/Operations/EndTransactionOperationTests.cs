@@ -30,9 +30,11 @@ namespace MongoDB.Driver.Core.Operations
         public void constructor_should_initialize_instance()
         {
             var writeConcern = new WriteConcern();
+            var recoveryToken = new BsonDocument("section", 31);
 
-            var result = new FakeEndTransactionOperation(writeConcern);
+            var result = new FakeEndTransactionOperation(recoveryToken, writeConcern);
 
+            result._recoveryToken().Should().Be(recoveryToken);
             result.MessageEncoderSettings.Should().BeNull();
             result.WriteConcern.Should().BeSameAs(writeConcern);
         }
@@ -40,7 +42,8 @@ namespace MongoDB.Driver.Core.Operations
         [Fact]
         public void constructor_should_throw_when_writeConcern_is_null()
         {
-            var exception = Record.Exception(() => new FakeEndTransactionOperation(null));
+            var exception = Record.Exception(
+                () => new FakeEndTransactionOperation(recoveryToken: new BsonDocument(), writeConcern: null));
 
             var e = exception.Should().BeOfType<ArgumentNullException>().Subject;
             e.ParamName.Should().Be("writeConcern");
@@ -96,14 +99,25 @@ namespace MongoDB.Driver.Core.Operations
         [Theory]
         [ParameterAttributeData]
         public void CreateCommand_should_return_expected_result(
+            [Values(true, false)] bool useRecoveryToken,
             [Values(1, 2)] int w)
         {
             var writeConcern = new WriteConcern(w);
-            var subject = CreateSubject(writeConcern: writeConcern);
+            var recoveryToken = useRecoveryToken ? new BsonDocument("cake", "false") : null;
+            var subject = CreateSubject(recoveryToken, writeConcern);
 
             var result = subject.CreateCommand();
 
-            result.Should().Be($"{{ fakeOperation : 1, writeConcern : {{ w : {w} }} }}");
+            var expectedResult = new BsonDocument {
+                { "fakeOperation", 1 },
+                { "writeConcern", new BsonDocument { {"w", w} } }
+            };
+            if (useRecoveryToken)
+            {
+                expectedResult.Add("recoveryToken", recoveryToken);
+            }
+
+            result.Should().Be(expectedResult);
         }
 
         [Fact]
@@ -119,11 +133,12 @@ namespace MongoDB.Driver.Core.Operations
 
         // private methods
         private EndTransactionOperation CreateSubject(
+            BsonDocument recoveryToken = null,
             WriteConcern writeConcern = null,
             MessageEncoderSettings messageEncoderSettings = null)
         {
             writeConcern = writeConcern ?? new WriteConcern();
-            return new FakeEndTransactionOperation(writeConcern)
+            return new FakeEndTransactionOperation(recoveryToken, writeConcern)
             {
                 MessageEncoderSettings = messageEncoderSettings
             };
@@ -133,8 +148,8 @@ namespace MongoDB.Driver.Core.Operations
         private class FakeEndTransactionOperation : EndTransactionOperation
         {
             // public constructors
-            public FakeEndTransactionOperation(WriteConcern writeConcern)
-                : base(writeConcern)
+            public FakeEndTransactionOperation(BsonDocument recoveryToken, WriteConcern writeConcern)
+                : base(recoveryToken, writeConcern)
             {
             }
 
@@ -149,9 +164,11 @@ namespace MongoDB.Driver.Core.Operations
         public void constructor_should_initialize_instance()
         {
             var writeConcern = new WriteConcern();
+            var recoveryToken = new BsonDocument("generalOrder", 1);
 
-            var result = new AbortTransactionOperation(writeConcern);
+            var result = new AbortTransactionOperation(recoveryToken, writeConcern);
 
+            result._recoveryToken().Should().BeSameAs(recoveryToken);
             result.CommandName().Should().Be("abortTransaction");
             result.WriteConcern.Should().BeSameAs(writeConcern);
         }
@@ -174,9 +191,10 @@ namespace MongoDB.Driver.Core.Operations
         public void constructor_should_initialize_instance()
         {
             var writeConcern = new WriteConcern();
+            var recoveryToken = new BsonDocument("generalOrder", 1);
+            var result = new CommitTransactionOperation(recoveryToken, writeConcern);
 
-            var result = new CommitTransactionOperation(writeConcern);
-
+            result._recoveryToken().Should().Be(recoveryToken);
             result.CommandName().Should().Be("commitTransaction");
             result.WriteConcern.Should().BeSameAs(writeConcern);
         }
@@ -195,6 +213,9 @@ namespace MongoDB.Driver.Core.Operations
 
     public static class EndTransactionOperationReflector
     {
+        // fields
+        public static BsonDocument _recoveryToken(this EndTransactionOperation obj) => (BsonDocument)Reflector.GetFieldValue(obj, nameof(_recoveryToken));
+
         // properties
         public static string CommandName(this EndTransactionOperation obj) => (string)Reflector.GetPropertyValue(obj, nameof(CommandName));
 

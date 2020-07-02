@@ -17,14 +17,17 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using FluentAssertions;
 using MongoDB.Bson;
 using MongoDB.Bson.TestHelpers.JsonDrivenTests;
-using MongoDB.Bson.TestHelpers.XunitExtensions;
 using MongoDB.Driver.Core;
+using MongoDB.Driver.Core.Bindings;
 using MongoDB.Driver.Core.Clusters;
+using MongoDB.Driver.Core.Clusters.ServerSelectors;
 using MongoDB.Driver.Core.Events;
-using MongoDB.Driver.Core.Misc;
+using MongoDB.Driver.Core.Servers;
+using MongoDB.Driver.Core.TestHelpers;
 using MongoDB.Driver.Core.TestHelpers.JsonDrivenTests;
 using MongoDB.Driver.Core.TestHelpers.XunitExtensions;
 using MongoDB.Driver.TestHelpers;
@@ -33,11 +36,12 @@ using Xunit;
 
 namespace MongoDB.Driver.Tests.Specifications.transactions
 {
-    public sealed class TransactionTestRunner
+    public sealed class TransactionTestRunner : IJsonDrivenTestRunner, IDisposable
     {
         #region static
         private static readonly HashSet<string> __commandsToNotCapture = new HashSet<string>
         {
+            "configureFailPoint",
             "isMaster",
             "buildInfo",
             "getLastError",
@@ -50,64 +54,134 @@ namespace MongoDB.Driver.Tests.Specifications.transactions
 
         // private fields
         private string _databaseName = "transaction-tests";
+        private readonly List<IDisposable> _disposables = new List<IDisposable>();
         private string _collectionName = "test";
 
         // public methods
+        public void ConfigureFailPoint(IServer server, ICoreSessionHandle session, BsonDocument failCommand)
+        {
+            var failPoint = FailPoint.Configure(server, session, failCommand);
+            _disposables.Add(failPoint);
+        }
+
+        public async Task ConfigureFailPointAsync(IServer server, ICoreSessionHandle session, BsonDocument failCommand)
+        {
+            var failPoint = await Task.Run(() => FailPoint.Configure(server, session, failCommand)).ConfigureAwait(false);
+            _disposables.Add(failPoint);
+        }
+
+        public void Dispose()
+        {
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
+        }
+
         [SkippableTheory]
         [ClassData(typeof(TestCaseFactory))]
         public void Run(JsonDrivenTestCase testCase)
         {
-            RequireServer.Check().Supports(Feature.Transactions).ClusterType(ClusterType.ReplicaSet);
             Run(testCase.Shared, testCase.Test);
         }
 
         // private methods
+        private void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                foreach (var disposable in _disposables)
+                {
+                    disposable.Dispose();
+                }
+            }
+        }
+
         private void Run(BsonDocument shared, BsonDocument test)
         {
             if (test.Contains("skipReason"))
             {
-                throw new SkipTestException(test["skipReason"].AsString);
+                throw new SkipException($"Test skipped because {test["skipReason"]}.");
             }
-            //if (test["description"].AsString != "rerun commit after empty transaction")
-            //{
-            //    return;
-            //}
 
-            JsonDrivenHelper.EnsureAllFieldsAreValid(shared, "_path", "database_name", "collection_name", "data", "tests");
-            JsonDrivenHelper.EnsureAllFieldsAreValid(test, "description", "clientOptions", "sessionOptions", "operations", "expectations", "outcome");
+            if (shared.TryGetValue("runOn", out var runOn))
+            {
+                RequireServer.Check().RunOn(runOn.AsBsonArray);
+            }
+
+            JsonDrivenHelper.EnsureAllFieldsAreValid(shared,
+                "_path",
+                "database_name",
+                "collection_name",
+                "data",
+                "tests",
+                "runOn");
+            JsonDrivenHelper.EnsureAllFieldsAreValid(test,
+                "description",
+                "clientOptions",
+                "failPoint",
+                "sessionOptions",
+                "operations",
+                "expectations",
+                "outcome",
+                "async",
+                "useMultipleMongoses");
 
             _databaseName = shared["database_name"].AsString;
             _collectionName = shared["collection_name"].AsString;
 
+            KillAllSessions();
             DropCollection();
             CreateCollection();
             InsertData(shared);
 
+            if (CoreTestConfiguration.Cluster.Description.Type == ClusterType.Sharded)
+            {
+                PrimeShardRoutersWithDistinctCommand();
+            }
+
             var eventCapturer = new EventCapturer()
                 .Capture<CommandStartedEvent>(e => !__commandsToNotCapture.Contains(e.CommandName));
 
-            Dictionary<string, BsonValue> sessionIdMap;
-
-            using (var client = CreateDisposableClient(test, eventCapturer))
-            using (var session0 = StartSession(client, test, "session0"))
-            using (var session1 = StartSession(client, test, "session1"))
+            var useMultipleShardRouters = test.GetValue("useMultipleMongoses", false).ToBoolean();
+            using (var client = CreateDisposableClient(test, eventCapturer, useMultipleShardRouters))
+            using (ConfigureFailPointOnPrimaryOrShardRoutersIfNeeded(client, test))
             {
-                var sessionMap = new Dictionary<string, IClientSessionHandle>
-                {
-                    { "session0", session0 },
-                    { "session1", session1 }
-                };
-                sessionIdMap = new Dictionary<string, BsonValue>
-                {
-                    { "session0", session0.ServerSession.Id },
-                    { "session1", session1.ServerSession.Id }
-                };
+                Dictionary<string, BsonValue> sessionIdMap;
 
-                ExecuteOperations(client, sessionMap, test);
+                using (var session0 = StartSession(client, test, "session0"))
+                using (var session1 = StartSession(client, test, "session1"))
+                {
+                    var objectMap = new Dictionary<string, object>
+                    {
+                        { "session0", session0 },
+                        { "session1", session1 }
+                    };
+                    sessionIdMap = new Dictionary<string, BsonValue>
+                    {
+                        { "session0", session0.ServerSession.Id },
+                        { "session1", session1.ServerSession.Id }
+                    };
+
+                    ExecuteOperations(client, objectMap, test);
+                }
+
+                AssertEvents(eventCapturer, test, sessionIdMap);
+                AssertOutcome(test);
             }
+        }
 
-            AssertEvents(eventCapturer, test, sessionIdMap);
-            AssertOutcome(test);
+        private void KillAllSessions()
+        {
+            var client = DriverTestConfiguration.Client;
+            var adminDatabase = client.GetDatabase("admin");
+            var command = BsonDocument.Parse("{ killAllSessions : [] }");
+            try
+            {
+                adminDatabase.RunCommand<BsonDocument>(command);
+            }
+            catch (MongoCommandException)
+            {
+                // ignore MongoCommandExceptions
+            }
         }
 
         private void DropCollection()
@@ -139,13 +213,28 @@ namespace MongoDB.Driver.Tests.Specifications.transactions
             }
         }
 
-        private DisposableMongoClient CreateDisposableClient(BsonDocument test, EventCapturer eventCapturer)
+        /// <summary>
+        /// Temporary patch until SERVER-39704 is resolved.
+        /// </summary>
+        private void PrimeShardRoutersWithDistinctCommand()
         {
-            return DriverTestConfiguration.CreateDisposableClient((MongoClientSettings settings) =>
+            foreach (var client in DriverTestConfiguration.DirectClientsToShardRouters)
             {
-                ConfigureClientSettings(settings, test);
-                settings.ClusterConfigurator = c => c.Subscribe(eventCapturer);
-            });
+                var database = client.GetDatabase(_databaseName);
+                var collection = database.GetCollection<BsonDocument>(_collectionName);
+                collection.Distinct<BsonValue>("_id", "{ }");
+            }
+        }
+
+        private DisposableMongoClient CreateDisposableClient(BsonDocument test, EventCapturer eventCapturer, bool useMultipleShardRouters)
+        {
+            return DriverTestConfiguration.CreateDisposableClient(
+                (MongoClientSettings settings) =>
+                {
+                    ConfigureClientSettings(settings, test);
+                    settings.ClusterConfigurator = c => c.Subscribe(eventCapturer);
+                },
+                useMultipleShardRouters);
         }
 
         private void ConfigureClientSettings(MongoClientSettings settings, BsonDocument test)
@@ -156,6 +245,10 @@ namespace MongoDB.Driver.Tests.Specifications.transactions
                 {
                     switch (option.Name)
                     {
+                        case "heartbeatFrequencyMS":
+                            settings.HeartbeatInterval = TimeSpan.FromMilliseconds(option.Value.AsInt32);
+                            break;
+
                         case "readConcernLevel":
                             var level = (ReadConcernLevel)Enum.Parse(typeof(ReadConcernLevel), option.Value.AsString, ignoreCase: true);
                             settings.ReadConcern = new ReadConcern(level);
@@ -200,11 +293,11 @@ namespace MongoDB.Driver.Tests.Specifications.transactions
 
         private IClientSessionHandle StartSession(IMongoClient client, BsonDocument test, string sessionKey)
         {
-            var options = CreateSessionOptions(test, sessionKey);
+            var options = ParseSessionOptions(test, sessionKey);
             return client.StartSession(options);
         }
 
-        private ClientSessionOptions CreateSessionOptions(BsonDocument test, string sessionKey)
+        private ClientSessionOptions ParseSessionOptions(BsonDocument test, string sessionKey)
         {
             var options = new ClientSessionOptions();
             if (test.Contains("sessionOptions"))
@@ -233,34 +326,90 @@ namespace MongoDB.Driver.Tests.Specifications.transactions
             return options;
         }
 
-        private void ExecuteOperations(IMongoClient client, Dictionary<string, IClientSessionHandle> sessionMap, BsonDocument test)
+        private DisposableBundle ConfigureFailPointOnPrimaryOrShardRoutersIfNeeded(IMongoClient client, BsonDocument test)
         {
-            var factory = CreateTestFactory(client, sessionMap);
-            foreach (var operation in test["operations"].AsBsonArray.Cast<BsonDocument>())
+            if (!test.TryGetValue("failPoint", out var failPoint))
             {
-                var jsonDrivenTest = factory.CreateTest(operation["name"].AsString);
-                jsonDrivenTest.Arrange(operation);
-                jsonDrivenTest.Act(CancellationToken.None);
-                jsonDrivenTest.Assert();
+                return null;
             }
+
+            var cluster = client.Cluster;
+            var timeOut = TimeSpan.FromSeconds(60);
+            SpinWait.SpinUntil(() => cluster.Description.Type != ClusterType.Unknown, timeOut).Should().BeTrue();
+
+            List<IServer> failPointServers;
+            switch (cluster.Description.Type)
+            {
+                case ClusterType.ReplicaSet:
+                    var primary = cluster.SelectServer(WritableServerSelector.Instance, CancellationToken.None);
+                    failPointServers = new List<IServer> { primary };
+                    break;
+
+                case ClusterType.Sharded:
+                    failPointServers =
+                        cluster.Description.Servers
+                        .Select(server => server.EndPoint)
+                        .Select(endPoint => cluster.SelectServer(new EndPointServerSelector(endPoint), CancellationToken.None))
+                        .ToList();
+                    break;
+
+                default:
+                    throw new Exception($"Unsupported cluster type: {cluster.Description.Type}");
+            }
+
+            var session = NoCoreSession.NewHandle();
+            var failPoints = failPointServers.Select(s => FailPoint.Configure(s, session, failPoint.AsBsonDocument)).ToList();
+
+            return new DisposableBundle(failPoints);
         }
 
-        private JsonDrivenTestFactory CreateTestFactory(IMongoClient client, Dictionary<string, IClientSessionHandle> sessionMap)
+        private void ExecuteOperations(IMongoClient client, Dictionary<string, object> objectMap, BsonDocument test)
         {
-            var database = client.GetDatabase(_databaseName);
-            var collection = database.GetCollection<BsonDocument>(_collectionName);
-            return new JsonDrivenTestFactory(client, database, collection, sessionMap);
+            var factory = new JsonDrivenTestFactory(this, client, _databaseName, _collectionName, bucketName: null, objectMap);
+
+            foreach (var operation in test["operations"].AsBsonArray.Cast<BsonDocument>())
+            {
+                var receiver = operation["object"].AsString;
+                var name = operation["name"].AsString;
+                var jsonDrivenTest = factory.CreateTest(receiver, name);
+
+                jsonDrivenTest.Arrange(operation);
+                if (test["async"].AsBoolean)
+                {
+                    jsonDrivenTest.ActAsync(CancellationToken.None).GetAwaiter().GetResult();
+                }
+                else
+                {
+                    jsonDrivenTest.Act(CancellationToken.None);
+                }
+                jsonDrivenTest.Assert();
+            }
         }
 
         private void AssertEvents(EventCapturer actualEvents, BsonDocument test, Dictionary<string, BsonValue> sessionIdMap)
         {
             if (test.Contains("expectations"))
             {
-                foreach (var expectedEvent in test["expectations"].AsBsonArray.Cast<BsonDocument>())
+                var expectedEvents = test["expectations"].AsBsonArray.Cast<BsonDocument>().GetEnumerator();
+
+                while (actualEvents.Any())
                 {
-                    RecursiveFieldSetter.SetAll(expectedEvent, "lsid", value => sessionIdMap[value.AsString]);
                     var actualEvent = actualEvents.Next();
+
+                    if (!expectedEvents.MoveNext())
+                    {
+                        throw new Exception($"Unexpected event of type: {actualEvent.GetType().Name}.");
+                    }
+                    var expectedEvent = expectedEvents.Current;
+                    RecursiveFieldSetter.SetAll(expectedEvent, "lsid", value => sessionIdMap[value.AsString]);
+
                     AssertEvent(actualEvent, expectedEvent);
+                }
+
+                if (expectedEvents.MoveNext())
+                {
+                    var expectedEvent = expectedEvents.Current;
+                    throw new Exception($"Missing event: {expectedEvent}.");
                 }
             }
         }
@@ -296,11 +445,12 @@ namespace MongoDB.Driver.Tests.Specifications.transactions
             }
         }
 
-        public TransactionOptions ParseTransactionOptions(BsonDocument document)
+        private TransactionOptions ParseTransactionOptions(BsonDocument document)
         {
             ReadConcern readConcern = null;
             ReadPreference readPreference = null;
             WriteConcern writeConcern = null;
+            TimeSpan? maxCommitTimeMS = null;
 
             foreach (var element in document)
             {
@@ -318,12 +468,16 @@ namespace MongoDB.Driver.Tests.Specifications.transactions
                         writeConcern = WriteConcern.FromBsonDocument(element.Value.AsBsonDocument);
                         break;
 
+                    case "maxCommitTimeMS":
+                        maxCommitTimeMS = TimeSpan.FromMilliseconds(element.Value.ToInt32());
+                        break;
+
                     default:
                         throw new ArgumentException($"Invalid field: {element.Name}.");
                 }
             }
 
-            return new TransactionOptions(readConcern, readPreference, writeConcern);
+            return new TransactionOptions(readConcern, readPreference, writeConcern, maxCommitTimeMS);
         }
 
         private void VerifyCollectionOutcome(BsonDocument outcome)
@@ -344,7 +498,7 @@ namespace MongoDB.Driver.Tests.Specifications.transactions
 
         private void VerifyCollectionData(IEnumerable<BsonDocument> expectedDocuments)
         {
-            var database = DriverTestConfiguration.Client.GetDatabase(_databaseName);
+            var database = DriverTestConfiguration.Client.GetDatabase(_databaseName).WithReadConcern(ReadConcern.Local);
             var collection = database.GetCollection<BsonDocument>(_collectionName);
             var actualDocuments = collection.Find("{}").ToList();
             actualDocuments.Should().BeEquivalentTo(expectedDocuments);
@@ -358,11 +512,21 @@ namespace MongoDB.Driver.Tests.Specifications.transactions
             {
                 get
                 {
-#if NET45
                     return "MongoDB.Driver.Tests.Specifications.transactions.tests.";
-#else
-                    return "MongoDB.Driver.Tests.Dotnet.Specifications.transactions.tests.";
-#endif
+                }
+            }
+
+            // protected methods
+            protected override IEnumerable<JsonDrivenTestCase> CreateTestCases(BsonDocument document)
+            {
+                foreach (var testCase in base.CreateTestCases(document))
+                {
+                    foreach (var async in new[] { false, true })
+                    {
+                        var name = $"{testCase.Name}:async={async}";
+                        var test = testCase.Test.DeepClone().AsBsonDocument.Add("async", async);
+                        yield return new JsonDrivenTestCase(name, testCase.Shared, test);
+                    }
                 }
             }
 

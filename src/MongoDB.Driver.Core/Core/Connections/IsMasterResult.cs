@@ -19,6 +19,7 @@ using System.Linq;
 using System.Net;
 using MongoDB.Bson;
 using MongoDB.Driver.Core.Clusters;
+using MongoDB.Driver.Core.Compression;
 using MongoDB.Driver.Core.Misc;
 using MongoDB.Driver.Core.Servers;
 
@@ -44,6 +45,47 @@ namespace MongoDB.Driver.Core.Connections
 
         // properties
         /// <summary>
+        /// Gets the compressor types.
+        /// </summary>
+        public IReadOnlyList<CompressorType> Compressions
+        {
+            get
+            {
+                if (_wrapped.TryGetValue("compression", out var value))
+                {
+                    return value
+                        .AsBsonArray
+                        .Select(x =>
+                        {
+                            return Enum.TryParse<CompressorType>(x.AsString, true, out var compressorType)
+                                ? compressorType
+                                // we can have such a case only due to the server bug
+                                : throw new NotSupportedException($"The unsupported compressor name: '{x}'.");
+                        })
+                        .ToList();
+                }
+
+                return new CompressorType[0];
+            }
+        }
+
+        /// <summary>
+        /// Gets the connection id server value.
+        /// </summary>
+        public int? ConnectionIdServerValue
+        {
+            get
+            {
+                if (_wrapped.TryGetValue("connectionId", out var connectionIdBsonValue))
+                {
+                    return connectionIdBsonValue.ToInt32();
+                }
+
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Gets the election identifier.
         /// </summary>
         public ElectionId ElectionId
@@ -58,6 +100,17 @@ namespace MongoDB.Driver.Core.Connections
 
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Get whether SaslSupportedMechs was part of the isMaster response.
+        /// </summary>
+        /// <value>
+        /// Whether SaslSupportedMechs was part of the isMaster response.
+        /// </value>
+        public bool HasSaslSupportedMechs
+        {
+            get { return _wrapped.Contains("saslSupportedMechs"); }
         }
 
         /// <summary>
@@ -207,6 +260,18 @@ namespace MongoDB.Driver.Core.Connections
         }
 
         /// <summary>
+        /// Get the SaslSupportedMechs.
+        /// </summary>
+        /// <value>
+        /// The SaslSupportedMechs. Empty if saslSupportedMechs was an empty list or if saslSupportedMechs was not
+        /// included in the isMaster response.
+        /// </value>
+        public IEnumerable<string> SaslSupportedMechs
+        {
+            get { return _wrapped.GetValue("saslSupportedMechs", new BsonArray()).AsBsonArray.Select(s => s.ToString()); }
+        }
+
+        /// <summary>
         /// Gets the type of the server.
         /// </summary>
         /// <value>
@@ -258,6 +323,28 @@ namespace MongoDB.Driver.Core.Connections
         }
 
         /// <summary>
+        /// Get the SpeculativeAuthenticate reply.
+        /// </summary>
+        /// <value>
+        /// Null if isMaster["ok"] != 1 or if the SpeculativeAuthenticate reply was not included in the isMaster response.
+        /// </value>
+        public BsonDocument SpeculativeAuthenticate
+        {
+            get
+            {
+                if (_wrapped.TryGetValue("ok", out var ok) && ok.ToBoolean() &&
+                    _wrapped.TryGetValue("speculativeAuthenticate", out var speculativeAuthenticate))
+                {
+                    return (BsonDocument)speculativeAuthenticate;
+                }
+                else
+                {
+                    return null;
+                }
+            }
+        }
+
+        /// <summary>
         /// Gets the replica set tags.
         /// </summary>
         /// <value>
@@ -273,6 +360,25 @@ namespace MongoDB.Driver.Core.Connections
                     return new TagSet(tags.AsBsonDocument.Select(e => new Tag(e.Name, (string)e.Value)));
                 }
 
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Get the TopologyVersion.
+        /// </summary>
+        /// <value>
+        /// Null if TopologyVersion was not included in the isMaster response.
+        /// </value>
+        public TopologyVersion TopologyVersion
+        {
+            get
+            {
+                if (_wrapped.TryGetValue("topologyVersion", out var topologyVersionValue) &&
+                    topologyVersionValue is BsonDocument topologyVersion)
+                {
+                    return Servers.TopologyVersion.FromBsonDocument(topologyVersion);
+                }
                 return null;
             }
         }

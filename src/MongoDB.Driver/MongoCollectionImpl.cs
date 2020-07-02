@@ -26,7 +26,6 @@ using MongoDB.Driver.Core.Clusters;
 using MongoDB.Driver.Core.Misc;
 using MongoDB.Driver.Core.Operations;
 using MongoDB.Driver.Core.WireProtocol.Messages.Encoders;
-using MongoDB.Driver.Linq;
 
 namespace MongoDB.Driver
 {
@@ -56,12 +55,7 @@ namespace MongoDB.Driver
             _operationExecutor = Ensure.IsNotNull(operationExecutor, nameof(operationExecutor));
             _documentSerializer = Ensure.IsNotNull(documentSerializer, nameof(documentSerializer));
 
-            _messageEncoderSettings = new MessageEncoderSettings
-            {
-                { MessageEncoderSettingsName.GuidRepresentation, _settings.GuidRepresentation },
-                { MessageEncoderSettingsName.ReadEncoding, _settings.ReadEncoding ?? Utf8Encodings.Strict },
-                { MessageEncoderSettingsName.WriteEncoding, _settings.WriteEncoding ?? Utf8Encodings.Strict }
-            };
+            _messageEncoderSettings = GetMessageEncoderSettings();
         }
 
         // properties
@@ -102,15 +96,16 @@ namespace MongoDB.Driver
             var renderedPipeline = Ensure.IsNotNull(pipeline, nameof(pipeline)).Render(_documentSerializer, _settings.SerializerRegistry);
             options = options ?? new AggregateOptions();
 
-            var last = renderedPipeline.Documents.LastOrDefault();
-            if (last != null && last.GetElement(0).Name == "$out")
+            var lastStage = renderedPipeline.Documents.LastOrDefault();
+            var lastStageName = lastStage?.GetElement(0).Name;
+            if (lastStage != null && (lastStageName == "$out" || lastStageName == "$merge"))
             {
                 var aggregateOperation = CreateAggregateToCollectionOperation(renderedPipeline, options);
                 ExecuteWriteOperation(session, aggregateOperation, cancellationToken);
 
                 // we want to delay execution of the find because the user may
                 // not want to iterate the results at all...
-                var findOperation = CreateAggregateToCollectionFindOperation(last, renderedPipeline.OutputSerializer, options);
+                var findOperation = CreateAggregateToCollectionFindOperation(lastStage, renderedPipeline.OutputSerializer, options);
                 var forkedSession = session.Fork();
                 var deferredCursor = new DeferredAsyncCursor<TResult>(
                     () => forkedSession.Dispose(),
@@ -136,15 +131,16 @@ namespace MongoDB.Driver
             var renderedPipeline = Ensure.IsNotNull(pipeline, nameof(pipeline)).Render(_documentSerializer, _settings.SerializerRegistry);
             options = options ?? new AggregateOptions();
 
-            var last = renderedPipeline.Documents.LastOrDefault();
-            if (last != null && last.GetElement(0).Name == "$out")
+            var lastStage = renderedPipeline.Documents.LastOrDefault();
+            var lastStageName = lastStage?.GetElement(0).Name;
+            if (lastStage != null && (lastStageName == "$out" || lastStageName == "$merge"))
             {
                 var aggregateOperation = CreateAggregateToCollectionOperation(renderedPipeline, options);
                 await ExecuteWriteOperationAsync(session, aggregateOperation, cancellationToken).ConfigureAwait(false);
 
                 // we want to delay execution of the find because the user may
                 // not want to iterate the results at all...
-                var findOperation = CreateAggregateToCollectionFindOperation(last, renderedPipeline.OutputSerializer, options);
+                var findOperation = CreateAggregateToCollectionFindOperation(lastStage, renderedPipeline.OutputSerializer, options);
                 var forkedSession = session.Fork();
                 var deferredCursor = new DeferredAsyncCursor<TResult>(
                     () => forkedSession.Dispose(),
@@ -157,6 +153,50 @@ namespace MongoDB.Driver
                 var aggregateOperation = CreateAggregateOperation(renderedPipeline, options);
                 return await ExecuteReadOperationAsync(session, aggregateOperation, cancellationToken).ConfigureAwait(false);
             }
+        }
+
+        public override void AggregateToCollection<TResult>(PipelineDefinition<TDocument, TResult> pipeline, AggregateOptions options, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            UsingImplicitSession(session => AggregateToCollection(session, pipeline, options, cancellationToken), cancellationToken);
+        }
+
+        public override void AggregateToCollection<TResult>(IClientSessionHandle session, PipelineDefinition<TDocument, TResult> pipeline, AggregateOptions options, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            Ensure.IsNotNull(session, nameof(session));
+            var renderedPipeline = Ensure.IsNotNull(pipeline, nameof(pipeline)).Render(_documentSerializer, _settings.SerializerRegistry);
+            options = options ?? new AggregateOptions();
+
+            var lastStage = renderedPipeline.Documents.LastOrDefault();
+            var lastStageName = lastStage?.GetElement(0).Name;
+            if (lastStage == null || (lastStageName != "$out" && lastStageName != "$merge"))
+            {
+                throw new InvalidOperationException("AggregateToCollection requires that the last stage be $out or $merge.");
+            }
+
+            var aggregateOperation = CreateAggregateToCollectionOperation(renderedPipeline, options);
+            ExecuteWriteOperation(session, aggregateOperation, cancellationToken);
+        }
+
+        public override Task AggregateToCollectionAsync<TResult>(PipelineDefinition<TDocument, TResult> pipeline, AggregateOptions options, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return UsingImplicitSessionAsync(session => AggregateToCollectionAsync(session, pipeline, options, cancellationToken), cancellationToken);
+        }
+
+        public override async Task AggregateToCollectionAsync<TResult>(IClientSessionHandle session, PipelineDefinition<TDocument, TResult> pipeline, AggregateOptions options, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            Ensure.IsNotNull(session, nameof(session));
+            var renderedPipeline = Ensure.IsNotNull(pipeline, nameof(pipeline)).Render(_documentSerializer, _settings.SerializerRegistry);
+            options = options ?? new AggregateOptions();
+
+            var lastStage = renderedPipeline.Documents.LastOrDefault();
+            var lastStageName = lastStage?.GetElement(0).Name;
+            if (lastStage == null || (lastStageName != "$out" && lastStageName != "$merge"))
+            {
+                throw new InvalidOperationException("AggregateToCollectionAsync requires that the last stage be $out or $merge.");
+            }
+
+            var aggregateOperation = CreateAggregateToCollectionOperation(renderedPipeline, options);
+            await ExecuteWriteOperationAsync(session, aggregateOperation, cancellationToken).ConfigureAwait(false);
         }
 
         public override BulkWriteResult<TDocument> BulkWrite(IEnumerable<WriteModel<TDocument>> requests, BulkWriteOptions options, CancellationToken cancellationToken = default(CancellationToken))
@@ -172,9 +212,14 @@ namespace MongoDB.Driver
             {
                 throw new ArgumentException("Must contain at least 1 request.", "requests");
             }
+            foreach (var request in requests)
+            {
+                request.ThrowIfNotValid();
+            }
+
             options = options ?? new BulkWriteOptions();
 
-            var operation = CreateBulkWriteOperation(requests, options);
+            var operation = CreateBulkWriteOperation(session, requests, options);
             try
             {
                 var result = ExecuteWriteOperation(session, operation, cancellationToken);
@@ -199,9 +244,14 @@ namespace MongoDB.Driver
             {
                 throw new ArgumentException("Must contain at least 1 request.", "requests");
             }
+            foreach (var request in requests)
+            {
+                request.ThrowIfNotValid();
+            }
+
             options = options ?? new BulkWriteOptions();
 
-            var operation = CreateBulkWriteOperation(requests, options);
+            var operation = CreateBulkWriteOperation(session, requests, options);
             try
             {
                 var result = await ExecuteWriteOperationAsync(session, operation, cancellationToken).ConfigureAwait(false);
@@ -213,11 +263,13 @@ namespace MongoDB.Driver
             }
         }
 
+        [Obsolete("Use CountDocuments or EstimatedDocumentCount instead.")]
         public override long Count(FilterDefinition<TDocument> filter, CountOptions options, CancellationToken cancellationToken = default(CancellationToken))
         {
             return UsingImplicitSession(session => Count(session, filter, options, cancellationToken), cancellationToken);
         }
 
+        [Obsolete("Use CountDocuments or EstimatedDocumentCount instead.")]
         public override long Count(IClientSessionHandle session, FilterDefinition<TDocument> filter, CountOptions options, CancellationToken cancellationToken = default(CancellationToken))
         {
             Ensure.IsNotNull(session, nameof(session));
@@ -228,11 +280,13 @@ namespace MongoDB.Driver
             return ExecuteReadOperation(session, operation, cancellationToken);
         }
 
+        [Obsolete("Use CountDocumentsAsync or EstimatedDocumentCountAsync instead.")]
         public override Task<long> CountAsync(FilterDefinition<TDocument> filter, CountOptions options, CancellationToken cancellationToken = default(CancellationToken))
         {
             return UsingImplicitSessionAsync(session => CountAsync(session, filter, options, cancellationToken), cancellationToken);
         }
 
+        [Obsolete("Use CountDocumentsAsync or EstimatedDocumentCountAsync instead.")]
         public override Task<long> CountAsync(IClientSessionHandle session, FilterDefinition<TDocument> filter, CountOptions options, CancellationToken cancellationToken = default(CancellationToken))
         {
             Ensure.IsNotNull(session, nameof(session));
@@ -240,6 +294,36 @@ namespace MongoDB.Driver
             options = options ?? new CountOptions();
 
             var operation = CreateCountOperation(filter, options);
+            return ExecuteReadOperationAsync(session, operation, cancellationToken);
+        }
+
+        public override long CountDocuments(FilterDefinition<TDocument> filter, CountOptions options, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return UsingImplicitSession(session => CountDocuments(session, filter, options, cancellationToken), cancellationToken);
+        }
+
+        public override long CountDocuments(IClientSessionHandle session, FilterDefinition<TDocument> filter, CountOptions options, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            Ensure.IsNotNull(session, nameof(session));
+            Ensure.IsNotNull(filter, nameof(filter));
+            options = options ?? new CountOptions();
+
+            var operation = CreateCountDocumentsOperation(filter, options);
+            return ExecuteReadOperation(session, operation, cancellationToken);
+        }
+
+        public override Task<long> CountDocumentsAsync(FilterDefinition<TDocument> filter, CountOptions options, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return UsingImplicitSessionAsync(session => CountDocumentsAsync(session, filter, options, cancellationToken), cancellationToken);
+        }
+
+        public override Task<long> CountDocumentsAsync(IClientSessionHandle session, FilterDefinition<TDocument> filter, CountOptions options, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            Ensure.IsNotNull(session, nameof(session));
+            Ensure.IsNotNull(filter, nameof(filter));
+            options = options ?? new CountOptions();
+
+            var operation = CreateCountDocumentsOperation(filter, options);
             return ExecuteReadOperationAsync(session, operation, cancellationToken);
         }
 
@@ -273,6 +357,24 @@ namespace MongoDB.Driver
 
             var operation = CreateDistinctOperation(field, filter, options);
             return ExecuteReadOperationAsync(session, operation, cancellationToken);
+        }
+
+        public override long EstimatedDocumentCount(EstimatedDocumentCountOptions options, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return UsingImplicitSession(session =>
+            {
+                var operation = CreateEstimatedDocumentCountOperation(options);
+                return ExecuteReadOperation(session, operation, cancellationToken);
+            });
+        }
+
+        public override Task<long> EstimatedDocumentCountAsync(EstimatedDocumentCountOptions options, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return UsingImplicitSessionAsync(session =>
+            {
+                var operation = CreateEstimatedDocumentCountOperation(options);
+                return ExecuteReadOperationAsync(session, operation, cancellationToken);
+            });
         }
 
         public override IAsyncCursor<TProjection> FindSync<TProjection>(FilterDefinition<TDocument> filter, FindOptions<TDocument, TProjection> options, CancellationToken cancellationToken = default(CancellationToken))
@@ -379,6 +481,11 @@ namespace MongoDB.Driver
             Ensure.IsNotNull(update, nameof(update));
             options = options ?? new FindOneAndUpdateOptions<TDocument, TProjection>();
 
+            if (update is PipelineUpdateDefinition<TDocument> && (options.ArrayFilters != null && options.ArrayFilters.Any()))
+            {
+                throw new NotSupportedException("An arrayfilter is not supported in the pipeline-style update.");
+            }
+
             var operation = CreateFindOneAndUpdateOperation(filter, update, options);
             return ExecuteWriteOperation(session, operation, cancellationToken);
         }
@@ -394,6 +501,11 @@ namespace MongoDB.Driver
             Ensure.IsNotNull(filter, nameof(filter));
             Ensure.IsNotNull(update, nameof(update));
             options = options ?? new FindOneAndUpdateOptions<TDocument, TProjection>();
+
+            if (update is PipelineUpdateDefinition<TDocument> && (options.ArrayFilters != null && options.ArrayFilters.Any()))
+            {
+                throw new NotSupportedException("An arrayfilter is not supported in the pipeline-style update.");
+            }
 
             var operation = CreateFindOneAndUpdateOperation(filter, update, options);
             return ExecuteWriteOperationAsync(session, operation, cancellationToken);
@@ -486,7 +598,7 @@ namespace MongoDB.Driver
             return new OfTypeMongoCollection<TDocument, TDerivedDocument>(this, derivedDocumentCollection, ofTypeFilter);
         }
 
-        public override IAsyncCursor<TResult> Watch<TResult>(
+        public override IChangeStreamCursor<TResult> Watch<TResult>(
             PipelineDefinition<ChangeStreamDocument<TDocument>, TResult> pipeline,
             ChangeStreamOptions options = null,
             CancellationToken cancellationToken = default(CancellationToken))
@@ -494,7 +606,7 @@ namespace MongoDB.Driver
             return UsingImplicitSession(session => Watch(session, pipeline, options, cancellationToken), cancellationToken);
         }
 
-        public override IAsyncCursor<TResult> Watch<TResult>(
+        public override IChangeStreamCursor<TResult> Watch<TResult>(
             IClientSessionHandle session,
             PipelineDefinition<ChangeStreamDocument<TDocument>, TResult> pipeline,
             ChangeStreamOptions options = null,
@@ -506,7 +618,7 @@ namespace MongoDB.Driver
             return ExecuteReadOperation(session, operation, cancellationToken);
         }
 
-        public override Task<IAsyncCursor<TResult>> WatchAsync<TResult>(
+        public override Task<IChangeStreamCursor<TResult>> WatchAsync<TResult>(
             PipelineDefinition<ChangeStreamDocument<TDocument>, TResult> pipeline,
             ChangeStreamOptions options = null,
             CancellationToken cancellationToken = default(CancellationToken))
@@ -514,7 +626,7 @@ namespace MongoDB.Driver
             return UsingImplicitSessionAsync(session => WatchAsync(session, pipeline, options, cancellationToken), cancellationToken);
         }
 
-        public override async Task<IAsyncCursor<TResult>> WatchAsync<TResult>(
+        public override async Task<IChangeStreamCursor<TResult>> WatchAsync<TResult>(
             IClientSessionHandle session,
             PipelineDefinition<ChangeStreamDocument<TDocument>, TResult> pipeline,
             ChangeStreamOptions options = null,
@@ -587,6 +699,7 @@ namespace MongoDB.Driver
                     {
                         CorrelationId = index,
                         Collation = deleteManyModel.Collation,
+                        Hint = deleteManyModel.Hint,
                         Limit = 0
                     };
                 case WriteModelType.DeleteOne:
@@ -595,6 +708,7 @@ namespace MongoDB.Driver
                     {
                         CorrelationId = index,
                         Collation = deleteOneModel.Collation,
+                        Hint = deleteOneModel.Hint,
                         Limit = 1
                     };
                 case WriteModelType.ReplaceOne:
@@ -606,6 +720,7 @@ namespace MongoDB.Driver
                     {
                         Collation = replaceOneModel.Collation,
                         CorrelationId = index,
+                        Hint = replaceOneModel.Hint,
                         IsMulti = false,
                         IsUpsert = replaceOneModel.IsUpsert
                     };
@@ -619,6 +734,7 @@ namespace MongoDB.Driver
                         ArrayFilters = RenderArrayFilters(updateManyModel.ArrayFilters),
                         Collation = updateManyModel.Collation,
                         CorrelationId = index,
+                        Hint = updateManyModel.Hint,
                         IsMulti = true,
                         IsUpsert = updateManyModel.IsUpsert
                     };
@@ -632,6 +748,7 @@ namespace MongoDB.Driver
                         ArrayFilters = RenderArrayFilters(updateOneModel.ArrayFilters),
                         Collation = updateOneModel.Collation,
                         CorrelationId = index,
+                        Hint = updateOneModel.Hint,
                         IsMulti = false,
                         IsUpsert = updateOneModel.IsUpsert
                     };
@@ -656,23 +773,70 @@ namespace MongoDB.Driver
                 MaxAwaitTime = options.MaxAwaitTime,
                 MaxTime = options.MaxTime,
                 ReadConcern = _settings.ReadConcern,
+                RetryRequested = _database.Client.Settings.RetryReads,
+#pragma warning disable 618
                 UseCursor = options.UseCursor
+#pragma warning restore 618
             };
         }
 
         private FindOperation<TResult> CreateAggregateToCollectionFindOperation<TResult>(BsonDocument outStage, IBsonSerializer<TResult> resultSerializer, AggregateOptions options)
         {
-            var outputCollectionName = outStage.GetElement(0).Value.AsString;
+            CollectionNamespace outputCollectionNamespace;
+            var stageName = outStage.GetElement(0).Name;
+            switch (stageName)
+            {
+                case "$out":
+                    {
+                        var outValue = outStage[0];
+                        DatabaseNamespace outputDatabaseNamespace;
+                        string outputCollectionName;
+                        if (outValue.IsString)
+                        {
+                            outputDatabaseNamespace = _collectionNamespace.DatabaseNamespace;
+                            outputCollectionName = outValue.AsString;
+                        }
+                        else
+                        {
+                            outputDatabaseNamespace = new DatabaseNamespace(outValue["db"].AsString);
+                            outputCollectionName = outValue["coll"].AsString;
+                        }
+                        outputCollectionNamespace = new CollectionNamespace(outputDatabaseNamespace, outputCollectionName);
+                    }
+                    break;
+                case "$merge":
+                    {
+                        var mergeArguments = outStage[0].AsBsonDocument;
+                        DatabaseNamespace outputDatabaseNamespace;
+                        string outputCollectionName;
+                        var into = mergeArguments["into"];
+                        if (into.IsString)
+                        {
+                            outputDatabaseNamespace = _collectionNamespace.DatabaseNamespace;
+                            outputCollectionName = into.AsString;
+                        }
+                        else
+                        {
+                            outputDatabaseNamespace = new DatabaseNamespace(into["db"].AsString);
+                            outputCollectionName = into["coll"].AsString;
+                        }
+                        outputCollectionNamespace = new CollectionNamespace(outputDatabaseNamespace, outputCollectionName);
+                    }
+                    break;
+                default:
+                    throw new ArgumentException($"Unexpected stage name: {stageName}.");
+            }
 
             return new FindOperation<TResult>(
-                new CollectionNamespace(_collectionNamespace.DatabaseNamespace, outputCollectionName),
+                outputCollectionNamespace,
                 resultSerializer,
                 _messageEncoderSettings)
             {
                 BatchSize = options.BatchSize,
                 Collation = options.Collation,
                 MaxTime = options.MaxTime,
-                ReadConcern = _settings.ReadConcern
+                ReadConcern = _settings.ReadConcern,
+                RetryRequested = _database.Client.Settings.RetryReads
             };
         }
 
@@ -689,12 +853,15 @@ namespace MongoDB.Driver
                 Comment = options.Comment,
                 Hint = options.Hint,
                 MaxTime = options.MaxTime,
+                ReadConcern = _settings.ReadConcern,
                 WriteConcern = _settings.WriteConcern
             };
         }
 
-        private BulkMixedWriteOperation CreateBulkWriteOperation(IEnumerable<WriteModel<TDocument>> requests, BulkWriteOptions options)
+        private BulkMixedWriteOperation CreateBulkWriteOperation(IClientSessionHandle session, IEnumerable<WriteModel<TDocument>> requests, BulkWriteOptions options)
         {
+            var effectiveWriteConcern = session.IsInTransaction ? WriteConcern.Acknowledged : _settings.WriteConcern;
+
             return new BulkMixedWriteOperation(
                 _collectionNamespace,
                 requests.Select(ConvertWriteModelToWriteRequest),
@@ -703,7 +870,7 @@ namespace MongoDB.Driver
                 BypassDocumentValidation = options.BypassDocumentValidation,
                 IsOrdered = options.IsOrdered,
                 RetryRequested = _database.Client.Settings.RetryWrites,
-                WriteConcern = _settings.WriteConcern
+                WriteConcern = effectiveWriteConcern
             };
         }
 
@@ -711,27 +878,28 @@ namespace MongoDB.Driver
             PipelineDefinition<ChangeStreamDocument<TDocument>, TResult> pipeline,
             ChangeStreamOptions options)
         {
-            options = options ?? new ChangeStreamOptions();
+            return ChangeStreamHelper.CreateChangeStreamOperation(
+                this,
+                pipeline,
+                _documentSerializer,
+                options,
+                _settings.ReadConcern, messageEncoderSettings: _messageEncoderSettings,
+                _database.Client.Settings.RetryReads);
+        }
 
-            var changeStreamDocumentSerializer = new ChangeStreamDocumentSerializer<TDocument>(_documentSerializer);
-            var serializerRegistry = BsonSerializer.SerializerRegistry;
-            var renderedPipeline = pipeline.Render(changeStreamDocumentSerializer, serializerRegistry);
-
-            var changeStreamOperation = new ChangeStreamOperation<TResult>(
-                _collectionNamespace,
-                renderedPipeline.Documents,
-                renderedPipeline.OutputSerializer,
-                _messageEncoderSettings)
+        private CountDocumentsOperation CreateCountDocumentsOperation(FilterDefinition<TDocument> filter, CountOptions options)
+        {
+            return new CountDocumentsOperation(_collectionNamespace, _messageEncoderSettings)
             {
-                BatchSize = options.BatchSize,
                 Collation = options.Collation,
-                FullDocument = options.FullDocument,
-                MaxAwaitTime = options.MaxAwaitTime,
+                Filter = filter.Render(_documentSerializer, _settings.SerializerRegistry),
+                Hint = options.Hint,
+                Limit = options.Limit,
+                MaxTime = options.MaxTime,
                 ReadConcern = _settings.ReadConcern,
-                ResumeAfter = options.ResumeAfter
+                RetryRequested = _database.Client.Settings.RetryReads,
+                Skip = options.Skip
             };
-
-            return changeStreamOperation;
         }
 
         private CountOperation CreateCountOperation(FilterDefinition<TDocument> filter, CountOptions options)
@@ -744,6 +912,7 @@ namespace MongoDB.Driver
                 Limit = options.Limit,
                 MaxTime = options.MaxTime,
                 ReadConcern = _settings.ReadConcern,
+                RetryRequested = _database.Client.Settings.RetryReads,
                 Skip = options.Skip
             };
         }
@@ -762,7 +931,17 @@ namespace MongoDB.Driver
                 Collation = options.Collation,
                 Filter = filter.Render(_documentSerializer, _settings.SerializerRegistry),
                 MaxTime = options.MaxTime,
-                ReadConcern = _settings.ReadConcern
+                ReadConcern = _settings.ReadConcern,
+                RetryRequested = _database.Client.Settings.RetryReads,
+            };
+        }
+
+        private CountOperation CreateEstimatedDocumentCountOperation(EstimatedDocumentCountOptions options)
+        {
+            return new CountOperation(_collectionNamespace, _messageEncoderSettings)
+            {
+                MaxTime = options?.MaxTime,
+                RetryRequested = _database.Client.Settings.RetryReads
             };
         }
 
@@ -778,6 +957,7 @@ namespace MongoDB.Driver
                 _messageEncoderSettings)
             {
                 Collation = options.Collation,
+                Hint = options.Hint,
                 MaxTime = options.MaxTime,
                 Projection = renderedProjection.Document,
                 Sort = options.Sort == null ? null : options.Sort.Render(_documentSerializer, _settings.SerializerRegistry),
@@ -800,6 +980,7 @@ namespace MongoDB.Driver
             {
                 BypassDocumentValidation = options.BypassDocumentValidation,
                 Collation = options.Collation,
+                Hint = options.Hint,
                 IsUpsert = options.IsUpsert,
                 MaxTime = options.MaxTime,
                 Projection = renderedProjection.Document,
@@ -825,6 +1006,7 @@ namespace MongoDB.Driver
                 ArrayFilters = RenderArrayFilters(options.ArrayFilters),
                 BypassDocumentValidation = options.BypassDocumentValidation,
                 Collation = options.Collation,
+                Hint = options.Hint,
                 IsUpsert = options.IsUpsert,
                 MaxTime = options.MaxTime,
                 Projection = renderedProjection.Document,
@@ -845,20 +1027,31 @@ namespace MongoDB.Driver
                 renderedProjection.ProjectionSerializer,
                 _messageEncoderSettings)
             {
+                AllowDiskUse = options.AllowDiskUse,
                 AllowPartialResults = options.AllowPartialResults,
                 BatchSize = options.BatchSize,
                 Collation = options.Collation,
                 Comment = options.Comment,
                 CursorType = options.CursorType.ToCore(),
                 Filter = filter.Render(_documentSerializer, _settings.SerializerRegistry),
+                Hint = options.Hint,
                 Limit = options.Limit,
+                Max = options.Max,
                 MaxAwaitTime = options.MaxAwaitTime,
                 MaxTime = options.MaxTime,
+                Min = options.Min,
+#pragma warning disable 618
                 Modifiers = options.Modifiers,
+#pragma warning restore 618
                 NoCursorTimeout = options.NoCursorTimeout,
+#pragma warning disable 618
                 OplogReplay = options.OplogReplay,
+#pragma warning restore 618
                 Projection = renderedProjection.Document,
                 ReadConcern = _settings.ReadConcern,
+                RetryRequested = _database.Client.Settings.RetryReads,
+                ReturnKey = options.ReturnKey,
+                ShowRecordId = options.ShowRecordId,
                 Skip = options.Skip,
                 Sort = options.Sort == null ? null : options.Sort.Render(_documentSerializer, _settings.SerializerRegistry)
             };
@@ -876,7 +1069,9 @@ namespace MongoDB.Driver
                 Collation = options.Collation,
                 Filter = options.Filter == null ? null : options.Filter.Render(_documentSerializer, _settings.SerializerRegistry),
                 FinalizeFunction = options.Finalize,
+#pragma warning disable 618
                 JavaScriptMode = options.JavaScriptMode,
+#pragma warning restore 618
                 Limit = options.Limit,
                 MaxTime = options.MaxTime,
                 ReadConcern = _settings.ReadConcern,
@@ -905,13 +1100,19 @@ namespace MongoDB.Driver
                 Collation = options.Collation,
                 Filter = options.Filter == null ? null : options.Filter.Render(_documentSerializer, _settings.SerializerRegistry),
                 FinalizeFunction = options.Finalize,
+#pragma warning disable 618
                 JavaScriptMode = options.JavaScriptMode,
+#pragma warning restore 618
                 Limit = options.Limit,
                 MaxTime = options.MaxTime,
+#pragma warning disable 618
                 NonAtomicOutput = collectionOutputOptions.NonAtomic,
+#pragma warning restore 618
                 Scope = options.Scope,
                 OutputMode = collectionOutputOptions.OutputMode,
+#pragma warning disable 618
                 ShardedOutput = collectionOutputOptions.Sharded,
+#pragma warning restore 618
                 Sort = options.Sort == null ? null : options.Sort.Render(_documentSerializer, _settings.SerializerRegistry),
                 Verbose = options.Verbose,
                 WriteConcern = _settings.WriteConcern
@@ -927,7 +1128,8 @@ namespace MongoDB.Driver
             {
                 Collation = options.Collation,
                 MaxTime = options.MaxTime,
-                ReadConcern = _settings.ReadConcern
+                ReadConcern = _settings.ReadConcern,
+                RetryRequested = _database.Client.Settings.RetryReads
             };
         }
 
@@ -946,6 +1148,28 @@ namespace MongoDB.Driver
         {
             var binding = new WritableServerBinding(_cluster, session.WrappedCoreSession.Fork());
             return new ReadWriteBindingHandle(binding);
+        }
+
+        private MessageEncoderSettings GetMessageEncoderSettings()
+        {
+            var messageEncoderSettings = new MessageEncoderSettings
+            {
+                { MessageEncoderSettingsName.ReadEncoding, _settings.ReadEncoding ?? Utf8Encodings.Strict },
+                { MessageEncoderSettingsName.WriteEncoding, _settings.WriteEncoding ?? Utf8Encodings.Strict }
+            };
+#pragma warning disable 618
+            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
+            {
+                messageEncoderSettings.Add(MessageEncoderSettingsName.GuidRepresentation, _settings.GuidRepresentation);
+            }
+#pragma warning restore 618
+
+            if (_database.Client is MongoClient mongoClient)
+            {
+                mongoClient.ConfigureAutoEncryptionMessageEncoderSettings(messageEncoderSettings);
+            }
+
+            return messageEncoderSettings;
         }
 
         private IBsonSerializer<TField> GetValueSerializerForDistinct<TField>(RenderedFieldDefinition<TField> renderedField, IBsonSerializerRegistry serializerRegistry)
@@ -1235,7 +1459,7 @@ namespace MongoDB.Driver
 
             public override void DropOne(IClientSessionHandle session, string name, CancellationToken cancellationToken = default(CancellationToken))
             {
-               DropOne(session, name, null, cancellationToken);
+                DropOne(session, name, null, cancellationToken);
             }
 
             public override void DropOne(
@@ -1262,7 +1486,7 @@ namespace MongoDB.Driver
 
             public override Task DropOneAsync(string name, DropIndexOptions options, CancellationToken cancellationToken = default(CancellationToken))
             {
-                return _collection.UsingImplicitSessionAsync(session => DropOneAsync(session, name,options, cancellationToken), cancellationToken);
+                return _collection.UsingImplicitSessionAsync(session => DropOneAsync(session, name, options, cancellationToken), cancellationToken);
             }
 
             public override Task DropOneAsync(IClientSessionHandle session, string name, CancellationToken cancellationToken = default(CancellationToken))
@@ -1316,6 +1540,7 @@ namespace MongoDB.Driver
             {
                 return new CreateIndexesOperation(_collection._collectionNamespace, requests, _collection._messageEncoderSettings)
                 {
+                    CommitQuorum = options?.CommitQuorum,
                     MaxTime = options?.MaxTime,
                     WriteConcern = _collection.Settings.WriteConcern
                 };
@@ -1328,13 +1553,16 @@ namespace MongoDB.Driver
                     var options = m.Options ?? new CreateIndexOptions<TDocument>();
                     var keysDocument = m.Keys.Render(_collection._documentSerializer, _collection._settings.SerializerRegistry);
                     var renderedPartialFilterExpression = options.PartialFilterExpression == null ? null : options.PartialFilterExpression.Render(_collection._documentSerializer, _collection._settings.SerializerRegistry);
+                    var renderedWildcardProjection = options.WildcardProjection?.Render(_collection._documentSerializer, _collection._settings.SerializerRegistry);
 
                     return new CreateIndexRequest(keysDocument)
                     {
                         Name = options.Name,
                         Background = options.Background,
                         Bits = options.Bits,
+#pragma warning disable 618
                         BucketSize = options.BucketSize,
+#pragma warning restore 618
                         Collation = options.Collation,
                         DefaultLanguage = options.DefaultLanguage,
                         ExpireAfter = options.ExpireAfter,
@@ -1348,7 +1576,8 @@ namespace MongoDB.Driver
                         TextIndexVersion = options.TextIndexVersion,
                         Unique = options.Unique,
                         Version = options.Version,
-                        Weights = options.Weights
+                        Weights = options.Weights,
+                        WildcardProjection = renderedWildcardProjection
                     };
                 });
             }
@@ -1373,7 +1602,10 @@ namespace MongoDB.Driver
 
             private ListIndexesOperation CreateListIndexesOperation()
             {
-                return new ListIndexesOperation(_collection._collectionNamespace, _collection._messageEncoderSettings);
+                return new ListIndexesOperation(_collection._collectionNamespace, _collection._messageEncoderSettings)
+                {
+                    RetryRequested = _collection.Database.Client.Settings.RetryReads
+                };
             }
         }
     }

@@ -59,11 +59,22 @@ namespace MongoDB.Driver.Core.Connections
 
         internal static BsonDocument CreateDriverDocument(string driverVersion)
         {
+            var driverName = "mongo-csharp-driver";
+            if (IsLegacyLoaded())
+            {
+                driverName = $"{driverName}|legacy";
+            }
+
             return new BsonDocument
             {
-                { "name", "mongo-csharp-driver" },
+                { "name", driverName },
                 { "version", driverVersion }
             };
+
+            bool IsLegacyLoaded()
+            {
+                return Type.GetType("MongoDB.Driver.MongoServer, MongoDB.Driver.Legacy") != null;
+            }
         }
 
         internal static BsonDocument CreateOSDocument()
@@ -73,7 +84,7 @@ namespace MongoDB.Driver.Core.Connections
             string architecture;
             string osVersion;
 
-#if NET45
+#if NET452
             if (Type.GetType("Mono.Runtime") != null)
             {
                 switch (Environment.OSVersion.Platform)

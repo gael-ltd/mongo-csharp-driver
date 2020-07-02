@@ -19,6 +19,7 @@ using System.Linq;
 using FluentAssertions;
 using FluentAssertions.Execution;
 using MongoDB.Bson;
+using MongoDB.Bson.TestHelpers;
 using MongoDB.Bson.TestHelpers.JsonDrivenTests;
 using MongoDB.Driver.Core.Events;
 
@@ -26,6 +27,13 @@ namespace MongoDB.Driver.Core.TestHelpers.JsonDrivenTests
 {
     public class CommandStartedEventAsserter : AspectAsserter<CommandStartedEvent>
     {
+        private KeyValuePair<string, BsonValue>[] _placeholders =
+        {
+            new KeyValuePair<string, BsonValue>("getMore", 42L),
+            new KeyValuePair<string, BsonValue>("afterClusterTime", 42),
+            new KeyValuePair<string, BsonValue>("recoveryToken", 42)
+        };
+
         // protected methods
         protected override void AssertAspect(CommandStartedEvent actualEvent, string name, BsonValue expectedValue)
         {
@@ -61,22 +69,32 @@ namespace MongoDB.Driver.Core.TestHelpers.JsonDrivenTests
                 var actualModel = actualModels[i];
                 var expectedModel = expectedModels[i];
 
-                if (expectedModel.Contains("multi") && expectedModel["multi"] == false && !actualModel.Contains("multi"))
+                if (!actualModel.Contains("multi"))
                 {
-                    expectedModel.Remove("multi");
+                    actualModel.Add("multi", false);
+                }
+                if (!actualModel.Contains("upsert"))
+                {
+                    actualModel.Add("upsert", false);
                 }
 
-                if (expectedModel.Contains("upsert") && expectedModel["upsert"] == false && !actualModel.Contains("upsert"))
+                if (!expectedModel.Contains("multi"))
                 {
-                    expectedModel.Remove("upsert");
+                    expectedModel.Add("multi", false);
+                }
+                if (!expectedModel.Contains("upsert"))
+                {
+                    expectedModel.Add("upsert", false);
                 }
             }
         }
 
         private void AssertCommandAspects(BsonDocument actualCommand, BsonDocument aspects)
         {
-            RecursiveFieldSetter.SetAll(actualCommand, "getMore", 42L);
-            RecursiveFieldSetter.SetAll(actualCommand, "afterClusterTime", 42);
+            foreach (var placeholder in _placeholders)
+            {
+                RecursiveFieldSetter.SetAll(actualCommand, placeholder.Key, placeholder.Value);
+            }
 
             foreach (var aspect in aspects)
             {
@@ -92,11 +110,14 @@ namespace MongoDB.Driver.Core.TestHelpers.JsonDrivenTests
             {
                 switch (name)
                 {
+                    case "allowDiskUse":
                     case "autocommit":
                     case "readConcern":
+                    case "recoveryToken":
                     case "startTransaction":
                     case "txnNumber":
                     case "writeConcern":
+                    case "maxTimeMS":
                         if (actualCommand.Contains(name))
                         {
                             throw new AssertionFailedException($"Did not expect field '{name}' in command: {actualCommand.ToJson()}.");
@@ -116,6 +137,8 @@ namespace MongoDB.Driver.Core.TestHelpers.JsonDrivenTests
                             return;
                         }
                         break;
+                    case "cursor" when commandName == "listCollections":
+                        return;
                 }
 
                 throw new AssertionFailedException($"Expected field '{name}' in command: {actualCommand.ToJson()}.");
@@ -127,10 +150,37 @@ namespace MongoDB.Driver.Core.TestHelpers.JsonDrivenTests
                 AdaptExpectedUpdateModels(actualValue.AsBsonArray.Cast<BsonDocument>().ToList(), expectedValue.AsBsonArray.Cast<BsonDocument>().ToList());
             }
 
-            if (!actualValue.Equals(expectedValue))
+            var namesToUseOrderInsensitiveComparisonWith = new[] { "writeConcern", "maxTimeMS", "updates", "indexes", "getMore", "deletes" };
+            var useOrderInsensitiveComparison = namesToUseOrderInsensitiveComparisonWith.Contains(name);
+
+            if (!(useOrderInsensitiveComparison ? BsonValueEquivalencyComparer.Compare(actualValue, expectedValue) : actualValue.Equals(expectedValue)))
             {
+                switch (name)
+                {
+                    case "out":
+                        if (commandName == "mapReduce")
+                        {
+                            if (expectedValue is BsonString &&
+                                actualValue.IsBsonDocument &&
+                                actualValue.AsBsonDocument.Contains("replace") &&
+                                actualValue["replace"] == expectedValue.AsString)
+                            {
+                                // allow short form for "out" to be equivalent to the long form
+                                // Assumes that the driver is correctly generating the following
+                                // fields: db, sharded, nonAtomic
+                                return;
+                            }
+                        }
+                        break;
+                }
+
                 throw new AssertionFailedException($"Expected field '{name}' in command '{commandName}' to be {expectedValue.ToJson()} but found {actualValue.ToJson()}.");
             }
+        }
+
+        public override void ConfigurePlaceholders(KeyValuePair<string, BsonValue>[] placeholders)
+        {
+            _placeholders = placeholders;
         }
     }
 }

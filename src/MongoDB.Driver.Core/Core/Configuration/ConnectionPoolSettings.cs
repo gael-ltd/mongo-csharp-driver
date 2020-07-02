@@ -93,6 +93,7 @@ namespace MongoDB.Driver.Core.Configuration
         /// <value>
         /// The size of the wait queue.
         /// </value>
+        [Obsolete("This property will be removed in a later release.")]
         public int WaitQueueSize
         {
             get { return _waitQueueSize; }
@@ -119,7 +120,7 @@ namespace MongoDB.Driver.Core.Configuration
         /// <param name="waitQueueSize">Size of the wait queue.</param>
         /// <param name="waitQueueTimeout">The wait queue timeout.</param>
         /// <returns>A new ConnectionPoolSettings instance.</returns>
-        public ConnectionPoolSettings With (
+        public ConnectionPoolSettings With(
             Optional<TimeSpan> maintenanceInterval = default(Optional<TimeSpan>),
             Optional<int> maxConnections = default(Optional<int>),
             Optional<int> minConnections = default(Optional<int>),

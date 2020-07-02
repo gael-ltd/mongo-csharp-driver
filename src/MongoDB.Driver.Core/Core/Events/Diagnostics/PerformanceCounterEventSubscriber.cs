@@ -13,7 +13,7 @@
 * limitations under the License.
 */
 
-#if NET45
+#if NET452
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -27,7 +27,6 @@ using MongoDB.Driver.Core.WireProtocol.Messages;
 
 namespace MongoDB.Driver.Core.Events.Diagnostics
 {
-    /// <preliminary/>
     /// <summary>
     /// Represents an event subscriber that records certain events to Windows performance counters.
     /// </summary>

@@ -36,6 +36,10 @@ namespace MongoDB.Driver
         // constructors
         /// <summary>
         /// Initializes a new instance of the <see cref="PasswordEvidence" /> class.
+        /// Less secure when used in conjunction with SCRAM-SHA-256, due to the need to store the password in a managed
+        /// string in order to SaslPrep it.
+        /// See <a href="https://github.com/mongodb/specifications/blob/master/source/auth/auth.rst#scram-sha-256">Driver Authentication: SCRAM-SHA-256</a>
+        /// for additional details.
         /// </summary>
         /// <param name="password">The password.</param>
         public PasswordEvidence(SecureString password)
@@ -102,7 +106,8 @@ namespace MongoDB.Driver
         /// Computes the MONGODB-CR password digest.
         /// </summary>
         /// <param name="username">The username.</param>
-        /// <returns></returns>
+        /// <returns>The MONGODB-CR password digest.</returns>
+        [Obsolete("MONGODB-CR was replaced by SCRAM-SHA-1 in MongoDB 3.0, and is now deprecated.")]
         internal string ComputeMongoCRPasswordDigest(string username)
         {
             using (var md5 = MD5.Create())

@@ -40,7 +40,7 @@ namespace MongoDB.Driver.Tests
         {
             _server = LegacyTestConfiguration.Server;
             _primary = LegacyTestConfiguration.Server.Primary;
-            _database = LegacyTestConfiguration.Database;
+            _database = _server.GetDatabase(GetType().Name);
             _adminDatabase = _server.GetDatabase("admin");
             // TODO: DropDatabase
             //_database.Drop();
@@ -52,6 +52,7 @@ namespace MongoDB.Driver.Tests
         public void TestCollectionExists()
         {
             var collectionName = "testcollectionexists";
+            EnsureCollectionDoesNotExist(collectionName);
             Assert.False(_database.CollectionExists(collectionName));
 
             _database.GetCollection(collectionName).Insert(new BsonDocument());
@@ -74,6 +75,7 @@ namespace MongoDB.Driver.Tests
         public void TestCreateCollection()
         {
             var collectionName = "testcreatecollection";
+            EnsureCollectionDoesNotExist(collectionName);
             Assert.False(_database.CollectionExists(collectionName));
 
             _database.CreateCollection(collectionName);
@@ -83,11 +85,12 @@ namespace MongoDB.Driver.Tests
         [SkippableFact]
         public void TestCreateCollectionSetIndexOptionDefaults()
         {
-            RequireServer.Check().Supports(Feature.IndexOptionsDefaults);
+            RequireServer.Check().Supports(Feature.IndexOptionsDefaults).ClusterTypes(ClusterType.Standalone, ClusterType.ReplicaSet);
             var collection = _database.GetCollection("testindexoptiondefaults");
             collection.Drop();
             Assert.False(collection.Exists());
-            var storageEngineOptions = new BsonDocument("mmapv1", new BsonDocument());
+            var storageEngine = CoreTestConfiguration.GetStorageEngine();
+            var storageEngineOptions = new BsonDocument(storageEngine, new BsonDocument());
             var indexOptionDefaults = new IndexOptionDefaults { StorageEngine = storageEngineOptions };
             var expectedIndexOptionDefaultsDocument = new BsonDocument("storageEngine", storageEngineOptions);
             var options = CollectionOptions.SetIndexOptionDefaults(indexOptionDefaults);
@@ -108,9 +111,12 @@ namespace MongoDB.Driver.Tests
             Assert.False(collection.Exists());
             var storageEngineOptions = new BsonDocument
             {
-                { "wiredTiger", new BsonDocument("configString", "block_compressor=zlib") },
-                { "mmapv1", new BsonDocument() }
+                { "wiredTiger", new BsonDocument("configString", "block_compressor=zlib") }
             };
+            if (Feature.MmapV1StorageEngine.IsSupported(CoreTestConfiguration.ServerVersion))
+            {
+                storageEngineOptions.Add("mmapv1", new BsonDocument());
+            }
             var options = CollectionOptions.SetStorageEngineOptions(storageEngineOptions);
             _database.CreateCollection(collection.Name, options);
 
@@ -145,9 +151,11 @@ namespace MongoDB.Driver.Tests
         {
             RequireServer.Check().Supports(Feature.CommandsThatWriteAcceptWriteConcern).ClusterType(ClusterType.ReplicaSet);
             var subject = _database;
+            var collectionName = "Restricted Section";
             var writeConcern = new WriteConcern(9);
+            EnsureCollectionDoesNotExist(collectionName);
 
-            var exception = Record.Exception(() => subject.WithWriteConcern(writeConcern).CreateCollection("collection"));
+            var exception = Record.Exception(() => subject.WithWriteConcern(writeConcern).CreateCollection(collectionName));
 
             exception.Should().BeOfType<MongoWriteConcernException>();
         }
@@ -159,8 +167,10 @@ namespace MongoDB.Driver.Tests
             var subject = _database;
             var writeConcern = new WriteConcern(9);
             var pipeline = new BsonDocument[0];
+            var viewName = "The Marauder's Map";
+            EnsureCollectionDoesNotExist(viewName);
 
-            var exception = Record.Exception(() => subject.WithWriteConcern(writeConcern).CreateView("viewName", "viewOn", pipeline, null));
+            var exception = Record.Exception(() => subject.WithWriteConcern(writeConcern).CreateView(viewName, "viewOn", pipeline, null));
 
             exception.Should().BeOfType<MongoWriteConcernException>();
         }
@@ -169,6 +179,7 @@ namespace MongoDB.Driver.Tests
         public void TestDropCollection()
         {
             var collectionName = "testdropcollection";
+            EnsureCollectionDoesNotExist(collectionName);
             Assert.False(_database.CollectionExists(collectionName));
 
             _database.GetCollection(collectionName).Insert(new BsonDocument());
@@ -184,15 +195,18 @@ namespace MongoDB.Driver.Tests
             RequireServer.Check().Supports(Feature.CommandsThatWriteAcceptWriteConcern).ClusterType(ClusterType.ReplicaSet);
             var subject = _database;
             var writeConcern = new WriteConcern(9);
+            var collectionName = "MacGuffins";
+            EnsureCollectionExists(collectionName); ;
 
-            var exception = Record.Exception(() => subject.WithWriteConcern(writeConcern).DropCollection("collection"));
+            var exception = Record.Exception(() => subject.WithWriteConcern(writeConcern).DropCollection(collectionName));
 
             exception.Should().BeOfType<MongoWriteConcernException>();
         }
 
-        [Fact]
+        [SkippableFact]
         public void TestEvalNoArgs()
         {
+            RequireServer.Check().Supports(Feature.Eval);
 #pragma warning disable 618
             if (!DriverTestConfiguration.Client.Settings.Credentials.Any())
             {
@@ -203,9 +217,10 @@ namespace MongoDB.Driver.Tests
 #pragma warning restore
         }
 
-        [Fact]
+        [SkippableFact]
         public void TestEvalNoArgsNoLock()
         {
+            RequireServer.Check().Supports(Feature.Eval);
 #pragma warning disable 618
             if (!DriverTestConfiguration.Client.Settings.Credentials.Any())
             {
@@ -216,35 +231,34 @@ namespace MongoDB.Driver.Tests
 #pragma warning restore
         }
 
-        [Fact]
+        [SkippableFact]
         public void TestEvalWithMaxTime()
         {
+            RequireServer.Check().Supports(Feature.Eval);
 #pragma warning disable 618
             if (!DriverTestConfiguration.Client.Settings.Credentials.Any())
             {
-                if (_primary.Supports(FeatureId.MaxTime))
+                using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
                 {
-                    using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
+                    if (failpoint.IsSupported())
                     {
-                        if (failpoint.IsSupported())
+                        failpoint.SetAlwaysOn();
+                        var args = new EvalArgs
                         {
-                            failpoint.SetAlwaysOn();
-                            var args = new EvalArgs
-                            {
-                                Code = "return 0;",
-                                MaxTime = TimeSpan.FromMilliseconds(1)
-                            };
-                            Assert.Throws<MongoExecutionTimeoutException>(() => _adminDatabase.Eval(args));
-                        }
+                            Code = "return 0;",
+                            MaxTime = TimeSpan.FromMilliseconds(1)
+                        };
+                        Assert.Throws<MongoExecutionTimeoutException>(() => _adminDatabase.Eval(args));
                     }
                 }
             }
 #pragma warning restore
         }
 
-        [Fact]
+        [SkippableFact]
         public void TestEvalWithOneArg()
         {
+            RequireServer.Check().Supports(Feature.Eval);
 #pragma warning disable 618
             if (!DriverTestConfiguration.Client.Settings.Credentials.Any())
             {
@@ -255,9 +269,10 @@ namespace MongoDB.Driver.Tests
 #pragma warning restore
         }
 
-        [Fact]
+        [SkippableFact]
         public void TestEvalWithOneArgNoLock()
         {
+            RequireServer.Check().Supports(Feature.Eval);
 #pragma warning disable 618
             if (!DriverTestConfiguration.Client.Settings.Credentials.Any())
             {
@@ -268,9 +283,10 @@ namespace MongoDB.Driver.Tests
 #pragma warning restore
         }
 
-        [Fact]
+        [SkippableFact]
         public void TestEvalWithTwoArgs()
         {
+            RequireServer.Check().Supports(Feature.Eval);
 #pragma warning disable 618
             if (!DriverTestConfiguration.Client.Settings.Credentials.Any())
             {
@@ -281,9 +297,10 @@ namespace MongoDB.Driver.Tests
 #pragma warning restore
         }
 
-        [Fact]
+        [SkippableFact]
         public void TestEvalWithTwoArgsNoLock()
         {
+            RequireServer.Check().Supports(Feature.Eval);
 #pragma warning disable 618
             if (!DriverTestConfiguration.Client.Settings.Credentials.Any())
             {
@@ -365,7 +382,7 @@ namespace MongoDB.Driver.Tests
         {
             if (_primary.InstanceType != MongoServerInstanceType.ShardRouter)
             {
-                var collection = LegacyTestConfiguration.Collection;
+                var collection = _database.GetCollection(nameof(TestGetProfilingInfo));
                 if (collection.Exists()) { collection.Drop(); }
                 collection.Insert(new BsonDocument("x", 1));
                 _database.SetProfilingLevel(ProfilingLevel.All);
@@ -392,6 +409,8 @@ namespace MongoDB.Driver.Tests
         {
             var collectionName1 = "testrenamecollection1";
             var collectionName2 = "testrenamecollection2";
+            EnsureCollectionDoesNotExist(collectionName1);
+            EnsureCollectionDoesNotExist(collectionName2);
             Assert.False(_database.CollectionExists(collectionName1));
             Assert.False(_database.CollectionExists(collectionName2));
 
@@ -417,6 +436,8 @@ namespace MongoDB.Driver.Tests
         {
             const string collectionName1 = "testrenamecollectiondroptarget1";
             const string collectionName2 = "testrenamecollectiondroptarget2";
+            EnsureCollectionDoesNotExist(collectionName1);
+            EnsureCollectionDoesNotExist(collectionName2);
             Assert.False(_database.CollectionExists(collectionName1));
             Assert.False(_database.CollectionExists(collectionName2));
 
@@ -492,52 +513,28 @@ namespace MongoDB.Driver.Tests
             RequireServer.Check().VersionLessThan("3.7.0");
 
 #pragma warning disable 618
-            bool usesCommands = _primary.Supports(FeatureId.UserManagementCommands);
-            if (usesCommands)
-            {
-                _database.RunCommand("dropAllUsersFromDatabase");
-            }
-            else
-            {
-                var collection = _database.GetCollection("system.users");
-                collection.RemoveAll();
-            }
+            _database.RunCommand("dropAllUsersFromDatabase");
 
             _database.AddUser(new MongoUser(username, new PasswordEvidence(password), isReadOnly));
 
             var user = _database.FindUser(username);
             Assert.NotNull(user);
             Assert.Equal(username, user.Username);
-            if (!usesCommands)
-            {
-                Assert.Equal(MongoUtils.Hash(string.Format("{0}:mongo:{1}", username, password)), user.PasswordHash);
-                Assert.Equal(isReadOnly, user.IsReadOnly);
-            }
 
             var users = _database.FindAllUsers();
             Assert.Equal(1, users.Length);
             Assert.Equal(username, users[0].Username);
-            if (!usesCommands)
-            {
-                Assert.Equal(MongoUtils.Hash(string.Format("{0}:mongo:{1}", username, password)), users[0].PasswordHash);
-                Assert.Equal(isReadOnly, users[0].IsReadOnly);
-            }
 
             // test updating existing user
             _database.AddUser(new MongoUser(username, new PasswordEvidence("newpassword"), !isReadOnly));
             user = _database.FindUser(username);
             Assert.NotNull(user);
             Assert.Equal(username, user.Username);
-            if (!usesCommands)
-            {
-                Assert.Equal(MongoUtils.Hash(string.Format("{0}:mongo:{1}", username, "newpassword")), user.PasswordHash);
-                Assert.Equal(!isReadOnly, user.IsReadOnly);
-            }
 
             _database.RemoveUser(user);
             user = _database.FindUser(username);
             Assert.Null(user);
-#pragma warning restore
+#pragma warning restore 618
         }
 
         [Fact]

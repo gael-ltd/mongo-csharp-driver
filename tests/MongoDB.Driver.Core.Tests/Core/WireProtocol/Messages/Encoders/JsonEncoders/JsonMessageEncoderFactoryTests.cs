@@ -17,9 +17,7 @@ using System;
 using System.IO;
 using FluentAssertions;
 using MongoDB.Bson;
-using MongoDB.Bson.IO;
 using MongoDB.Bson.Serialization.Serializers;
-using MongoDB.Driver.Core.WireProtocol.Messages.Encoders.JsonEncoders;
 using Xunit;
 
 namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.JsonEncoders
@@ -201,6 +199,17 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.JsonEncoders
                 var encoderFactory = new JsonMessageEncoderFactory(null, textWriter, __messageEncoderSettings);
                 var encoder = encoderFactory.GetUpdateMessageEncoder();
                 encoder.Should().BeOfType<UpdateMessageJsonEncoder>();
+            }
+        }
+
+        [Fact]
+        public void GetCompressedMessageEncoder_should_return_a_CompressedMessageJsonEncoder()
+        {
+            using (var textWriter = new StringWriter())
+            {
+                var encoderFactory = new JsonMessageEncoderFactory(null, textWriter, __messageEncoderSettings);
+                var encoder = encoderFactory.GetCompressedMessageEncoder(null);
+                encoder.Should().BeOfType<CompressedMessageJsonEncoder>();
             }
         }
     }

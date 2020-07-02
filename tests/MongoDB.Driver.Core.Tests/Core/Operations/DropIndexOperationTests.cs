@@ -156,7 +156,7 @@ namespace MongoDB.Driver.Core.Operations
             var indexName = "x_1";
             var maxTime = TimeSpan.FromTicks(maxTimeTicks);
             var subject = new DropIndexOperation(_collectionNamespace, indexName, _messageEncoderSettings);
-            subject.MaxTime= maxTime;
+            subject.MaxTime = maxTime;
             var expectedResult = new BsonDocument
             {
                 { "dropIndexes", _collectionNamespace.CollectionName },
@@ -170,7 +170,7 @@ namespace MongoDB.Driver.Core.Operations
 
             result.Should().Be(expectedResult);
             result["maxTimeMS"].BsonType.Should().Be(BsonType.Int32);
-            
+
         }
 
         [Theory]
@@ -255,7 +255,7 @@ namespace MongoDB.Driver.Core.Operations
         public void Execute_should_throw_when_maxTime_is_exceeded(
             [Values(false, true)] bool async)
         {
-            RequireServer.Check().Supports(Feature.FailPoints).ClusterTypes(ClusterType.Standalone, ClusterType.ReplicaSet);
+            RequireServer.Check().ClusterTypes(ClusterType.Standalone, ClusterType.ReplicaSet);
             var indexName = "x_1";
             var subject = new DropIndexOperation(_collectionNamespace, indexName, _messageEncoderSettings) { MaxTime = TimeSpan.FromSeconds(9001) };
 
@@ -350,7 +350,7 @@ namespace MongoDB.Driver.Core.Operations
 
             result.Should().BeSameAs(_messageEncoderSettings);
         }
-        
+
         [Theory]
         [ParameterAttributeData]
         public void WriteConcern_get_and_set_should_work(

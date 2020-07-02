@@ -39,7 +39,7 @@ namespace MongoDB.Driver.Core.Connections
         /// <value>
         /// The connection identifier.
         /// </value>
-        ConnectionId ConnectionId { get;}
+        ConnectionId ConnectionId { get; }
 
         /// <summary>
         /// Gets the connection description.
@@ -56,6 +56,14 @@ namespace MongoDB.Driver.Core.Connections
         /// The end point.
         /// </value>
         EndPoint EndPoint { get; }
+
+        /// <summary>
+        /// Gets the generation of the pool when this connection was created.
+        /// </summary>
+        /// <value>
+        /// The generation of the pool when this connection was created.
+        /// </value>
+        int Generation { get; }
 
         /// <summary>
         /// Gets a value indicating whether this instance is expired.

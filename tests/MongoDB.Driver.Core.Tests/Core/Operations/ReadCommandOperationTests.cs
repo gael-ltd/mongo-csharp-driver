@@ -53,6 +53,20 @@ namespace MongoDB.Driver.Core.Operations
             result.DatabaseNamespace.Should().BeSameAs(databaseNamespace);
             result.MessageEncoderSettings.Should().BeSameAs(messageEncoderSettings);
             result.ResultSerializer.Should().BeSameAs(resultSerializer);
+            result.RetryRequested.Should().BeFalse();
+        }
+
+        [Theory]
+        [ParameterAttributeData]
+        public void RetryRequested_get_and_set_should_work(
+            [Values(false, true)] bool value)
+        {
+            var subject = CreateSubject<BsonDocument>();
+
+            subject.RetryRequested = value;
+            var result = subject.RetryRequested;
+
+            result.Should().Be(value);
         }
 
         [Theory]
@@ -295,6 +309,30 @@ namespace MongoDB.Driver.Core.Operations
                         subject.MessageEncoderSettings,
                         cancellationToken),
                     Times.Once);
+            }
+        }
+
+        [Theory]
+        [ParameterAttributeData]
+        public void Execute_should_call_GetChannel_only_once([Values(false, true)] bool async)
+        {
+            var subject = CreateSubject<BsonDocument>();
+            var readPreference = ReadPreference.Primary;
+            var serverDescription = CreateServerDescription(ServerType.Standalone);
+            var mockChannel = CreateMockChannel();
+            var mockChannelSource = CreateMockChannelSource(serverDescription, mockChannel.Object);
+            var binding = CreateMockReadBinding(readPreference, mockChannelSource.Object).Object;
+            var cancellationToken = new CancellationTokenSource().Token;
+
+            if (async)
+            {
+                subject.ExecuteAsync(binding, cancellationToken).GetAwaiter().GetResult();
+                mockChannelSource.Verify(c => c.GetChannelAsync(cancellationToken), Times.Once);
+            }
+            else
+            {
+                subject.Execute(binding, cancellationToken);
+                mockChannelSource.Verify(c => c.GetChannel(cancellationToken), Times.Once);
             }
         }
 

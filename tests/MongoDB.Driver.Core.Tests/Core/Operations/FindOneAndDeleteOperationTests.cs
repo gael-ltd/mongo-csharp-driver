@@ -85,6 +85,7 @@ namespace MongoDB.Driver.Core.Operations
             subject.MessageEncoderSettings.Should().BeSameAs(_messageEncoderSettings);
 
             subject.Collation.Should().BeNull();
+            subject.Hint.Should().BeNull();
             subject.MaxTime.Should().NotHaveValue();
             subject.Projection.Should().BeNull();
             subject.Sort.Should().BeNull();
@@ -104,6 +105,79 @@ namespace MongoDB.Driver.Core.Operations
             var result = subject.Collation;
 
             result.Should().BeSameAs(value);
+        }
+
+        [Theory]
+        [ParameterAttributeData]
+        public void CreateCommand_should_return_expected_result_when_Hint_is_set(
+            [Values(null, "_id_")] string hintString)
+        {
+            var hint = (BsonValue)hintString;
+            var subject = new FindOneAndDeleteOperation<BsonDocument>(_collectionNamespace, _filter, BsonDocumentSerializer.Instance, _messageEncoderSettings)
+            {
+                Hint = hint
+            };
+            var session = OperationTestHelper.CreateSession();
+            var connectionDescription = OperationTestHelper.CreateConnectionDescription(serverVersion: Feature.HintForFindAndModifyFeature.FirstSupportedVersion);
+
+            var result = subject.CreateCommand(session, connectionDescription, null);
+
+            var expectedResult = new BsonDocument
+            {
+                { "findAndModify", _collectionNamespace.CollectionName },
+                { "query", _filter },
+                { "remove", true },
+                { "hint", () => hint, hint != null }
+            };
+            result.Should().Be(expectedResult);
+        }
+
+        [SkippableTheory]
+        [ParameterAttributeData]
+        public void Execute_with_hint_should_throw_when_hint_is_not_supported(
+            [Values(0, 1)] int w,
+            [Values(false, true)] bool async)
+        {
+            var writeConcern = new WriteConcern(w);
+            var serverVersion = CoreTestConfiguration.ServerVersion;
+            var subject = new FindOneAndDeleteOperation<BsonDocument>(_collectionNamespace, _filter, BsonDocumentSerializer.Instance, _messageEncoderSettings)
+            {
+                Hint = new BsonDocument("_id", 1),
+                WriteConcern = writeConcern
+            };
+
+            var exception = Record.Exception(() => ExecuteOperation(subject, async, useImplicitSession: true));
+
+            if (!writeConcern.IsAcknowledged)
+            {
+                exception.Should().BeOfType<NotSupportedException>();
+            }
+            else if (Feature.HintForFindAndModifyFeature.DriverMustThrowIfNotSupported(serverVersion))
+            {
+                exception.Should().BeOfType<NotSupportedException>();
+            }
+            else if (Feature.HintForFindAndModifyFeature.IsSupported(serverVersion))
+            {
+                exception.Should().BeNull();
+            }
+            else
+            {
+                exception.Should().BeOfType<MongoCommandException>();
+            }
+        }
+
+        [Theory]
+        [ParameterAttributeData]
+        public void Hint_get_and_set_should_work(
+            [Values(null, "_id_")] string hintString)
+        {
+            var subject = new FindOneAndDeleteOperation<BsonDocument>(_collectionNamespace, _filter, BsonDocumentSerializer.Instance, _messageEncoderSettings);
+            var value = (BsonValue)hintString;
+
+            subject.Hint = value;
+            var result = subject.Hint;
+
+            result.Should().Be(value);
         }
 
         [Theory]
@@ -353,7 +427,7 @@ namespace MongoDB.Driver.Core.Operations
         public void Execute_should_throw_when_maxTime_is_exceeded(
             [Values(false, true)] bool async)
         {
-            RequireServer.Check().Supports(Feature.FailPoints).ClusterTypes(ClusterType.Standalone, ClusterType.ReplicaSet);
+            RequireServer.Check().ClusterTypes(ClusterType.Standalone, ClusterType.ReplicaSet);
             var filter = BsonDocument.Parse("{ x : 1 }");
             var subject = new FindOneAndDeleteOperation<BsonDocument>(_collectionNamespace, filter, _findAndModifyValueDeserializer, _messageEncoderSettings);
             subject.MaxTime = TimeSpan.FromSeconds(9001);

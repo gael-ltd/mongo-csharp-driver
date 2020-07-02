@@ -64,6 +64,7 @@ namespace MongoDB.Driver
         /// <summary>
         /// Gets or sets the size of a geohash bucket.
         /// </summary>
+        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public double? BucketSize
         {
             get { return _bucketSize; }
@@ -218,7 +219,9 @@ namespace MongoDB.Driver
                 {
                     Background = options.Background,
                     Bits = options.Bits,
+#pragma warning disable 618
                     BucketSize = options.BucketSize,
+#pragma warning restore 618
                     Collation = options.Collation,
                     DefaultLanguage = options.DefaultLanguage,
                     ExpireAfter = options.ExpireAfter,
@@ -242,6 +245,7 @@ namespace MongoDB.Driver
 
         // private fields
         private FilterDefinition<TDocument> _partialFilterExpression;
+        private ProjectionDefinition<TDocument> _wildcardProjection;
 
         // public properties
         /// <summary>
@@ -251,6 +255,15 @@ namespace MongoDB.Driver
         {
             get { return _partialFilterExpression; }
             set { _partialFilterExpression = value; }
+        }
+
+        /// <summary>
+        /// Gets or sets the wildcard projection.
+        /// </summary>
+        public ProjectionDefinition<TDocument> WildcardProjection
+        {
+            get { return _wildcardProjection; }
+            set { _wildcardProjection = value; }
         }
     }
 }

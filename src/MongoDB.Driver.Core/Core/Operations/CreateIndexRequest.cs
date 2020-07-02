@@ -14,8 +14,6 @@
 */
 
 using System;
-using System.Collections.Generic;
-using System.Text;
 using MongoDB.Bson;
 using MongoDB.Driver.Core.Misc;
 
@@ -47,6 +45,7 @@ namespace MongoDB.Driver.Core.Operations
         private bool? _unique;
         private int? _version;
         private BsonDocument _weights;
+        private BsonDocument _wildcardProjection;
 
         // constructors
         /// <summary>
@@ -101,6 +100,7 @@ namespace MongoDB.Driver.Core.Operations
         /// <value>
         /// The size of the bucket for geo haystack indexes.
         /// </value>
+        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public double? BucketSize
         {
             get { return _bucketSize; }
@@ -295,6 +295,18 @@ namespace MongoDB.Driver.Core.Operations
             set { _weights = value; }
         }
 
+        /// <summary>
+        /// Gets or sets the wildcard projection.
+        /// </summary>
+        /// <value>
+        /// The wildcardProjection for indexes.
+        /// </value>
+        public BsonDocument WildcardProjection
+        {
+            get { return _wildcardProjection; }
+            set { _wildcardProjection = value; }
+        }
+
         // publuc methods
         /// <summary>
         /// Gets the name of the index.
@@ -306,7 +318,7 @@ namespace MongoDB.Driver.Core.Operations
             {
                 return _name;
             }
-            
+
             if (_additionalOptions != null)
             {
                 BsonValue name;
@@ -344,7 +356,8 @@ namespace MongoDB.Driver.Core.Operations
                 { "textIndexVersion", () => _textIndexVersion.Value, _textIndexVersion.HasValue },
                 { "unique", () => _unique.Value, _unique.HasValue },
                 { "v", () => _version.Value, _version.HasValue },
-                { "weights", () => _weights, _weights != null }
+                { "weights", () => _weights, _weights != null },
+                { "wildcardProjection", _wildcardProjection, _wildcardProjection != null }
             };
 
             if (_additionalOptions != null)

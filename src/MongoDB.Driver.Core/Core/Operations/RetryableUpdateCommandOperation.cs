@@ -108,6 +108,13 @@ namespace MongoDB.Driver.Core.Operations
                     throw new NotSupportedException($"Server version {serverVersion} does not support arrayFilters.");
                 }
             }
+            if (Feature.HintForUpdateAndReplaceOperations.DriverMustThrowIfNotSupported(serverVersion) || (WriteConcern != null && !WriteConcern.IsAcknowledged))
+            {
+                if (_updates.Items.Skip(_updates.Offset).Take(_updates.Count).Any(u => u.Hint != null))
+                {
+                    throw new NotSupportedException($"Server version {serverVersion} does not support hints.");
+                }
+            }
 
             var writeConcern = WriteConcernHelper.GetWriteConcernForWriteCommand(session, WriteConcern);
             return new BsonDocument
@@ -176,6 +183,11 @@ namespace MongoDB.Driver.Core.Operations
                     }
                     writer.WriteEndArray();
                 }
+                if (value.Hint != null)
+                {
+                    writer.WriteName("hint");
+                    BsonValueSerializer.Instance.Serialize(context, value.Hint);
+                }
                 writer.WriteEndDocument();
             }
 
@@ -187,7 +199,7 @@ namespace MongoDB.Driver.Core.Operations
                 try
                 {
                     var position = writer.Position;
-                    BsonDocumentSerializer.Instance.Serialize(context, request.Update);
+                    BsonValueSerializer.Instance.Serialize(context, request.Update);
                     if (request.UpdateType == UpdateType.Update && writer.Position == position + 8)
                     {
                         throw new BsonSerializationException("Update documents cannot be empty.");

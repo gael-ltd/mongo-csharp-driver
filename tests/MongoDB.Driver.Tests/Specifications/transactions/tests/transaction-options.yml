@@ -1,3 +1,11 @@
+runOn:
+    -
+        minServerVersion: "4.0"
+        topology: ["replicaset"]
+    -
+        minServerVersion: "4.1.8"
+        topology: ["sharded"]
+
 database_name: &database_name "transaction-tests"
 collection_name: &collection_name "test"
 
@@ -8,32 +16,30 @@ tests:
 
     operations: &commitAbortOperations
       - name: startTransaction
+        object: session0
+      - name: insertOne
+        object: collection
         arguments:
           session: session0
-      - name: insertOne
-        arguments:
           document:
             _id: 1
-          session: session0
         result:
           insertedId: 1
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
       # Now test abort.
       - name: startTransaction
+        object: session0
+      - name: insertOne
+        object: collection
         arguments:
           session: session0
-      - name: insertOne
-        arguments:
           document:
             _id: 2
-          session: session0
         result:
           insertedId: 2
       - name: abortTransaction
-        arguments:
-          session: session0
+        object: session0
 
     expectations:
       - command_started_event:
@@ -49,6 +55,7 @@ tests:
             autocommit: false
             readConcern:
             writeConcern:
+            maxTimeMS:
           command_name: insert
           database_name: *database_name
       - command_started_event:
@@ -61,6 +68,7 @@ tests:
             autocommit: false
             readConcern:
             writeConcern:
+            maxTimeMS:
           command_name: commitTransaction
           database_name: admin
       - command_started_event:
@@ -77,6 +85,7 @@ tests:
             readConcern:
               afterClusterTime: 42
             writeConcern:
+            maxTimeMS:
           command_name: insert
           database_name: *database_name
       - command_started_event:
@@ -89,6 +98,7 @@ tests:
             autocommit: false
             readConcern:
             writeConcern:
+            maxTimeMS:
           command_name: abortTransaction
           database_name: admin
 
@@ -120,6 +130,7 @@ tests:
             readConcern:
               level: local
             writeConcern:
+            maxTimeMS:
           command_name: insert
           database_name: *database_name
       - command_started_event:
@@ -133,6 +144,7 @@ tests:
             readConcern:
             writeConcern:
               w: 1
+            maxTimeMS:
           command_name: commitTransaction
           database_name: admin
       - command_started_event:
@@ -150,6 +162,7 @@ tests:
               level: local
               afterClusterTime: 42
             writeConcern:
+            maxTimeMS:
           command_name: insert
           database_name: *database_name
       - command_started_event:
@@ -163,6 +176,7 @@ tests:
             readConcern:
             writeConcern:
               w: 1
+            maxTimeMS:
           command_name: abortTransaction
           database_name: admin
 
@@ -174,9 +188,10 @@ tests:
       session0:
         defaultTransactionOptions:
           readConcern:
-            level: snapshot
+            level: majority
           writeConcern:
             w: 1
+          maxCommitTimeMS: 60000
 
     operations: *commitAbortOperations
 
@@ -193,7 +208,7 @@ tests:
             startTransaction: true
             autocommit: false
             readConcern:
-              level: snapshot
+              level: majority
             writeConcern:
           command_name: insert
           database_name: *database_name
@@ -208,6 +223,7 @@ tests:
             readConcern:
             writeConcern:
               w: 1
+            maxTimeMS: 60000
           command_name: commitTransaction
           database_name: admin
       - command_started_event:
@@ -222,7 +238,7 @@ tests:
             startTransaction: true
             autocommit: false
             readConcern:
-              level: snapshot
+              level: majority
               afterClusterTime: 42
             writeConcern:
           command_name: insert
@@ -253,47 +269,49 @@ tests:
       session0:
         defaultTransactionOptions:
           readConcern:
-            level: majority
+            level: snapshot
           writeConcern:
             w: 1
+          maxCommitTimeMS: 30000
 
     operations:
       - name: startTransaction
+        object: session0
         arguments:
-          session: session0
           options:
             readConcern:
-              level: snapshot
+              level: majority
             writeConcern:
               w: majority
+            maxCommitTimeMS: 60000
       - name: insertOne
+        object: collection
         arguments:
+          session: session0
           document:
             _id: 1
-          session: session0
         result:
           insertedId: 1
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
       - name: startTransaction
+        object: session0
         arguments:
-          session: session0
           options:
             readConcern:
-              level: snapshot
+              level: majority
             writeConcern:
               w: majority
       - name: insertOne
+        object: collection
         arguments:
+          session: session0
           document:
             _id: 2
-          session: session0
         result:
           insertedId: 2
       - name: abortTransaction
-        arguments:
-          session: session0
+        object: session0
 
     expectations:
       - command_started_event:
@@ -308,8 +326,9 @@ tests:
             startTransaction: true
             autocommit: false
             readConcern:
-              level: snapshot
+              level: majority
             writeConcern:
+            maxTimeMS:
           command_name: insert
           database_name: *database_name
       - command_started_event:
@@ -323,6 +342,7 @@ tests:
             readConcern:
             writeConcern:
               w: majority
+            maxTimeMS: 60000
           command_name: commitTransaction
           database_name: admin
       - command_started_event:
@@ -337,9 +357,10 @@ tests:
             startTransaction: true
             autocommit: false
             readConcern:
-              level: snapshot
+              level: majority
               afterClusterTime: 42
             writeConcern:
+            maxTimeMS:
           command_name: insert
           database_name: *database_name
       - command_started_event:
@@ -353,6 +374,7 @@ tests:
             readConcern:
             writeConcern:
               w: majority
+            maxTimeMS:
           command_name: abortTransaction
           database_name: admin
 
@@ -368,9 +390,10 @@ tests:
       session0:
         defaultTransactionOptions:
           readConcern:
-            level: snapshot
+            level: majority
           writeConcern:
             w: majority
+          maxCommitTimeMS: 60000
 
     operations: *commitAbortOperations
 
@@ -387,8 +410,9 @@ tests:
             startTransaction: true
             autocommit: false
             readConcern:
-              level: snapshot
+              level: majority
             writeConcern:
+            maxTimeMS:
           command_name: insert
           database_name: *database_name
       - command_started_event:
@@ -402,6 +426,7 @@ tests:
             readConcern:
             writeConcern:
               w: majority
+            maxTimeMS: 60000
           command_name: commitTransaction
           database_name: admin
       - command_started_event:
@@ -416,9 +441,10 @@ tests:
             startTransaction: true
             autocommit: false
             readConcern:
-              level: snapshot
+              level: majority
               afterClusterTime: 42
             writeConcern:
+            maxTimeMS:
           command_name: insert
           database_name: *database_name
       - command_started_event:
@@ -432,6 +458,7 @@ tests:
             readConcern:
             writeConcern:
               w: majority
+            maxTimeMS:
           command_name: abortTransaction
           database_name: admin
 
@@ -513,110 +540,6 @@ tests:
 
     outcome: *outcome
 
-  - description: readConcern local in startTransaction options
-
-    sessionOptions:
-      session0:
-        defaultTransactionOptions:
-          readConcern:
-            level: majority # Overridden.
-
-    operations:
-      - name: startTransaction
-        arguments:
-          session: session0
-          options:
-            readConcern:
-              level: snapshot
-      - name: insertOne
-        arguments:
-          document:
-            _id: 1
-          session: session0
-        result:
-          insertedId: 1
-      - name: commitTransaction
-        arguments:
-          session: session0
-      # Now test abort.
-      - name: startTransaction
-        arguments:
-          session: session0
-          options:
-            readConcern:
-              level: snapshot
-      - name: insertOne
-        arguments:
-          document:
-            _id: 2
-          session: session0
-        result:
-          insertedId: 2
-      - name: abortTransaction
-        arguments:
-          session: session0
-
-    expectations:
-      - command_started_event:
-          command:
-            insert: *collection_name
-            documents:
-              - _id: 1
-            ordered: true
-            lsid: session0
-            txnNumber:
-              $numberLong: "1"
-            startTransaction: true
-            autocommit: false
-            readConcern:
-              level: snapshot
-            writeConcern:
-          command_name: insert
-          database_name: *database_name
-      - command_started_event:
-          command:
-            commitTransaction: 1
-            lsid: session0
-            txnNumber:
-              $numberLong: "1"
-            startTransaction:
-            autocommit: false
-            readConcern:
-            writeConcern:
-          command_name: commitTransaction
-          database_name: admin
-      - command_started_event:
-          command:
-            insert: *collection_name
-            documents:
-              - _id: 2
-            ordered: true
-            lsid: session0
-            txnNumber:
-              $numberLong: "2"
-            startTransaction: true
-            autocommit: false
-            readConcern:
-              level: snapshot
-              afterClusterTime: 42
-            writeConcern:
-          command_name: insert
-          database_name: *database_name
-      - command_started_event:
-          command:
-            abortTransaction: 1
-            lsid: session0
-            txnNumber:
-              $numberLong: "2"
-            startTransaction:
-            autocommit: false
-            readConcern:
-            writeConcern:
-          command_name: abortTransaction
-          database_name: admin
-
-    outcome: *outcome
-
   - description: client writeConcern ignored for bulk
 
     clientOptions:
@@ -624,12 +547,13 @@ tests:
 
     operations:
       - name: startTransaction
+        object: session0
         arguments:
-          session: session0
           options:
             writeConcern:
               w: 1
       - name: bulkWrite
+        object: collection
         arguments:
           requests:
             - name: insertOne
@@ -638,14 +562,14 @@ tests:
           session: session0
         result:
           deletedCount: 0
+          insertedCount: 1
           insertedIds: {0: 1}
           matchedCount: 0
           modifiedCount: 0
           upsertedCount: 0
           upsertedIds: {}
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
 
     expectations:
       - command_started_event:
@@ -686,25 +610,25 @@ tests:
 
     operations:
       - name: startTransaction
+        object: session0
+      - name: insertOne
+        object: collection
         arguments:
           session: session0
-      - name: insertOne
-        arguments:
           document:
             _id: 1
-          session: session0
         result:
           insertedId: 1
-      - name: count
+      - name: find
+        object: collection
         arguments:
+          session: session0
           filter:
             _id: 1
-          session: session0
         result:
           errorContains: read preference in a transaction must be primary
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
 
     expectations:
       - command_started_event:
@@ -753,25 +677,25 @@ tests:
 
     operations:
       - name: startTransaction
+        object: session0
+      - name: insertOne
+        object: collection
         arguments:
           session: session0
-      - name: insertOne
-        arguments:
           document:
             _id: 1
-          session: session0
         result:
           insertedId: 1
-      - name: count
+      - name: find
+        object: collection
         arguments:
+          session: session0
           filter:
             _id: 1
-          session: session0
         result:
           errorContains: read preference in a transaction must be primary
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
 
     expectations:
       - command_started_event:
@@ -820,28 +744,29 @@ tests:
 
     operations:
       - name: startTransaction
+        object: session0
         arguments:
-          session: session0
           options:
             readPreference:
               mode: Secondary
       - name: insertOne
+        object: collection
         arguments:
+          session: session0
           document:
             _id: 1
-          session: session0
         result:
           insertedId: 1
-      - name: count
+      - name: find
+        object: collection
         arguments:
+          session: session0
           filter:
             _id: 1
-          session: session0
         result:
           errorContains: read preference in a transaction must be primary
       - name: commitTransaction
-        arguments:
-          session: session0
+        object: session0
 
     expectations:
       - command_started_event:

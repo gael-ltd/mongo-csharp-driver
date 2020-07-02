@@ -14,12 +14,8 @@
 */
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using MongoDB.Bson;
 using MongoDB.Driver.Core.Misc;
-using MongoDB.Driver.Core.Operations;
 
 namespace MongoDB.Driver
 {
@@ -27,7 +23,7 @@ namespace MongoDB.Driver
     /// Model for deleting a single document.
     /// </summary>
     /// <typeparam name="TDocument">The type of the document.</typeparam>
-#if NET45
+#if NET452
     [Serializable]
 #endif
     public sealed class DeleteOneModel<TDocument> : WriteModel<TDocument>
@@ -35,6 +31,7 @@ namespace MongoDB.Driver
         // fields
         private Collation _collation;
         private readonly FilterDefinition<TDocument> _filter;
+        private BsonValue _hint;
 
         // constructors
         /// <summary>
@@ -62,6 +59,15 @@ namespace MongoDB.Driver
         public FilterDefinition<TDocument> Filter
         {
             get { return _filter; }
+        }
+
+        /// <summary>
+        /// Gets or sets the hint.
+        /// </summary>
+        public BsonValue Hint
+        {
+            get { return _hint; }
+            set { _hint = value; }
         }
 
         /// <summary>

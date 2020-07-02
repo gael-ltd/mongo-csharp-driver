@@ -14,7 +14,7 @@
 */
 
 using System;
-#if NET45
+#if NET452
 using System.Runtime.Serialization;
 #endif
 using MongoDB.Bson;
@@ -25,12 +25,12 @@ namespace MongoDB.Driver.GridFS
     /// <summary>
     /// Represents a GridFSChunk exception.
     /// </summary>
-#if NET45
+#if NET452
     [Serializable]
 #endif
     public class GridFSChunkException : GridFSException
     {
-#region static
+        #region static
         private static string FormatMessage(BsonValue id, long n, string reason)
         {
             Ensure.IsNotNull(id, nameof(id));
@@ -38,7 +38,7 @@ namespace MongoDB.Driver.GridFS
             Ensure.IsNotNull(reason, nameof(reason));
             return string.Format("GridFS chunk {0} of file id {1} is {2}.", n, id, reason);
         }
-#endregion
+        #endregion
 
         // constructors
         /// <summary>
@@ -52,7 +52,7 @@ namespace MongoDB.Driver.GridFS
         {
         }
 
-#if NET45
+#if NET452
         /// <summary>
         /// Initializes a new instance of the <see cref="GridFSChunkException"/> class.
         /// </summary>

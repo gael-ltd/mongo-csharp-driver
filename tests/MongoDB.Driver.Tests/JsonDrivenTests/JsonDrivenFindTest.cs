@@ -29,45 +29,59 @@ namespace MongoDB.Driver.Tests.JsonDrivenTests
         private FilterDefinition<BsonDocument> _filter = new BsonDocument();
         private FindOptions<BsonDocument> _options = new FindOptions<BsonDocument>();
         private List<BsonDocument> _result;
+        private IClientSessionHandle _session;
 
         // public constructors
-        public JsonDrivenFindTest(IMongoClient client, IMongoDatabase database, IMongoCollection<BsonDocument> collection, Dictionary<string, IClientSessionHandle> sessionMap)
-            : base(client, database, collection, sessionMap)
+        public JsonDrivenFindTest(IMongoCollection<BsonDocument> collection, Dictionary<string, object> objectMap)
+            : base(collection, objectMap)
         {
         }
 
         // public methods
         public override void Arrange(BsonDocument document)
         {
-            JsonDrivenHelper.EnsureAllFieldsAreValid(document, "name", "arguments", "result");
+            JsonDrivenHelper.EnsureAllFieldsAreValid(document, "name", "object", "collectionOptions", "arguments", "result", "results", "error");
             base.Arrange(document);
         }
 
         // protected methods
         protected override void AssertResult()
         {
-            _result.Should().Equal(_expectedResult.AsBsonArray.Cast<BsonDocument>());
+            if (_expectedResult is BsonDocument resultDocument && _result.Count == 1)
+            {
+                _result[0].Should().Be(resultDocument);
+            }
+            else
+            {
+                _result.Should().Equal(_expectedResult.AsBsonArray.Cast<BsonDocument>());
+            }
         }
 
         protected override void CallMethod(CancellationToken cancellationToken)
         {
-            _result = _collection.FindSync(_filter, _options, cancellationToken).ToList();
-        }
-
-        protected override void CallMethod(IClientSessionHandle session, CancellationToken cancellationToken)
-        {
-            _result = _collection.FindSync(session, _filter, _options, cancellationToken).ToList();
+            IAsyncCursor<BsonDocument> cursor;
+            if (_session == null)
+            {
+                cursor = _collection.FindSync(_filter, _options, cancellationToken);
+            }
+            else
+            {
+                cursor = _collection.FindSync(_session, _filter, _options, cancellationToken);
+            }
+            _result = cursor.ToList();
         }
 
         protected override async Task CallMethodAsync(CancellationToken cancellationToken)
         {
-            var cursor = await _collection.FindAsync(_filter, _options, cancellationToken).ConfigureAwait(false);
-            _result = await cursor.ToListAsync(cancellationToken).ConfigureAwait(false);
-        }
-
-        protected override async Task CallMethodAsync(IClientSessionHandle session, CancellationToken cancellationToken)
-        {
-            var cursor = await _collection.FindAsync(session, _filter, _options, cancellationToken).ConfigureAwait(false);
+            IAsyncCursor<BsonDocument> cursor;
+            if (_session == null)
+            {
+                cursor = await _collection.FindAsync(_filter, _options, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                cursor = await _collection.FindAsync(_session, _filter, _options, cancellationToken).ConfigureAwait(false);
+            }
             _result = await cursor.ToListAsync(cancellationToken).ConfigureAwait(false);
         }
 
@@ -81,6 +95,22 @@ namespace MongoDB.Driver.Tests.JsonDrivenTests
 
                 case "filter":
                     _filter = new BsonDocumentFilterDefinition<BsonDocument>(value.AsBsonDocument);
+                    return;
+
+                case "limit":
+                    _options.Limit = value.ToInt32();
+                    return;
+
+                case "result":
+                    ParseExpectedResult(value.IsBsonArray ? value.AsBsonArray : new BsonArray(new[] { value }));
+                    return;
+
+                case "session":
+                    _session = (IClientSessionHandle)_objectMap[value.AsString];
+                    return;
+
+                case "sort":
+                    _options.Sort = (SortDefinition<BsonDocument>)value;
                     return;
             }
 

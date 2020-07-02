@@ -21,7 +21,7 @@ namespace MongoDB.Bson
     /// <summary>
     /// Represents a BSON regular expression value.
     /// </summary>
-#if NET45
+#if NET452
     [Serializable]
 #endif
     public class BsonRegularExpression : BsonValue, IComparable<BsonRegularExpression>, IEquatable<BsonRegularExpression>
@@ -47,7 +47,7 @@ namespace MongoDB.Bson
                 var escaped = pattern.Substring(1, index - 1);
                 var unescaped = (escaped == "(?:)") ? "" : escaped.Replace("\\/", "/");
                 _pattern = unescaped;
-                _options = pattern.Substring(index + 1);
+                _options = SortOptionsIfNecessary(pattern.Substring(index + 1));
             }
             else
             {
@@ -68,7 +68,7 @@ namespace MongoDB.Bson
                 throw new ArgumentNullException("pattern");
             }
             _pattern = pattern;
-            _options = options ?? "";
+            _options = SortOptionsIfNecessary(options ?? "");
         }
 
         /// <summary>
@@ -91,13 +91,13 @@ namespace MongoDB.Bson
             {
                 _options += "m";
             }
-            if ((regex.Options & RegexOptions.IgnorePatternWhitespace) != 0)
-            {
-                _options += "x";
-            }
             if ((regex.Options & RegexOptions.Singleline) != 0)
             {
                 _options += "s";
+            }
+            if ((regex.Options & RegexOptions.IgnorePatternWhitespace) != 0)
+            {
+                _options += "x";
             }
         }
 
@@ -266,13 +266,13 @@ namespace MongoDB.Bson
             {
                 options |= RegexOptions.Multiline;
             }
-            if (_options.IndexOf('x') != -1)
-            {
-                options |= RegexOptions.IgnorePatternWhitespace;
-            }
             if (_options.IndexOf('s') != -1)
             {
                 options |= RegexOptions.Singleline;
+            }
+            if (_options.IndexOf('x') != -1)
+            {
+                options |= RegexOptions.IgnorePatternWhitespace;
             }
             return new Regex(_pattern, options);
         }
@@ -283,8 +283,36 @@ namespace MongoDB.Bson
         /// <returns>A string representation of the value.</returns>
         public override string ToString()
         {
-            var escaped = (_pattern == "") ? "(?:)" :_pattern.Replace("/", @"\/");
+            var escaped = (_pattern == "") ? "(?:)" : _pattern.Replace("/", @"\/");
             return string.Format("/{0}/{1}", escaped, _options);
+        }
+
+        // private methods
+        private string SortOptionsIfNecessary(string options)
+        {
+            if (IsAlreadySorted(options))
+            {
+                return options;
+            }
+            else
+            {
+                var sorted = options.ToCharArray();
+                Array.Sort(sorted);
+                return new string(sorted);
+            }
+
+            bool IsAlreadySorted(string value)
+            {
+                for (var i = 0; i < value.Length - 1; i++)
+                {
+                    if (value[i] > value[i + 1])
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
         }
     }
 }

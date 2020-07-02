@@ -1053,6 +1053,16 @@ namespace MongoDB.Driver
         }
 
         /// <summary>
+        /// Creates an update pipeline.
+        /// </summary>
+        /// <param name="pipeline">The pipeline.</param>
+        /// <returns>An update pipeline.</returns>
+        public UpdateDefinition<TDocument> Pipeline(PipelineDefinition<TDocument, TDocument> pipeline)
+        {
+            return new PipelineUpdateDefinition<TDocument>(pipeline);
+        }
+
+        /// <summary>
         /// Creates a pop operator.
         /// </summary>
         /// <param name="field">The field.</param>
@@ -1332,7 +1342,7 @@ namespace MongoDB.Driver
             _values = Ensure.IsNotNull(values, nameof(values)).ToList();
         }
 
-        public override BsonDocument Render(IBsonSerializer<TDocument> documentSerializer, IBsonSerializerRegistry serializerRegistry)
+        public override BsonValue Render(IBsonSerializer<TDocument> documentSerializer, IBsonSerializerRegistry serializerRegistry)
         {
             var renderedField = _field.Render(documentSerializer, serializerRegistry);
 
@@ -1394,13 +1404,13 @@ namespace MongoDB.Driver
             _updates = Ensure.IsNotNull(updates, nameof(updates)).ToList();
         }
 
-        public override BsonDocument Render(IBsonSerializer<TDocument> documentSerializer, IBsonSerializerRegistry serializerRegistry)
+        public override BsonValue Render(IBsonSerializer<TDocument> documentSerializer, IBsonSerializerRegistry serializerRegistry)
         {
             var document = new BsonDocument();
 
             foreach (var update in _updates)
             {
-                var renderedUpdate = update.Render(documentSerializer, serializerRegistry);
+                var renderedUpdate = update.Render(documentSerializer, serializerRegistry).AsBsonDocument;
 
                 foreach (var element in renderedUpdate.Elements)
                 {
@@ -1434,7 +1444,7 @@ namespace MongoDB.Driver
             _value = value;
         }
 
-        public override BsonDocument Render(IBsonSerializer<TDocument> documentSerializer, IBsonSerializerRegistry serializerRegistry)
+        public override BsonValue Render(IBsonSerializer<TDocument> documentSerializer, IBsonSerializerRegistry serializerRegistry)
         {
             var renderedField = _field.Render(documentSerializer, serializerRegistry);
 
@@ -1471,7 +1481,7 @@ namespace MongoDB.Driver
             _value = value;
         }
 
-        public override BsonDocument Render(IBsonSerializer<TDocument> documentSerializer, IBsonSerializerRegistry serializerRegistry)
+        public override BsonValue Render(IBsonSerializer<TDocument> documentSerializer, IBsonSerializerRegistry serializerRegistry)
         {
             var renderedField = _field.Render(documentSerializer, serializerRegistry);
             return new BsonDocument(_operatorName, new BsonDocument(renderedField.FieldName, _value));
@@ -1491,7 +1501,7 @@ namespace MongoDB.Driver
             _value = value;
         }
 
-        public override BsonDocument Render(IBsonSerializer<TDocument> documentSerializer, IBsonSerializerRegistry serializerRegistry)
+        public override BsonValue Render(IBsonSerializer<TDocument> documentSerializer, IBsonSerializerRegistry serializerRegistry)
         {
             var renderedField = _field.Render(documentSerializer, serializerRegistry);
 
@@ -1530,7 +1540,7 @@ namespace MongoDB.Driver
             _values = Ensure.IsNotNull(values, nameof(values)).ToList();
         }
 
-        public override BsonDocument Render(IBsonSerializer<TDocument> documentSerializer, IBsonSerializerRegistry serializerRegistry)
+        public override BsonValue Render(IBsonSerializer<TDocument> documentSerializer, IBsonSerializerRegistry serializerRegistry)
         {
             var renderedField = _field.Render(documentSerializer, serializerRegistry);
 
@@ -1604,7 +1614,7 @@ namespace MongoDB.Driver
             _sort = sort;
         }
 
-        public override BsonDocument Render(IBsonSerializer<TDocument> documentSerializer, IBsonSerializerRegistry serializerRegistry)
+        public override BsonValue Render(IBsonSerializer<TDocument> documentSerializer, IBsonSerializerRegistry serializerRegistry)
         {
             var renderedField = _field.Render(documentSerializer, serializerRegistry);
 
