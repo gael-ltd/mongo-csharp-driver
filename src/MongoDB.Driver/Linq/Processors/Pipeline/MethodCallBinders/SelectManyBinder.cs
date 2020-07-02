@@ -62,9 +62,9 @@ namespace MongoDB.Driver.Linq.Processors.Pipeline.MethodCallBinders
             {
                 var resultLambda = ExpressionHelper.GetLambda(arguments.Last());
                 bindingContext.AddExpressionMapping(resultLambda.Parameters[0], pipeline.Projector);
-
-                var fieldExpression = PrepareFieldExpression(collectionField, itemSerializationInfo.Serializer, bindingContext);
-                bindingContext.AddExpressionMapping(resultLambda.Parameters[1], fieldExpression);
+                bindingContext.AddExpressionMapping(
+                    resultLambda.Parameters[1],
+                    new FieldExpression(collectionField.FieldName, itemSerializationInfo.Serializer));
 
                 resultItemName = resultLambda.Parameters[1].Name;
                 resultSelector = bindingContext.Bind(resultLambda.Body);
@@ -72,7 +72,7 @@ namespace MongoDB.Driver.Linq.Processors.Pipeline.MethodCallBinders
             else
             {
                 resultItemName = "__p";
-                resultSelector = PrepareFieldExpression(collectionField, itemSerializationInfo.Serializer, bindingContext);
+                resultSelector = new FieldExpression(collectionField.FieldName, itemSerializationInfo.Serializer);
             }
 
             var projector = bindingContext.BindProjector(ref resultSelector);
@@ -116,17 +116,6 @@ namespace MongoDB.Driver.Linq.Processors.Pipeline.MethodCallBinders
             }
 
             return null;
-        }
-
-        private FieldExpression PrepareFieldExpression(IFieldExpression collectionField, IBsonSerializer serializer, PipelineBindingContext bindingContext)
-        {
-            // Determine whether we generate a query based on a document itself (when a `Document` type is `DocumentExpression`)
-            // or the result of previous steps (the `Document` type is `FieldExpression`).
-            var parentFieldExpression = collectionField.Document as FieldExpression;
-
-            return parentFieldExpression == null
-                ? new FieldExpression(collectionField.FieldName, serializer)
-                : new FieldExpression(new FieldExpression(parentFieldExpression.FieldName, parentFieldExpression.Serializer), collectionField.FieldName, serializer);
         }
     }
 }

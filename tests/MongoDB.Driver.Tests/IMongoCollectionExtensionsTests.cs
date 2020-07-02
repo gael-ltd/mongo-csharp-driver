@@ -47,37 +47,25 @@ namespace MongoDB.Driver.Tests
                 result = collection.Aggregate(options);
             }
 
-            var fluent = result.Should().BeOfType<CollectionAggregateFluent<Person, Person>>().Subject;
+            var fluent = result.Should().BeOfType<AggregateFluent<Person, Person>>().Subject;
             fluent._collection().Should().BeSameAs(collection);
             fluent._options().Should().BeSameAs(options);
             fluent._pipeline().Should().BeOfType<EmptyPipelineDefinition<Person>>();
             fluent._session().Should().BeSameAs(session);
         }
 
-        [Theory]
-        [ParameterAttributeData]
-        public void AsQueryable_should_return_expected_result(
-            [Values(false, true)] bool withSession)
+        [Fact]
+        public void AsQueryable_should_return_expected_result()
         {
             var collection = CreateMockCollection().Object;
-            var session = withSession ? Mock.Of<IClientSessionHandle>() : null;
             var options = new AggregateOptions();
 
-            IMongoQueryable<Person> result;
-            if (withSession)
-            {
-                result = collection.AsQueryable(session, options);
-            }
-            else
-            {
-                result = collection.AsQueryable(options);
-            }
+            var result = collection.AsQueryable(options);
 
             var queryable = result.Should().BeOfType<MongoQueryableImpl<Person, Person>>().Subject;
             var provider = queryable.Provider.Should().BeOfType<MongoQueryProviderImpl<Person>>().Subject;
             provider._collection().Should().BeSameAs(collection);
             provider._options().Should().BeSameAs(options);
-            provider._session().Should().BeSameAs(session);
         }
 
         [Theory]
@@ -97,75 +85,26 @@ namespace MongoDB.Driver.Tests
             {
                 if (async)
                 {
-#pragma warning disable 618
                     IMongoCollectionExtensions.CountAsync(collection, session, filterExpression, options, cancellationToken);
                     mockCollection.Verify(s => s.CountAsync(session, It.IsAny<ExpressionFilterDefinition<Person>>(), options, cancellationToken), Times.Once);
-#pragma warning restore
                 }
                 else
                 {
-#pragma warning disable 618
                     IMongoCollectionExtensions.Count(collection, session, filterExpression, options, cancellationToken);
                     mockCollection.Verify(s => s.Count(session, It.IsAny<ExpressionFilterDefinition<Person>>(), options, cancellationToken), Times.Once);
-#pragma warning restore
                 }
             }
             else
             {
                 if (async)
                 {
-#pragma warning disable 618
                     IMongoCollectionExtensions.CountAsync(collection, filterExpression, options, cancellationToken);
                     mockCollection.Verify(s => s.CountAsync(It.IsAny<ExpressionFilterDefinition<Person>>(), options, cancellationToken), Times.Once);
-#pragma warning restore
                 }
                 else
                 {
-#pragma warning disable 618
                     IMongoCollectionExtensions.Count(collection, filterExpression, options, cancellationToken);
                     mockCollection.Verify(s => s.Count(It.IsAny<ExpressionFilterDefinition<Person>>(), options, cancellationToken), Times.Once);
-#pragma warning restore
-                }
-            }
-        }
-
-        [Theory]
-        [ParameterAttributeData]
-        public void CountDocuments_should_call_collection_with_expected_arguments(
-            [Values(false, true)] bool usingSession,
-            [Values(false, true)] bool async)
-        {
-            var mockCollection = CreateMockCollection();
-            var collection = mockCollection.Object;
-            var session = new Mock<IClientSessionHandle>().Object;
-            var filterExpression = (Expression<Func<Person, bool>>)(x => x.FirstName == "Jack");
-            var options = new CountOptions();
-            var cancellationToken = new CancellationTokenSource().Token;
-
-            if (usingSession)
-            {
-                if (async)
-                {
-                    IMongoCollectionExtensions.CountDocumentsAsync(collection, session, filterExpression, options, cancellationToken);
-                    mockCollection.Verify(s => s.CountDocumentsAsync(session, It.IsAny<ExpressionFilterDefinition<Person>>(), options, cancellationToken), Times.Once);
-                }
-                else
-                {
-                    IMongoCollectionExtensions.CountDocuments(collection, session, filterExpression, options, cancellationToken);
-                    mockCollection.Verify(s => s.CountDocuments(session, It.IsAny<ExpressionFilterDefinition<Person>>(), options, cancellationToken), Times.Once);
-                }
-            }
-            else
-            {
-                if (async)
-                {
-                    IMongoCollectionExtensions.CountDocumentsAsync(collection, filterExpression, options, cancellationToken);
-                    mockCollection.Verify(s => s.CountDocumentsAsync(It.IsAny<ExpressionFilterDefinition<Person>>(), options, cancellationToken), Times.Once);
-                }
-                else
-                {
-                    IMongoCollectionExtensions.CountDocuments(collection, filterExpression, options, cancellationToken);
-                    mockCollection.Verify(s => s.CountDocuments(It.IsAny<ExpressionFilterDefinition<Person>>(), options, cancellationToken), Times.Once);
                 }
             }
         }
@@ -447,7 +386,6 @@ namespace MongoDB.Driver.Tests
             var filterExpression = (Expression<Func<Person, bool>>)(x => x.FirstName == "Jack");
             var options = new FindOptions
             {
-                AllowDiskUse = true,
                 AllowPartialResults = true,
                 BatchSize = 123,
                 Collation = new Collation("en-us"),
@@ -455,13 +393,9 @@ namespace MongoDB.Driver.Tests
                 CursorType = CursorType.Tailable,
                 MaxAwaitTime = TimeSpan.FromSeconds(1),
                 MaxTime = TimeSpan.FromSeconds(2),
-#pragma warning disable 618
                 Modifiers = new BsonDocument("modifier", 1),
-#pragma warning restore 618
                 NoCursorTimeout = true,
-#pragma warning disable 618
                 OplogReplay = true
-#pragma warning restore 618
             };
 
             FindFluent<Person, Person> fluent;
@@ -500,7 +434,6 @@ namespace MongoDB.Driver.Tests
             fluent._session().Should().BeSameAs(session);
 
             var actualOptions = fluent._options();
-            actualOptions.AllowDiskUse.Should().Be(options.AllowDiskUse);
             actualOptions.AllowPartialResults.Should().Be(options.AllowPartialResults);
             actualOptions.BatchSize.Should().Be(options.BatchSize);
             actualOptions.Collation.Should().Be(options.Collation);
@@ -508,13 +441,9 @@ namespace MongoDB.Driver.Tests
             actualOptions.CursorType.Should().Be(options.CursorType);
             actualOptions.MaxAwaitTime.Should().Be(options.MaxAwaitTime);
             actualOptions.MaxTime.Should().Be(options.MaxTime);
-#pragma warning disable 618
             actualOptions.Modifiers.Should().Be(options.Modifiers);
-#pragma warning restore 618
             actualOptions.NoCursorTimeout.Should().Be(options.NoCursorTimeout);
-#pragma warning disable 618
             actualOptions.OplogReplay.Should().Be(options.OplogReplay);
-#pragma warning restore 618
         }
 
         [Theory]
@@ -974,111 +903,33 @@ namespace MongoDB.Driver.Tests
             var session = new Mock<IClientSessionHandle>().Object;
             var filterExpression = (Expression<Func<Person, bool>>)(x => x.FirstName == "Jack");
             var replacement = new Person();
+            var options = new UpdateOptions();
             var cancellationToken = new CancellationTokenSource().Token;
 
-            assertReplaceOne();
-
-            var replaceOptions = new ReplaceOptions();
-            assertReplaceOneWithReplaceOptions(replaceOptions);
-
-            var updateOptions = new UpdateOptions();
-            assertReplaceOneWithUpdateOptions(updateOptions);
-
-            void assertReplaceOne()
+            if (usingSession)
             {
-                if (usingSession)
+                if (async)
                 {
-                    if (async)
-                    {
-                        IMongoCollectionExtensions.ReplaceOneAsync(collection, session, filterExpression, replacement, cancellationToken: cancellationToken);
-                        mockCollection.Verify(m => m.ReplaceOneAsync(session, It.IsAny<ExpressionFilterDefinition<Person>>(), replacement, (ReplaceOptions)null, cancellationToken), Times.Once);
-                    }
-                    else
-                    {
-                        IMongoCollectionExtensions.ReplaceOne(collection, session, filterExpression, replacement, cancellationToken: cancellationToken);
-                        mockCollection.Verify(m => m.ReplaceOne(session, It.IsAny<ExpressionFilterDefinition<Person>>(), replacement, (ReplaceOptions)null, cancellationToken), Times.Once);
-                    }
+                    IMongoCollectionExtensions.ReplaceOneAsync(collection, session, filterExpression, replacement, options, cancellationToken);
+                    mockCollection.Verify(m => m.ReplaceOneAsync(session, It.IsAny<ExpressionFilterDefinition<Person>>(), replacement, options, cancellationToken), Times.Once);
                 }
                 else
                 {
-                    if (async)
-                    {
-                        IMongoCollectionExtensions.ReplaceOneAsync(collection, filterExpression, replacement, cancellationToken: cancellationToken);
-                        mockCollection.Verify(m => m.ReplaceOneAsync(It.IsAny<ExpressionFilterDefinition<Person>>(), replacement, (ReplaceOptions)null, cancellationToken), Times.Once);
-                    }
-                    else
-                    {
-                        IMongoCollectionExtensions.ReplaceOne(collection, filterExpression, replacement, cancellationToken: cancellationToken);
-                        mockCollection.Verify(m => m.ReplaceOne(It.IsAny<ExpressionFilterDefinition<Person>>(), replacement, (ReplaceOptions)null, cancellationToken), Times.Once);
-                    }
+                    IMongoCollectionExtensions.ReplaceOne(collection, session, filterExpression, replacement, options, cancellationToken);
+                    mockCollection.Verify(m => m.ReplaceOne(session, It.IsAny<ExpressionFilterDefinition<Person>>(), replacement, options, cancellationToken), Times.Once);
                 }
             }
-
-            void assertReplaceOneWithReplaceOptions(ReplaceOptions options)
+            else
             {
-                if (usingSession)
+                if (async)
                 {
-                    if (async)
-                    {
-                        IMongoCollectionExtensions.ReplaceOneAsync(collection, session, filterExpression, replacement, options, cancellationToken);
-                        mockCollection.Verify(m => m.ReplaceOneAsync(session, It.IsAny<ExpressionFilterDefinition<Person>>(), replacement, options, cancellationToken), Times.Once);
-                    }
-                    else
-                    {
-                        IMongoCollectionExtensions.ReplaceOne(collection, session, filterExpression, replacement, options, cancellationToken);
-                        mockCollection.Verify(m => m.ReplaceOne(session, It.IsAny<ExpressionFilterDefinition<Person>>(), replacement, options, cancellationToken), Times.Once);
-                    }
+                    IMongoCollectionExtensions.ReplaceOneAsync(collection, filterExpression, replacement, options, cancellationToken);
+                    mockCollection.Verify(m => m.ReplaceOneAsync(It.IsAny<ExpressionFilterDefinition<Person>>(), replacement, options, cancellationToken), Times.Once);
                 }
                 else
                 {
-                    if (async)
-                    {
-                        IMongoCollectionExtensions.ReplaceOneAsync(collection, filterExpression, replacement, options, cancellationToken);
-                        mockCollection.Verify(m => m.ReplaceOneAsync(It.IsAny<ExpressionFilterDefinition<Person>>(), replacement, options, cancellationToken), Times.Once);
-                    }
-                    else
-                    {
-                        IMongoCollectionExtensions.ReplaceOne(collection, filterExpression, replacement, options, cancellationToken);
-                        mockCollection.Verify(m => m.ReplaceOne(It.IsAny<ExpressionFilterDefinition<Person>>(), replacement, options, cancellationToken), Times.Once);
-                    }
-                }
-            }
-
-            void assertReplaceOneWithUpdateOptions(UpdateOptions options)
-            {
-                if (usingSession)
-                {
-                    if (async)
-                    {
-#pragma warning disable 618
-                        IMongoCollectionExtensions.ReplaceOneAsync(collection, session, filterExpression, replacement, options, cancellationToken);
-                        mockCollection.Verify(m => m.ReplaceOneAsync(session, It.IsAny<ExpressionFilterDefinition<Person>>(), replacement, options, cancellationToken), Times.Once);
-#pragma warning restore 618
-                    }
-                    else
-                    {
-#pragma warning disable 618
-                        IMongoCollectionExtensions.ReplaceOne(collection, session, filterExpression, replacement, options, cancellationToken);
-                        mockCollection.Verify(m => m.ReplaceOne(session, It.IsAny<ExpressionFilterDefinition<Person>>(), replacement, options, cancellationToken), Times.Once);
-#pragma warning restore 618
-                    }
-                }
-                else
-                {
-                    if (async)
-                    {
-#pragma warning disable 618
-                        IMongoCollectionExtensions.ReplaceOneAsync(collection, filterExpression, replacement, options, cancellationToken);
-                        mockCollection.Verify(m => m.ReplaceOneAsync(It.IsAny<ExpressionFilterDefinition<Person>>(), replacement, options, cancellationToken), Times.Once);
-#pragma warning restore 618
-                    }
-                    else
-                    {
-#pragma warning disable 618
-                        IMongoCollectionExtensions.ReplaceOne(collection, filterExpression, replacement, options, cancellationToken);
-                        mockCollection.Verify(m => m.ReplaceOne(It.IsAny<ExpressionFilterDefinition<Person>>(), replacement, options, cancellationToken), Times.Once);
-#pragma warning restore 618
-                    }
+                    IMongoCollectionExtensions.ReplaceOne(collection, filterExpression, replacement, options, cancellationToken);
+                    mockCollection.Verify(m => m.ReplaceOne(It.IsAny<ExpressionFilterDefinition<Person>>(), replacement, options, cancellationToken), Times.Once);
                 }
             }
         }

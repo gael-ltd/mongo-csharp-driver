@@ -30,18 +30,17 @@ namespace MongoDB.Driver.Tests.JsonDrivenTests
         private FindOneAndUpdateOptions<BsonDocument> _options = new FindOneAndUpdateOptions<BsonDocument>();
         private BsonDocument _result;
         private UpdateDefinition<BsonDocument> _udpate;
-        private IClientSessionHandle _session;
 
         // public constructors
-        public JsonDrivenFindOneAndUpdateTest(IMongoCollection<BsonDocument> collection, Dictionary<string, object> objectMap)
-            : base(collection, objectMap)
+        public JsonDrivenFindOneAndUpdateTest(IMongoClient client, IMongoDatabase database, IMongoCollection<BsonDocument> collection, Dictionary<string, IClientSessionHandle> sessionMap)
+            : base(client, database, collection, sessionMap)
         {
         }
 
         // public methods
         public override void Arrange(BsonDocument document)
         {
-            JsonDrivenHelper.EnsureAllFieldsAreValid(document, "name", "object", "collectionOptions", "arguments", "result");
+            JsonDrivenHelper.EnsureAllFieldsAreValid(document, "name", "arguments", "result");
             base.Arrange(document);
         }
 
@@ -53,26 +52,22 @@ namespace MongoDB.Driver.Tests.JsonDrivenTests
 
         protected override void CallMethod(CancellationToken cancellationToken)
         {
-            if (_session == null)
-            {
-                _result = _collection.FindOneAndUpdate(_filter, _udpate, _options, cancellationToken);
-            }
-            else
-            {
-                _result = _collection.FindOneAndUpdate(_session, _filter, _udpate, _options, cancellationToken);
-            }
+            _result = _collection.FindOneAndUpdate(_filter, _udpate, _options, cancellationToken);
+        }
+
+        protected override void CallMethod(IClientSessionHandle session, CancellationToken cancellationToken)
+        {
+            _result = _collection.FindOneAndUpdate(session, _filter, _udpate, _options, cancellationToken);
         }
 
         protected override async Task CallMethodAsync(CancellationToken cancellationToken)
         {
-            if (_session == null)
-            {
-                _result = await _collection.FindOneAndUpdateAsync(_filter, _udpate, _options, cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                _result = await _collection.FindOneAndUpdateAsync(_session, _filter, _udpate, _options, cancellationToken).ConfigureAwait(false);
-            }
+            _result = await _collection.FindOneAndUpdateAsync(_filter, _udpate, _options, cancellationToken).ConfigureAwait(false);
+        }
+
+        protected override async Task CallMethodAsync(IClientSessionHandle session, CancellationToken cancellationToken)
+        {
+            _result = await _collection.FindOneAndUpdateAsync(session, _filter, _udpate, _options, cancellationToken).ConfigureAwait(false);
         }
 
         protected override void SetArgument(string name, BsonValue value)
@@ -89,10 +84,6 @@ namespace MongoDB.Driver.Tests.JsonDrivenTests
 
                 case "update":
                     _udpate = new BsonDocumentUpdateDefinition<BsonDocument>(value.AsBsonDocument);
-                    return;
-
-                case "session":
-                    _session = (IClientSessionHandle)_objectMap[value.AsString];
                     return;
 
                 case "upsert":

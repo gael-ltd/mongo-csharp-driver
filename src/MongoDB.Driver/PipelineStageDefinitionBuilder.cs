@@ -339,14 +339,12 @@ namespace MongoDB.Driver
                 operatorName,
                 (s, sr) =>
                 {
-                    var renderedOptions = new BsonDocument
+                    var renderedOptions = new BsonDocument();
+                    renderedOptions.Add("fullDocument", MongoUtils.ToCamelCase(options.FullDocument.ToString()));
+                    if (options.ResumeAfter != null)
                     {
-                        { "fullDocument", () => MongoUtils.ToCamelCase(options.FullDocument.ToString()), options.FullDocument != ChangeStreamFullDocumentOption.Default },
-                        { "allChangesForCluster", true, options.AllChangesForCluster ?? false },
-                        { "resumeAfter", options.ResumeAfter, options.ResumeAfter != null },
-                        { "startAfter", options.StartAfter, options.StartAfter != null },
-                        { "startAtOperationTime", options.StartAtOperationTime, options.StartAtOperationTime != null }
-                    };
+                        renderedOptions.Add("resumeAfter", options.ResumeAfter);
+                    }
                     var document = new BsonDocument(operatorName, renderedOptions);
                     var outputSerializer = new ChangeStreamDocumentSerializer<TInput>(s);
                     return new RenderedPipelineStageDefinition<ChangeStreamDocument<TInput>>(
@@ -489,8 +487,8 @@ namespace MongoDB.Driver
             Ensure.IsNotNull(connectToField, nameof(connectToField));
             Ensure.IsNotNull(startWith, nameof(startWith));
             Ensure.IsNotNull(@as, nameof(@as));
-            Ensure.That(AreGraphLookupFromAndToTypesCompatible<TConnectFrom, TConnectTo>(), "TConnectFrom and TConnectTo are not compatible", nameof(TConnectFrom));
-            Ensure.That(AreGraphLookupFromAndToTypesCompatible<TStartWith, TConnectTo>(), "TStartWith and TConnectTo are not compatible", nameof(TStartWith));
+            Ensure.That(IsTConnectToOrEnumerableTConnectTo<TConnectFrom, TConnectTo>(), "TConnectFrom must be either TConnectTo or a type that implements IEnumerable<TConnectTo>.", nameof(TConnectFrom));
+            Ensure.That(IsTConnectToOrEnumerableTConnectTo<TStartWith, TConnectTo>(), "TStartWith must be either TConnectTo or a type that implements IEnumerable<TConnectTo>.", nameof(TStartWith));
 
             const string operatorName = "$graphLookup";
             var stage = new DelegatedPipelineStageDefinition<TInput, TOutput>(
@@ -813,89 +811,6 @@ namespace MongoDB.Driver
         }
 
         /// <summary>
-        /// Creates a $lookup stage.
-        /// </summary>
-        /// <typeparam name="TInput">The type of the input documents.</typeparam>
-        /// <typeparam name="TForeignDocument">The type of the foreign collection documents.</typeparam>
-        /// <typeparam name="TAsElement">The type of the as field elements.</typeparam>
-        /// <typeparam name="TAs">The type of the as field.</typeparam>
-        /// <typeparam name="TOutput">The type of the output documents.</typeparam>
-        /// <param name="foreignCollection">The foreign collection.</param>
-        /// <param name="let">The "let" definition.</param>
-        /// <param name="lookupPipeline">The lookup pipeline.</param>
-        /// <param name="as">The as field in <typeparamref name="TOutput" /> in which to place the results of the lookup pipeline.</param>
-        /// <param name="options">The options.</param>
-        /// <returns>The stage.</returns>
-        public static PipelineStageDefinition<TInput, TOutput> Lookup<TInput, TForeignDocument, TAsElement, TAs, TOutput>(
-            IMongoCollection<TForeignDocument> foreignCollection,
-            BsonDocument let,
-            PipelineDefinition<TForeignDocument, TAsElement> lookupPipeline,
-            FieldDefinition<TOutput, TAs> @as,
-            AggregateLookupOptions<TForeignDocument, TOutput> options = null)
-            where TAs : IEnumerable<TAsElement>
-        {
-            Ensure.IsNotNull(foreignCollection, nameof(foreignCollection));
-            Ensure.IsNotNull(lookupPipeline, nameof(lookupPipeline));
-            Ensure.IsNotNull(@as, nameof(@as));
-
-            options = options ?? new AggregateLookupOptions<TForeignDocument, TOutput>();
-            const string operatorName = "$lookup";
-            var stage = new DelegatedPipelineStageDefinition<TInput, TOutput>(
-                operatorName,
-                (inputSerializer, sr) =>
-                {
-                    var foreignSerializer = options.ForeignSerializer ?? foreignCollection.DocumentSerializer ?? inputSerializer as IBsonSerializer<TForeignDocument> ?? sr.GetSerializer<TForeignDocument>();
-                    var outputSerializer = options.ResultSerializer ?? inputSerializer as IBsonSerializer<TOutput> ?? sr.GetSerializer<TOutput>();
-                    var lookupPipelineDocuments = new BsonArray(lookupPipeline.Render(foreignSerializer, sr).Documents);
-
-                    var lookupBody = new BsonDocument
-                    {
-                        { "from", foreignCollection.CollectionNamespace.CollectionName },
-                        { "let", let, let != null },
-                        { "pipeline", lookupPipelineDocuments },
-                        { "as", @as.Render(outputSerializer, sr).FieldName }
-                    };
-
-                    return new RenderedPipelineStageDefinition<TOutput>(operatorName, new BsonDocument(operatorName, lookupBody), outputSerializer);
-                });
-
-            return stage;
-        }
-
-        /// <summary>
-        /// Creates a $lookup stage.
-        /// </summary>
-        /// <typeparam name="TInput">The type of the input documents.</typeparam>
-        /// <typeparam name="TForeignDocument">The type of the foreign collection documents.</typeparam>
-        /// <typeparam name="TAsElement">The type of the as field elements.</typeparam>
-        /// <typeparam name="TAs">The type of the as field.</typeparam>
-        /// <typeparam name="TOutput">The type of the output documents.</typeparam>
-        /// <param name="foreignCollection">The foreign collection.</param>
-        /// <param name="let">The "let" definition.</param>
-        /// <param name="lookupPipeline">The lookup pipeline.</param>
-        /// <param name="as">The as field in <typeparamref name="TOutput" /> in which to place the results of the lookup pipeline.</param>
-        /// <param name="options">The options.</param>
-        /// <returns>The stage.</returns>
-        public static PipelineStageDefinition<TInput, TOutput> Lookup<TInput, TForeignDocument, TAsElement, TAs, TOutput>(
-            IMongoCollection<TForeignDocument> foreignCollection,
-            BsonDocument let,
-            PipelineDefinition<TForeignDocument, TAsElement> lookupPipeline,
-            Expression<Func<TOutput, TAs>> @as,
-            AggregateLookupOptions<TForeignDocument, TOutput> options = null)
-            where TAs : IEnumerable<TAsElement>
-        {
-            Ensure.IsNotNull(foreignCollection, nameof(foreignCollection));
-            Ensure.IsNotNull(lookupPipeline, nameof(lookupPipeline));
-            Ensure.IsNotNull(@as, nameof(@as));
-
-            return Lookup<TInput, TForeignDocument, TAsElement, TAs, TOutput>(
-                foreignCollection,
-                let,
-                lookupPipeline,
-                new ExpressionFieldDefinition<TOutput, TAs>(@as));
-        }
-
-        /// <summary>
         /// Creates a $match stage.
         /// </summary>
         /// <typeparam name="TInput">The type of the input documents.</typeparam>
@@ -925,108 +840,6 @@ namespace MongoDB.Driver
         {
             Ensure.IsNotNull(filter, nameof(filter));
             return Match(new ExpressionFilterDefinition<TInput>(filter));
-        }
-
-        /// <summary>
-        /// Creates a $merge stage.
-        /// </summary>
-        /// <typeparam name="TInput">The type of the input documents.</typeparam>
-        /// <typeparam name="TOutput">The type of the output documents.</typeparam>
-        /// <param name="outputCollection">The output collection.</param>
-        /// <param name="mergeOptions">The merge options.</param>
-        /// <returns>The stage.</returns>
-        public static PipelineStageDefinition<TInput, TOutput> Merge<TInput, TOutput>(
-            IMongoCollection<TOutput> outputCollection,
-            MergeStageOptions<TOutput> mergeOptions)
-        {
-            Ensure.IsNotNull(outputCollection, nameof(outputCollection));
-            Ensure.IsNotNull(mergeOptions, nameof(mergeOptions));
-
-            if (mergeOptions.LetVariables != null && mergeOptions.WhenMatched != MergeStageWhenMatched.Pipeline)
-            {
-                throw new ArgumentException("LetVariables can only be set when WhenMatched == Pipeline.");
-            }
-
-            if (mergeOptions.WhenMatchedPipeline == null)
-            {
-                if (mergeOptions.WhenMatched == MergeStageWhenMatched.Pipeline)
-                {
-                    throw new ArgumentException("WhenMatchedPipeline is required when WhenMatched == Pipeline.");
-                }
-            }
-            else
-            {
-                if (mergeOptions.WhenMatched != MergeStageWhenMatched.Pipeline)
-                {
-                    throw new ArgumentException("WhenMatchedPipeline can only be set when WhenMatched == Pipeline.");
-                }
-            }
-
-            const string operatorName = "$merge";
-            var stage = new DelegatedPipelineStageDefinition<TInput, TOutput>(
-                operatorName,
-                (inputSerializer, serializerRegistry) =>
-                {
-                    var outputSerializer = mergeOptions.OutputSerializer ?? (inputSerializer as IBsonSerializer<TOutput>) ?? serializerRegistry.GetSerializer<TOutput>();
-
-                    var outputCollectionNamespace = outputCollection.CollectionNamespace;
-                    var outputDatabaseNamespace = outputCollectionNamespace.DatabaseNamespace;
-                    var renderedInto = new BsonDocument
-                    {
-                        { "db", outputDatabaseNamespace.DatabaseName },
-                        { "coll", outputCollectionNamespace.CollectionName }
-                    };
-
-                    BsonValue renderedOn = null;
-                    if (mergeOptions.OnFieldNames != null)
-                    {
-                        if (mergeOptions.OnFieldNames.Count == 1)
-                        {
-                            renderedOn = mergeOptions.OnFieldNames.Single();
-                        }
-                        else
-                        {
-                            renderedOn = new BsonArray(mergeOptions.OnFieldNames.Select(n => BsonString.Create(n)));
-                        }
-                    }
-
-                    BsonValue renderedWhenMatched = null;
-                    if (mergeOptions.WhenMatched.HasValue)
-                    {
-                        var whenMatched = mergeOptions.WhenMatched.Value;
-                        if (whenMatched == MergeStageWhenMatched.Pipeline)
-                        {
-                            var renderedPipeline = mergeOptions.WhenMatchedPipeline.Render(outputSerializer, serializerRegistry);
-                            renderedWhenMatched = new BsonArray(renderedPipeline.Documents);
-                        }
-                        else
-                        {
-                            renderedWhenMatched = MongoUtils.ToCamelCase(whenMatched.ToString());
-                        }
-                    }
-
-                    BsonString renderedWhenNotMatched = null;
-                    if (mergeOptions.WhenNotMatched.HasValue)
-                    {
-                        var whenNotMatched = mergeOptions.WhenNotMatched;
-                        renderedWhenNotMatched = MongoUtils.ToCamelCase(whenNotMatched.ToString());
-                    }
-
-                    var renderedMerge = new BsonDocument
-                    {
-                        { "into", renderedInto },
-                        { "on", renderedOn, renderedOn != null },
-                        { "let", mergeOptions.LetVariables, mergeOptions.LetVariables != null },
-                        { "whenMatched", renderedWhenMatched, renderedWhenMatched != null },
-                        { "whenNotMatched", renderedWhenNotMatched, renderedWhenNotMatched != null }
-                    };
-
-                    var renderedStage = new BsonDocument(operatorName, renderedMerge);
-
-                    return new RenderedPipelineStageDefinition<TOutput>(operatorName, renderedStage, outputSerializer);
-                });
-
-            return stage;
         }
 
         /// <summary>
@@ -1074,10 +887,7 @@ namespace MongoDB.Driver
             IMongoCollection<TInput> outputCollection)
         {
             Ensure.IsNotNull(outputCollection, nameof(outputCollection));
-            var outputDatabaseName = outputCollection.Database.DatabaseNamespace.DatabaseName;
-            var outputCollectionName = outputCollection.CollectionNamespace.CollectionName;
-            var outDocument = new BsonDocument { { "db", outputDatabaseName }, { "coll", outputCollectionName } };
-            return new BsonDocumentPipelineStageDefinition<TInput, TInput>(new BsonDocument("$out", outDocument));
+            return new BsonDocumentPipelineStageDefinition<TInput, TInput>(new BsonDocument("$out", outputCollection.CollectionNamespace.CollectionName));
         }
 
         /// <summary>
@@ -1183,47 +993,6 @@ namespace MongoDB.Driver
         }
 
         /// <summary>
-        /// Creates a $replaceWith stage.
-        /// </summary>
-        /// <typeparam name="TInput">The type of the input documents.</typeparam>
-        /// <typeparam name="TOutput">The type of the output documents.</typeparam>
-        /// <param name="newRoot">The new root.</param>
-        /// <returns>The stage.</returns>
-        public static PipelineStageDefinition<TInput, TOutput> ReplaceWith<TInput, TOutput>(
-            AggregateExpressionDefinition<TInput, TOutput> newRoot)
-        {
-            Ensure.IsNotNull(newRoot, nameof(newRoot));
-
-            const string operatorName = "$replaceWith";
-            var stage = new DelegatedPipelineStageDefinition<TInput, TOutput>(
-                operatorName,
-                (s, sr) =>
-                {
-                    var document = new BsonDocument(operatorName, newRoot.Render(s, sr));
-                    var outputSerializer = sr.GetSerializer<TOutput>();
-                    return new RenderedPipelineStageDefinition<TOutput>(operatorName, document, outputSerializer);
-                });
-
-            return stage;
-        }
-
-        /// <summary>
-        /// Creates a $replaceWith stage.
-        /// </summary>
-        /// <typeparam name="TInput">The type of the input documents.</typeparam>
-        /// <typeparam name="TOutput">The type of the output documents.</typeparam>
-        /// <param name="newRoot">The new root.</param>
-        /// <param name="translationOptions">The translation options.</param>
-        /// <returns>The stage.</returns>
-        public static PipelineStageDefinition<TInput, TOutput> ReplaceWith<TInput, TOutput>(
-            Expression<Func<TInput, TOutput>> newRoot,
-            ExpressionTranslationOptions translationOptions = null)
-        {
-            Ensure.IsNotNull(newRoot, nameof(newRoot));
-            return ReplaceWith(new ExpressionAggregateExpressionDefinition<TInput, TOutput>(newRoot, translationOptions));
-        }
-
-        /// <summary>
         /// Creates a $skip stage.
         /// </summary>
         /// <typeparam name="TInput">The type of the input documents.</typeparam>
@@ -1287,52 +1056,6 @@ namespace MongoDB.Driver
         {
             Ensure.IsNotNull(value, nameof(value));
             return SortByCount(new ExpressionAggregateExpressionDefinition<TInput, TValue>(value, translationOptions));
-        }
-
-        /// <summary>
-        /// Creates a $unionWith stage.
-        /// </summary>
-        /// <typeparam name="TInput">The type of the input documents.</typeparam>
-        /// <typeparam name="TWith">The type of the with collection documents.</typeparam>
-        /// <param name="withCollection">The with collection.</param>
-        /// <param name="withPipeline">The with pipeline.</param>
-        /// <returns>The stage.</returns>
-        public static PipelineStageDefinition<TInput, TInput> UnionWith<TInput, TWith>(
-            IMongoCollection<TWith> withCollection,
-            PipelineDefinition<TWith, TInput> withPipeline = null)
-        {
-            Ensure.IsNotNull(withCollection, nameof(withCollection));
-            if (withPipeline == null && typeof(TWith) != typeof(TInput))
-            {
-                throw new ArgumentException("The withPipeline cannot be null when TWith != TInput. A pipeline is required to transform the TWith documents to TInput documents.", nameof(withPipeline));
-            }
-
-            const string operatorName = "$unionWith";
-            var stage = new DelegatedPipelineStageDefinition<TInput, TInput>(
-                operatorName,
-                (inputSerializer, sr) =>
-                {
-                    BsonArray withPipelineDocuments;
-                    if (withPipeline != null)
-                    {
-                        var withSerializer = withCollection.DocumentSerializer ?? inputSerializer as IBsonSerializer<TWith> ?? sr.GetSerializer<TWith>();
-                        withPipelineDocuments = new BsonArray(withPipeline.Render(withSerializer, sr).Documents);
-                    }
-                    else
-                    {
-                        withPipelineDocuments = null;
-                    }
-
-                    var unionWithBody = new BsonDocument
-                    {
-                        { "coll", withCollection.CollectionNamespace.CollectionName },
-                        { "pipeline", withPipelineDocuments, withPipelineDocuments != null }
-                    };
-
-                    return new RenderedPipelineStageDefinition<TInput>(operatorName, new BsonDocument(operatorName, unionWithBody), inputSerializer);
-                });
-
-            return stage;
         }
 
         /// <summary>
@@ -1429,7 +1152,7 @@ namespace MongoDB.Driver
         }
 
         // private methods
-        private static bool AreGraphLookupFromAndToTypesCompatible<TConnectFrom, TConnectTo>()
+        private static bool IsTConnectToOrEnumerableTConnectTo<TConnectFrom, TConnectTo>()
         {
             if (typeof(TConnectFrom) == typeof(TConnectTo))
             {
@@ -1437,13 +1160,7 @@ namespace MongoDB.Driver
             }
 
             var ienumerableTConnectTo = typeof(IEnumerable<>).MakeGenericType(typeof(TConnectTo));
-            if (ienumerableTConnectTo.GetTypeInfo().IsAssignableFrom(typeof(TConnectFrom)))
-            {
-                return true;
-            }
-
-            var ienumerableTConnectFrom = typeof(IEnumerable<>).MakeGenericType(typeof(TConnectFrom));
-            if (ienumerableTConnectFrom.GetTypeInfo().IsAssignableFrom(typeof(TConnectTo)))
+            if (typeof(TConnectFrom).GetTypeInfo().GetInterfaces().Contains(ienumerableTConnectTo))
             {
                 return true;
             }

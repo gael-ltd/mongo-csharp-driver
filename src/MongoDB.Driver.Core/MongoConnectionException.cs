@@ -14,9 +14,7 @@
 */
 
 using System;
-using System.IO;
-using System.Net.Sockets;
-#if NET452
+#if NET45
 using System.Runtime.Serialization;
 #endif
 using MongoDB.Driver.Core.Connections;
@@ -27,7 +25,7 @@ namespace MongoDB.Driver
     /// <summary>
     /// Represents a MongoDB connection exception.
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     public class MongoConnectionException : MongoException
@@ -58,7 +56,7 @@ namespace MongoDB.Driver
             _connectionId = Ensure.IsNotNull(connectionId, nameof(connectionId));
         }
 
-#if NET452
+#if NET45
         /// <summary>
         /// Initializes a new instance of the <see cref="MongoConnectionException"/> class.
         /// </summary>
@@ -80,32 +78,8 @@ namespace MongoDB.Driver
             get { return _connectionId; }
         }
 
-        /// <summary>
-        /// Whether or not this exception contains a socket timeout exception.
-        /// </summary>
-        public bool ContainsSocketTimeoutException
-        {
-            get
-            {
-                for (var exception = InnerException; exception != null; exception = exception.InnerException)
-                {
-                    if (exception is SocketException socketException &&
-                        socketException.SocketErrorCode == SocketError.TimedOut)
-                    {
-                        return true;
-                    }
-                }
-                return false;
-            }
-        }
-
-        /// <summary>
-        /// Determines whether the exception is network error or no.
-        /// </summary>
-        public virtual bool IsNetworkException => true; // true in subclasses, only if they can be considered as a network error
-
         // methods
-#if NET452
+#if NET45
         /// <inheritdoc/>
         public override void GetObjectData(SerializationInfo info, StreamingContext context)
         {

@@ -44,25 +44,14 @@ namespace MongoDB.Driver.Core.TestHelpers
         /// </summary>
         /// <param name="cluster">The cluster.</param>
         /// <param name="session">The session.</param>
-        /// <param name="command">The command.</param>
+        /// <param name="name">The name.</param>
+        /// <param name="args">The arguments for the FailPoint.</param>
         /// <returns>A FailPoint containing the proper binding.</returns>
-        public static FailPoint Configure(ICluster cluster, ICoreSessionHandle session, BsonDocument command)
+        public static FailPoint Configure(ICluster cluster, ICoreSessionHandle session, string name, BsonDocument args)
         {
             var server = GetWriteableServer(cluster);
-            return FailPoint.Configure(server, session, command);
-        }
-
-        /// <summary>
-        /// Create a FailPoint and executes a configureFailPoint command on the selected server.
-        /// </summary>
-        /// <param name="server">The server.</param>
-        /// <param name="session">The session.</param>
-        /// <param name="command">The command.</param>
-        /// <returns>A FailPoint containing the proper binding.</returns>
-        public static FailPoint Configure(IServer server, ICoreSessionHandle session, BsonDocument command)
-        {
             var binding = new SingleServerReadWriteBinding(server, session.Fork());
-            var failpoint = new FailPoint(server, binding, command);
+            var failpoint = new FailPoint(server, binding, name, args);
             try
             {
                 failpoint.Configure();
@@ -73,22 +62,6 @@ namespace MongoDB.Driver.Core.TestHelpers
                 try { failpoint.Dispose(); } catch { }
                 throw;
             }
-        }
-
-        /// <summary>
-        /// Create a FailPoint and executes a configureFailPoint command on the selected server.
-        /// </summary>
-        /// <param name="cluster">The cluster.</param>
-        /// <param name="session">The session.</param>
-        /// <param name="name">The name.</param>
-        /// <param name="args">The arguments for the FailPoint.</param>
-        /// <returns>A FailPoint containing the proper binding.</returns>
-        public static FailPoint Configure(ICluster cluster, ICoreSessionHandle session, string name, BsonDocument args)
-        {
-            Ensure.IsNotNull(name, nameof(name));
-            Ensure.IsNotNull(args, nameof(args));
-            var command = new BsonDocument("configureFailPoint", name).Merge(args, overwriteExistingElements: false);
-            return Configure(cluster, session, command);
         }
 
         /// <summary>
@@ -127,9 +100,10 @@ namespace MongoDB.Driver.Core.TestHelpers
         #endregion
 
         // private fields
-        private readonly BsonDocument _command;
+        private readonly BsonDocument _args;
         private readonly IReadWriteBinding _binding;
         private bool _disposed;
+        private readonly string _name;
         private readonly IServer _server;
 
         // constructors
@@ -138,13 +112,15 @@ namespace MongoDB.Driver.Core.TestHelpers
         /// </summary>
         /// <param name="server">The server.</param>
         /// <param name="binding">Must be a single server binding.</param>
-        /// <param name="command">The command.</param>
-        public FailPoint(IServer server, IReadWriteBinding binding, BsonDocument command)
+        /// <param name="name">The name.</param>
+        /// <param name="args">The arguments for the FailPoint.</param>
+        public FailPoint(IServer server, IReadWriteBinding binding, string name, BsonDocument args)
         {
             _server = Ensure.IsNotNull(server, nameof(server));
             _binding = Ensure.IsNotNull(binding, nameof(binding));
-            _command = Ensure.IsNotNull(command, nameof(command));
-            Ensure.That(command.GetElement(0).Name == "configureFailPoint", "Command name must be \"configureFailPoint\".", nameof(command));
+            _name = Ensure.IsNotNull(name, nameof(name));
+            _args = Ensure.IsNotNull(args, nameof(args));
+            
         }
 
         // public properties
@@ -160,7 +136,7 @@ namespace MongoDB.Driver.Core.TestHelpers
         /// </summary>
         public void Configure()
         {
-            Configure(_command);
+            Configure(_args);
         }
 
         public void Dispose()
@@ -174,20 +150,17 @@ namespace MongoDB.Driver.Core.TestHelpers
         }
 
         // private methods
-        private void Configure(BsonDocument command)
+        private void Configure(BsonDocument args)
         {
+            var command = new BsonDocument("configureFailPoint", _name);
+            command.Merge(args);
             ExecuteCommand(command);
         }
 
         private void ConfigureOff()
         {
-            var name = _command[0].AsString;
-            var command = new BsonDocument
-            {
-                { "configureFailPoint", name },
-                { "mode", "off" }
-            };
-            Configure(command);
+            var args = new BsonDocument("mode", "off");
+            Configure(args);
         }
 
         private void ExecuteCommand(BsonDocument command)

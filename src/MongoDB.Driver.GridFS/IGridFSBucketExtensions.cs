@@ -13,7 +13,6 @@
 * limitations under the License.
 */
 
-using MongoDB.Bson;
 using MongoDB.Bson.IO;
 using MongoDB.Driver.Core.WireProtocol.Messages.Encoders;
 
@@ -38,18 +37,12 @@ namespace MongoDB.Driver.GridFS
         internal static MessageEncoderSettings GetMessageEncoderSettings<TFileId>(this IGridFSBucket<TFileId> bucket)
         {
             var databaseSettings = bucket.Database.Settings;
-            var messageEncoderSettings = new MessageEncoderSettings
+            return new MessageEncoderSettings
             {
+                { MessageEncoderSettingsName.GuidRepresentation, databaseSettings.GuidRepresentation },
                 { MessageEncoderSettingsName.ReadEncoding,  databaseSettings.ReadEncoding ?? Utf8Encodings.Strict },
                 { MessageEncoderSettingsName.WriteEncoding,  databaseSettings.WriteEncoding ?? Utf8Encodings.Strict }
             };
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                messageEncoderSettings.Add(MessageEncoderSettingsName.GuidRepresentation, databaseSettings.GuidRepresentation);
-            }
-#pragma warning restore 618
-            return messageEncoderSettings;
         }
     }
 }

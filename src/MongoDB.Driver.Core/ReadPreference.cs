@@ -121,7 +121,6 @@ namespace MongoDB.Driver
         #endregion
 
         // fields
-        private readonly ReadPreferenceHedge _hedge;
         private readonly TimeSpan? _maxStaleness;
         private readonly ReadPreferenceMode _mode;
         private readonly IReadOnlyList<TagSet> _tagSets;
@@ -133,12 +132,10 @@ namespace MongoDB.Driver
         /// <param name="mode">The read preference mode.</param>
         /// <param name="tagSets">The tag sets.</param>
         /// <param name="maxStaleness">The maximum staleness.</param>
-        /// <param name="hedge">The hedge.</param>
         public ReadPreference(
             ReadPreferenceMode mode,
             IEnumerable<TagSet> tagSets = null,
-            TimeSpan? maxStaleness = null,
-            ReadPreferenceHedge hedge = null)
+            TimeSpan? maxStaleness = null)
         {
             var tagSetsArray = tagSets == null ? __emptyTagSetsArray : tagSets.ToArray();
             if (tagSetsArray.Length > 0)
@@ -156,23 +153,12 @@ namespace MongoDB.Driver
                 Ensure.That(mode != ReadPreferenceMode.Primary, "MaxStaleness cannot be used with ReadPreferenceMode Primary.", nameof(maxStaleness));
             }
 
-            if (hedge != null)
-            {
-                Ensure.That(mode != ReadPreferenceMode.Primary, "Hedged reads cannot be used with ReadPreferenceMode Primary.", nameof(hedge));
-            }
-
             _mode = mode;
             _tagSets = tagSetsArray;
             _maxStaleness = maxStaleness;
-            _hedge = hedge;
         }
 
         // properties
-        /// <summary>
-        /// Gets the hedge.
-        /// </summary>
-        public ReadPreferenceHedge Hedge => _hedge;
-
         /// <summary>
         /// Gets the maximum staleness.
         /// </summary>
@@ -216,7 +202,6 @@ namespace MongoDB.Driver
             }
 
             return
-                object.Equals(_hedge, other._hedge) &&
                 _maxStaleness.Equals(other._maxStaleness) &&
                 _mode.Equals(other._mode) &&
                 _tagSets.SequenceEqual(other.TagSets);
@@ -232,7 +217,6 @@ namespace MongoDB.Driver
         public override int GetHashCode()
         {
             return new Hasher()
-                .Hash(_hedge)
                 .Hash(_maxStaleness)
                 .Hash(_mode)
                 .HashElements(_tagSets)
@@ -256,23 +240,8 @@ namespace MongoDB.Driver
                 sb.Append(", MaxStaleness : ");
                 sb.Append(TimeSpanParser.ToString(_maxStaleness.Value));
             }
-            if (_hedge != null)
-            {
-                sb.Append(", Hedge : ");
-                sb.Append(_hedge.ToBsonDocument().ToJson());
-            }
             sb.Append(" }");
             return sb.ToString();
-        }
-
-        /// <summary>
-        /// Returns a new instance of ReadPreference with some values changed.
-        /// </summary>
-        /// <param name="hedge">The hedge.</param>
-        /// <returns>A new instance of ReadPreference.</returns>
-        public ReadPreference With(ReadPreferenceHedge hedge)
-        {
-            return new ReadPreference(_mode, _tagSets, _maxStaleness, hedge);
         }
 
         /// <summary>
@@ -282,7 +251,7 @@ namespace MongoDB.Driver
         /// <returns>A new instance of ReadPreference.</returns>
         public ReadPreference With(ReadPreferenceMode mode)
         {
-            return new ReadPreference(mode, _tagSets, _maxStaleness, _hedge);
+            return new ReadPreference(mode, _tagSets, _maxStaleness);
         }
 
         /// <summary>
@@ -292,7 +261,7 @@ namespace MongoDB.Driver
         /// <returns>A new instance of ReadPreference.</returns>
         public ReadPreference With(IEnumerable<TagSet> tagSets)
         {
-            return new ReadPreference(_mode, tagSets, _maxStaleness, _hedge);
+            return new ReadPreference(_mode, tagSets, _maxStaleness);
         }
 
         /// <summary>
@@ -302,7 +271,7 @@ namespace MongoDB.Driver
         /// <returns>A new instance of ReadPreference.</returns>
         public ReadPreference With(TimeSpan? maxStaleness)
         {
-            return new ReadPreference(_mode, _tagSets, maxStaleness, _hedge);
+            return new ReadPreference(_mode, _tagSets, maxStaleness);
         }
     }
 }

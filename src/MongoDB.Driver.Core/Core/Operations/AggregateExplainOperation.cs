@@ -199,10 +199,7 @@ namespace MongoDB.Driver.Core.Operations
                 _collectionNamespace.DatabaseNamespace,
                 command,
                 BsonDocumentSerializer.Instance,
-                _messageEncoderSettings)
-            {
-                RetryRequested = false
-            };
+                _messageEncoderSettings);
         }
     }
 }

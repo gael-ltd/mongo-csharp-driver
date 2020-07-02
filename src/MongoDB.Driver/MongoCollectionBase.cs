@@ -21,6 +21,7 @@ using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Driver.Core.Misc;
+using MongoDB.Driver.Linq;
 
 namespace MongoDB.Driver
 {
@@ -67,30 +68,6 @@ namespace MongoDB.Driver
         }
 
         /// <inheritdoc />
-        public virtual void AggregateToCollection<TResult>(PipelineDefinition<TDocument, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
-        public virtual void AggregateToCollection<TResult>(IClientSessionHandle session, PipelineDefinition<TDocument, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
-        public virtual Task AggregateToCollectionAsync<TResult>(PipelineDefinition<TDocument, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
-        public virtual Task AggregateToCollectionAsync<TResult>(IClientSessionHandle session, PipelineDefinition<TDocument, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
         public virtual BulkWriteResult<TDocument> BulkWrite(IEnumerable<WriteModel<TDocument>> requests, BulkWriteOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             throw new NotImplementedException();
@@ -112,50 +89,22 @@ namespace MongoDB.Driver
         }
 
         /// <inheritdoc />
-        [Obsolete("Use CountDocuments or EstimatedDocumentCount instead.")]
         public virtual long Count(FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             throw new NotImplementedException();
         }
 
         /// <inheritdoc />
-        [Obsolete("Use CountDocuments or EstimatedDocumentCount instead.")]
         public virtual long Count(IClientSessionHandle session, FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             throw new NotImplementedException();
         }
 
         /// <inheritdoc />
-        [Obsolete("Use CountDocumentsAsync or EstimatedDocumentCountAsync instead.")]
         public abstract Task<long> CountAsync(FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
 
         /// <inheritdoc />
-        [Obsolete("Use CountDocumentsAsync or EstimatedDocumentCountAsync instead.")]
         public virtual Task<long> CountAsync(IClientSessionHandle session, FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
-        public virtual long CountDocuments(FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
-        public virtual long CountDocuments(IClientSessionHandle session, FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
-        public virtual Task<long> CountDocumentsAsync(FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
-        public virtual Task<long> CountDocumentsAsync(IClientSessionHandle session, FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             throw new NotImplementedException();
         }
@@ -185,8 +134,7 @@ namespace MongoDB.Driver
 
             var model = new DeleteManyModel<TDocument>(filter)
             {
-                Collation = options.Collation,
-                Hint = options.Hint
+                Collation = options.Collation
             };
             try
             {
@@ -224,8 +172,7 @@ namespace MongoDB.Driver
 
             var model = new DeleteManyModel<TDocument>(filter)
             {
-                Collation = options.Collation,
-                Hint = options.Hint
+                Collation = options.Collation
             };
             try
             {
@@ -263,8 +210,7 @@ namespace MongoDB.Driver
 
             var model = new DeleteOneModel<TDocument>(filter)
             {
-                Collation = options.Collation,
-                Hint = options.Hint
+                Collation = options.Collation
             };
             try
             {
@@ -302,8 +248,7 @@ namespace MongoDB.Driver
 
             var model = new DeleteOneModel<TDocument>(filter)
             {
-                Collation = options.Collation,
-                Hint = options.Hint
+                Collation = options.Collation
             };
             try
             {
@@ -333,18 +278,6 @@ namespace MongoDB.Driver
 
         /// <inheritdoc />
         public virtual Task<IAsyncCursor<TField>> DistinctAsync<TField>(IClientSessionHandle session, FieldDefinition<TDocument, TField> field, FilterDefinition<TDocument> filter, DistinctOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
-        public virtual long EstimatedDocumentCount(EstimatedDocumentCountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
-        public virtual Task<long> EstimatedDocumentCountAsync(EstimatedDocumentCountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             throw new NotImplementedException();
         }
@@ -579,42 +512,30 @@ namespace MongoDB.Driver
         public abstract IFilteredMongoCollection<TDerivedDocument> OfType<TDerivedDocument>() where TDerivedDocument : TDocument;
 
         /// <inheritdoc />
-        public ReplaceOneResult ReplaceOne(FilterDefinition<TDocument> filter, TDocument replacement, ReplaceOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
+        public virtual ReplaceOneResult ReplaceOne(FilterDefinition<TDocument> filter, TDocument replacement, UpdateOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             return ReplaceOne(filter, replacement, options, (requests, bulkWriteOptions) => BulkWrite(requests, bulkWriteOptions, cancellationToken));
         }
 
         /// <inheritdoc />
-        [Obsolete("Use the overload that takes a ReplaceOptions instead of an UpdateOptions.")]
-        public virtual ReplaceOneResult ReplaceOne(FilterDefinition<TDocument> filter, TDocument replacement, UpdateOptions options, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            return ReplaceOne(filter, replacement, ReplaceOptions.From(options), (requests, bulkWriteOptions) => BulkWrite(requests, bulkWriteOptions, cancellationToken));
-        }
-
-
-        /// <inheritdoc />
-        public ReplaceOneResult ReplaceOne(IClientSessionHandle session, FilterDefinition<TDocument> filter, TDocument replacement, ReplaceOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
+        public virtual ReplaceOneResult ReplaceOne(IClientSessionHandle session, FilterDefinition<TDocument> filter, TDocument replacement, UpdateOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             return ReplaceOne(filter, replacement, options, (requests, bulkWriteOptions) => BulkWrite(session, requests, bulkWriteOptions, cancellationToken));
         }
 
-        /// <inheritdoc />
-        [Obsolete("Use the overload that takes a ReplaceOptions instead of an UpdateOptions.")]
-        public virtual ReplaceOneResult ReplaceOne(IClientSessionHandle session, FilterDefinition<TDocument> filter, TDocument replacement, UpdateOptions options, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            return ReplaceOne(filter, replacement, ReplaceOptions.From(options), (requests, bulkWriteOptions) => BulkWrite(session, requests, bulkWriteOptions, cancellationToken));
-        }
-
-        private ReplaceOneResult ReplaceOne(FilterDefinition<TDocument> filter, TDocument replacement, ReplaceOptions options, Func<IEnumerable<WriteModel<TDocument>>, BulkWriteOptions, BulkWriteResult<TDocument>> bulkWrite)
+        private ReplaceOneResult ReplaceOne(FilterDefinition<TDocument> filter, TDocument replacement, UpdateOptions options, Func<IEnumerable<WriteModel<TDocument>>, BulkWriteOptions, BulkWriteResult<TDocument>> bulkWrite)
         {
             Ensure.IsNotNull(filter, nameof(filter));
             Ensure.IsNotNull((object)replacement, "replacement");
+            if (options?.ArrayFilters != null)
+            {
+                throw new ArgumentException("ArrayFilters cannot be used with ReplaceOne.", nameof(options));
+            }
 
-            options = options ?? new ReplaceOptions();
+            options = options ?? new UpdateOptions();
             var model = new ReplaceOneModel<TDocument>(filter, replacement)
             {
                 Collation = options.Collation,
-                Hint = options.Hint,
                 IsUpsert = options.IsUpsert
             };
 
@@ -634,41 +555,30 @@ namespace MongoDB.Driver
         }
 
         /// <inheritdoc />
-        public Task<ReplaceOneResult> ReplaceOneAsync(FilterDefinition<TDocument> filter, TDocument replacement, ReplaceOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
+        public virtual Task<ReplaceOneResult> ReplaceOneAsync(FilterDefinition<TDocument> filter, TDocument replacement, UpdateOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             return ReplaceOneAsync(filter, replacement, options, (requests, bulkWriteOptions) => BulkWriteAsync(requests, bulkWriteOptions, cancellationToken));
         }
 
         /// <inheritdoc />
-        [Obsolete("Use the overload that takes a ReplaceOptions instead of an UpdateOptions.")]
-        public virtual Task<ReplaceOneResult> ReplaceOneAsync(FilterDefinition<TDocument> filter, TDocument replacement, UpdateOptions options, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            return ReplaceOneAsync(filter, replacement, ReplaceOptions.From(options), (requests, bulkWriteOptions) => BulkWriteAsync(requests, bulkWriteOptions, cancellationToken));
-        }
-
-        /// <inheritdoc />
-        public Task<ReplaceOneResult> ReplaceOneAsync(IClientSessionHandle session, FilterDefinition<TDocument> filter, TDocument replacement, ReplaceOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
+        public virtual Task<ReplaceOneResult> ReplaceOneAsync(IClientSessionHandle session, FilterDefinition<TDocument> filter, TDocument replacement, UpdateOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             return ReplaceOneAsync(filter, replacement, options, (requests, bulkWriteOptions) => BulkWriteAsync(session, requests, bulkWriteOptions, cancellationToken));
         }
 
-        /// <inheritdoc />
-        [Obsolete("Use the overload that takes a ReplaceOptions instead of an UpdateOptions.")]
-        public virtual Task<ReplaceOneResult> ReplaceOneAsync(IClientSessionHandle session, FilterDefinition<TDocument> filter, TDocument replacement, UpdateOptions options, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            return ReplaceOneAsync(filter, replacement, ReplaceOptions.From(options), (requests, bulkWriteOptions) => BulkWriteAsync(session, requests, bulkWriteOptions, cancellationToken));
-        }
-
-        private async Task<ReplaceOneResult> ReplaceOneAsync(FilterDefinition<TDocument> filter, TDocument replacement, ReplaceOptions options, Func<IEnumerable<WriteModel<TDocument>>, BulkWriteOptions, Task<BulkWriteResult<TDocument>>> bulkWriteAsync)
+        private async Task<ReplaceOneResult> ReplaceOneAsync(FilterDefinition<TDocument> filter, TDocument replacement, UpdateOptions options, Func<IEnumerable<WriteModel<TDocument>>, BulkWriteOptions, Task<BulkWriteResult<TDocument>>> bulkWriteAsync)
         {
             Ensure.IsNotNull(filter, nameof(filter));
             Ensure.IsNotNull((object)replacement, "replacement");
+            if (options?.ArrayFilters != null)
+            {
+                throw new ArgumentException("ArrayFilters cannot be used with ReplaceOne.", nameof(options));
+            }
 
-            options = options ?? new ReplaceOptions();
+            options = options ?? new UpdateOptions();
             var model = new ReplaceOneModel<TDocument>(filter, replacement)
             {
                 Collation = options.Collation,
-                Hint = options.Hint,
                 IsUpsert = options.IsUpsert
             };
 
@@ -709,7 +619,6 @@ namespace MongoDB.Driver
             {
                 ArrayFilters = options.ArrayFilters,
                 Collation = options.Collation,
-                Hint = options.Hint,
                 IsUpsert = options.IsUpsert
             };
 
@@ -750,7 +659,6 @@ namespace MongoDB.Driver
             {
                 ArrayFilters = options.ArrayFilters,
                 Collation = options.Collation,
-                Hint = options.Hint,
                 IsUpsert = options.IsUpsert
             };
 
@@ -791,7 +699,6 @@ namespace MongoDB.Driver
             {
                 ArrayFilters = options.ArrayFilters,
                 Collation = options.Collation,
-                Hint = options.Hint,
                 IsUpsert = options.IsUpsert
             };
 
@@ -832,7 +739,6 @@ namespace MongoDB.Driver
             {
                 ArrayFilters = options.ArrayFilters,
                 Collation = options.Collation,
-                Hint = options.Hint,
                 IsUpsert = options.IsUpsert
             };
 
@@ -852,7 +758,7 @@ namespace MongoDB.Driver
         }
 
         /// <inheritdoc />
-        public virtual IChangeStreamCursor<TResult> Watch<TResult>(
+        public virtual IAsyncCursor<TResult> Watch<TResult>(
             PipelineDefinition<ChangeStreamDocument<TDocument>, TResult> pipeline,
             ChangeStreamOptions options = null,
             CancellationToken cancellationToken = default(CancellationToken))
@@ -861,7 +767,7 @@ namespace MongoDB.Driver
         }
 
         /// <inheritdoc />
-        public virtual IChangeStreamCursor<TResult> Watch<TResult>(
+        public virtual IAsyncCursor<TResult> Watch<TResult>(
             IClientSessionHandle session,
             PipelineDefinition<ChangeStreamDocument<TDocument>, TResult> pipeline,
             ChangeStreamOptions options = null,
@@ -871,7 +777,7 @@ namespace MongoDB.Driver
         }
 
         /// <inheritdoc />
-        public virtual Task<IChangeStreamCursor<TResult>> WatchAsync<TResult>(
+        public virtual Task<IAsyncCursor<TResult>> WatchAsync<TResult>(
             PipelineDefinition<ChangeStreamDocument<TDocument>, TResult> pipeline,
             ChangeStreamOptions options = null,
             CancellationToken cancellationToken = default(CancellationToken))
@@ -880,7 +786,7 @@ namespace MongoDB.Driver
         }
 
         /// <inheritdoc />
-        public virtual Task<IChangeStreamCursor<TResult>> WatchAsync<TResult>(
+        public virtual Task<IAsyncCursor<TResult>> WatchAsync<TResult>(
             IClientSessionHandle session,
             PipelineDefinition<ChangeStreamDocument<TDocument>, TResult> pipeline,
             ChangeStreamOptions options = null,

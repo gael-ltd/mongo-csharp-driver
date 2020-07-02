@@ -18,8 +18,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using FluentAssertions;
 using MongoDB.Bson;
-using MongoDB.Bson.Serialization.Serializers;
-using MongoDB.Bson.TestHelpers;
 using MongoDB.Bson.TestHelpers.XunitExtensions;
 using MongoDB.Driver.Core.Misc;
 using MongoDB.Driver.Core.TestHelpers.XunitExtensions;
@@ -44,7 +42,6 @@ namespace MongoDB.Driver.Core.Operations
             subject.DatabaseNamespace.Should().BeSameAs(_databaseNamespace);
             subject.MessageEncoderSettings.Should().BeSameAs(_messageEncoderSettings);
             subject.Filter.Should().BeNull();
-            subject.RetryRequested.Should().BeFalse();
         }
 
         [Fact]
@@ -73,32 +70,6 @@ namespace MongoDB.Driver.Core.Operations
             var result = subject.Filter;
 
             result.Should().BeSameAs(filter);
-        }
-
-        [Theory]
-        [ParameterAttributeData]
-        public void NameOnly_get_and_set_should_work(
-           [Values(null, false, true)] bool? nameOnly)
-        {
-            var subject = new ListCollectionsUsingCommandOperation(_databaseNamespace, _messageEncoderSettings);
-
-            subject.NameOnly = nameOnly;
-            var result = subject.NameOnly;
-
-            result.Should().Be(nameOnly);
-        }
-
-        [Theory]
-        [ParameterAttributeData]
-        public void RetryRequested_get_and_set_should_work(
-           [Values(false, true)] bool value)
-        {
-            var subject = new ListCollectionsUsingCommandOperation(_databaseNamespace, _messageEncoderSettings);
-
-            subject.RetryRequested = value;
-            var result = subject.RetryRequested;
-
-            result.Should().Be(value);
         }
 
         [SkippableTheory]
@@ -170,30 +141,6 @@ namespace MongoDB.Driver.Core.Operations
             VerifySessionIdWasSentWhenSupported(subject, "listCollections", async);
         }
 
-        [Theory]
-        [InlineData(null, null, "{ listCollections : 1 }")]
-        [InlineData(null, false, "{ listCollections : 1, nameOnly : false }")]
-        [InlineData(null, true, "{ listCollections : 1, nameOnly : true }")]
-        [InlineData("{ x: 1 }", null, "{ listCollections : 1, filter : { x : 1 } }")]
-        [InlineData("{ x: 1 }", false, "{ listCollections : 1, filter : { x : 1 }, nameOnly : false }")]
-        [InlineData("{ x: 1 }", true, "{ listCollections : 1, filter : { x : 1 }, nameOnly : true }")]
-        public void CreateCommand_should_return_expected_result(string filterString, bool? nameOnly, string expectedCommand)
-        {
-            var filter = filterString == null ? null : BsonDocument.Parse(filterString);
-            var subject = new ListCollectionsUsingCommandOperation(_databaseNamespace, _messageEncoderSettings)
-            {
-                Filter = filter,
-                NameOnly = nameOnly
-            };
-
-            var result = subject.CreateOperation();
-
-            result.Command.Should().Be(expectedCommand);
-            result.DatabaseNamespace.Should().BeSameAs(subject.DatabaseNamespace);
-            result.ResultSerializer.Should().BeSameAs(BsonDocumentSerializer.Instance);
-            result.MessageEncoderSettings.Should().BeSameAs(subject.MessageEncoderSettings);
-        }
-
         // helper methods
         private void CreateCappedCollection()
         {
@@ -237,10 +184,5 @@ namespace MongoDB.Driver.Core.Operations
                 CreateCappedCollection();
             });
         }
-    }
-
-    public static class ListCollectionsUsingCommandOperationReflector
-    {
-        public static ReadCommandOperation<BsonDocument> CreateOperation(this ListCollectionsUsingCommandOperation obj) => (ReadCommandOperation<BsonDocument>)Reflector.Invoke(obj, nameof(CreateOperation));
     }
 }

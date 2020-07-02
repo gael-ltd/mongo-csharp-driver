@@ -46,7 +46,7 @@ namespace MongoDB.Bson.Serialization.Serializers
         /// <summary>
         /// Initializes a new instance of the <see cref="QueueSerializer" /> class.
         /// </summary>
-        /// <param name="serializerRegistry">The serializer registry.</param>
+        /// <param name="serializerRegistry"></param>
         public QueueSerializer(IBsonSerializerRegistry serializerRegistry)
             : base(serializerRegistry)
         {

@@ -13,6 +13,7 @@
 * limitations under the License.
 */
 
+using System;
 using System.Collections.Generic;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
@@ -45,12 +46,18 @@ namespace MongoDB.Driver.Core.Operations
             };
         }
 
-        protected override bool RequestHasCollation(InsertRequest request)
+        protected override IExecutableInRetryableWriteContext<BulkWriteOperationResult> CreateEmulator()
         {
-            return false;
+            return new BulkInsertOperationEmulator(CollectionNamespace, Requests, MessageEncoderSettings)
+            {
+                IsOrdered = IsOrdered,
+                MaxBatchCount = MaxBatchCount,
+                MaxBatchLength = MaxBatchLength,
+                WriteConcern = WriteConcern
+            };
         }
 
-        protected override bool RequestHasHint(InsertRequest request)
+        protected override bool RequestHasCollation(InsertRequest request)
         {
             return false;
         }

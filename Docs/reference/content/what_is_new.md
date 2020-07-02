@@ -7,88 +7,6 @@ title = "What's New"
   identifier = "What's New"
   pre = "<i class='fa fa-star'></i>"
 +++
-## What's New in 2.11.0-beta2
-
-The main new features in 2.11.0-beta2 support new features in MongoDB 4.4.0. These features include:
-
-* Support for all new
-  [``$meta``](https://docs.mongodb.com/manual/reference/operator/projection/meta/)
-  projections: `randVal`, `searchScore`, `searchHighlights`,
-  `geoNearDistance`, `geoNearPoint`, `recordId`, `indexKey` and
-  `sortKey`
-* Support for passing a hint to update commands as well as
-  `findAndModify` update and replace operations
-* Support for `allowDiskUse` on find operations
-* Support for `MONGODB-AWS` authentication using Amazon Web Services
-  (AWS) Identity and Access Management (IAM) credentials
-* Support for stapled OCSP (Online Certificate Status Protocol) (macOS only)
-* Support for shorter SCRAM (Salted Challenge Response Authentication Mechanism) conversations
-* Support for speculative SCRAM and MONGODB-X509 authentication
-* Support for the `CommitQuorum` option in `createIndexes`
-* Support for [hedged reads](https://docs.mongodb.com/master/core/read-preference-hedge-option/index.html)
-
-Other new additions and updates in this beta include:
-
-* A new target of .NET Standard 2.0
-* Support for Snappy compression on .NET Core on Windows (in addition
-  to existing support on .NET Framework)
-* Support for Zstandard compression on Windows on 64-bit platforms
-* A new default of enabling certificate revocation checking.
-* A new URI option `tlsDisableCertificateRevocationCheck` to disable
-  certificate revocation checking.
-* An expanded list of retryable write errors via the inclusion of
-  `ExceededTimeLimit`, `LockTimeout` and `ClientDisconnect`
-* A new GuidRepresentationMode setting to opt-in to the new V3 GuidRepresentation mode
-* Improved SDAM (Server Discovery and Monitoring) error handling
-* Support for the `AuthorizedDatabases` option in `ListDatabases`
-* Session support for `AsQueryable`
-
-## What's New in 2.10.0
-
-{{% note %}}
-If you are using unacknowledged writes (also known as w:0 writes) with versions 2.10.0 or 2.10.1 of the driver, we strongly recommend you upgrade to version 2.10.2 as soon as possible, to obtain the fix for a critical issue: https://jira.mongodb.org/browse/CSHARP-2960
-{{% /note %}}
-
-Some of the changes in 2.10.0 include:
-
-* [Client-side field level encryption support]({{< relref "reference\driver\crud\client_side_encryption.md" >}}) for Windows
-* Added new ReplaceOptions parameter for the ReplaceOne CRUD methods
-
-## What's New in 2.9.0
-
-Some of the changes in 2.9.0 include:
-
-* Retryable writes are enabled by default
-* Retryable reads support (enabled by default)
-* Distributed transactions on sharded clusters
-* Convenient API for transactions via `IClientSession.WithTransaction()`
-* Support for message compression
-* SRV polling for `mongodb+srv` connection scheme
-* Update specification using an aggregation framework pipeline
-* SCRAM-SHA authentication caching
-* Connections to the replica set primary are no longer closed after a step-down, allowing in progress read operations to complete
-* New aggregate helper methods support running database-level aggregations
-* `$merge` support
-* Change stream helpers now support the `startAfter` option
-* Index creation helpers now support wildcard indexes
-
-## What's New in 2.8.0
-
-Some of the changes in 2.8.0 include:
-
-* A number of minor bug fixes
-* Update dependency on System.Net.Security to 4.3.2
-* Update dependency on System.Runtime.InteropServices.RuntimeInformation to 4.3.0
-* Update dependency on DnsClient to 1.2.0 and work around breaking changes in the latest version of DnsClient
-
-## What's New in 2.7.0
-
-The major new feature in 2.7.0 is support for new server 4.0 features including:
-
-* Transactions
-* ReadConcern Snapshot
-* Change streams support extended to include all changes for an entire database or cluster
-* SCRAM-SHA-256 authentication
 
 ## What's New in 2.6.0
 
@@ -151,7 +69,7 @@ ReadPreference has a new MaxStaleness property that can be used when reading fro
 
 ### New Linearizable ReadConcernLevel
 
-There is a new ReadConcernLevel called Linearizable in addition to the existing Local and Majority levels. You specify the read concern level by assigning a value to
+There is a new ReadConcernLevel called Linearizable in addition to the existing Local and Majority levels. You specify the read concern level by assigning a value to 
 the ReadConcernLevel property of a ReadConcern value.
 
 ### Support for collations
@@ -219,7 +137,7 @@ In earlier versions of the driver the aggregate fluent API had methods supportin
 executed when the aggregate fluent object was executed, but there was no way to build a standalone pipeline value.
 
 With the introduction of the CreateView method and Facet pipeline operators there is now a need to create
-pipelines separately from the aggregate fluent API.
+pipelines separately from the aggregate fluent API. 
 
 The new PipelineDefinitionBuilder class can be used to create pipelines.
 
@@ -249,7 +167,7 @@ The 2.3.0 driver is a minor release with few new features. The most notable is d
 
 You can now use the .NET driver with .NET Core.
 
-The Nuget packages target two versions of the .NET frameworks: net45 and netstandard1.5. The net45 target allows the driver to be used with the full .NET Framework
+The Nuget packages target two versions of the .NET frameworks: net45 and netstandard1.5. The net45 target allows the driver to be used with the full .NET Framework 
 version 4.5 and later, and the netstandard1.5 target allows the driver to be used with any framework that supports netstandard1.5, which includes .NET Core 1.0.
 
 ## What's New in 2.2.0
@@ -289,7 +207,7 @@ The 2.0.0 driver ships with a host of new features. The most notable are discuss
 ### Async
 
 As has been requested for a while now, the driver now offers a full async stack. Since it uses Tasks, it is fully usable
-with async and await.
+with async and await. 
 
 While we offer a mostly backwards-compatible sync API, it is calling into the async stack underneath. Until you are ready
 to move to async, you should measure against the 1.x versions to ensure performance regressions don't enter your codebase.
@@ -298,7 +216,7 @@ All new applications should utilize the New API.
 
 ### New API
 
-Because of our async nature, we have rebuilt our entire API. The new API is accessible via MongoClient.GetDatabase.
+Because of our async nature, we have rebuilt our entire API. The new API is accessible via MongoClient.GetDatabase. 
 
 - Interfaces are used ([`IMongoClient`]({{< apiref "T_MongoDB_Driver_IMongoClient" >}}), [`IMongoDatabase`]({{< apiref "T_MongoDB_Driver_IMongoDatabase" >}}), [`IMongoCollection<TDocument>`]({{< apiref "T_MongoDB_Driver_IMongoCollection_1" >}})) to support easier testing.
 - A fluent Find API is available with full support for expression trees including projections.
@@ -338,7 +256,7 @@ We've also include some experimental features which are subject to change. These
 #### Logging
 
 It is possible to see what is going on deep down in the driver by listening to core events. We've included a simple text logger as an example:
-
+	
 ``` csharp
 var settings = new MongoClientSettings
 {

@@ -14,11 +14,11 @@
 */
 
 using System;
-#if !NETCOREAPP1_1
 using System.ComponentModel;
-#endif
 using System.Globalization;
 using System.Linq;
+using MongoDB.Bson;
+using MongoDB.Bson.IO;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Attributes;
 using MongoDB.Bson.Serialization.Serializers;
@@ -67,7 +67,7 @@ namespace MongoDB.Bson.Tests.Serialization
                 {
                     DateTime now = DateTime.Today;
                     int age = now.Year - DateOfBirth.Year;
-                    if (DateOfBirth > now.AddYears(-age))
+                    if (DateOfBirth > now.AddYears(-age)) 
                         age--;
 
                     return age;
@@ -136,12 +136,14 @@ namespace MongoDB.Bson.Tests.Serialization
             Assert.True(bson.SequenceEqual(rehydrated.ToBson()));
         }
 
-#if !NETCOREAPP1_1
-        public class InventoryItem 
+        public class InventoryItem
+#if NET45
             : ISupportInitialize
+#endif
         {
             public int Price { get; set; }
 
+#if NET45
             [BsonIgnore]
             public bool WasBeginInitCalled;
             [BsonIgnore]
@@ -156,6 +158,7 @@ namespace MongoDB.Bson.Tests.Serialization
             {
                 WasEndInitCalled = true;
             }
+#endif
         }
 
         [Fact]
@@ -167,10 +170,11 @@ namespace MongoDB.Bson.Tests.Serialization
             var rehydrated = BsonSerializer.Deserialize<InventoryItem>(bson);
 
             Assert.Equal(42, rehydrated.Price);
+#if NET45
             Assert.True(rehydrated.WasBeginInitCalled);
             Assert.True(rehydrated.WasEndInitCalled);
-        }
 #endif
+        }
 
         [BsonKnownTypes(typeof(B), typeof(C))]
         private class A

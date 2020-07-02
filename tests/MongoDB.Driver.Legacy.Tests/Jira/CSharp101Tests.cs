@@ -14,7 +14,6 @@
 */
 
 using System;
-using FluentAssertions;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Xunit;
@@ -177,83 +176,60 @@ namespace MongoDB.Driver.Tests.Jira.CSharp101
         [Fact]
         public void TestBsonDocumentEmptyGuid()
         {
-#pragma warning disable 618, 1062
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 && BsonDefaults.GuidRepresentation == GuidRepresentation.Unspecified ||
-                BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V3)
+            _collection.RemoveAll();
+
+            var document = new BsonDocument
             {
-                var exception = Record.Exception(() => new BsonDocument { { "_id", Guid.Empty }, { "A", 1 } });
-                exception.Should().BeOfType<InvalidOperationException>();
-            }
-            else
-            {
-                _collection.RemoveAll();
+                { "_id", Guid.Empty },
+                { "A", 1 }
+            };
+            _collection.Save(document);
+            Assert.Equal(2, document.ElementCount);
+            Assert.Equal("_id", document.GetElement(0).Name);
+            Assert.IsType<BsonBinaryData>(document["_id"]);
+            Assert.NotEqual(new BsonBinaryData(Guid.Empty), document["_id"]);
+            Assert.Equal(1, _collection.Count());
 
-                var document = new BsonDocument
-                {
-                    { "_id", Guid.Empty },
-                    { "A", 1 }
-                };
+            var id = document["_id"].AsGuid;
+            document["A"] = 2;
+            _collection.Save(document);
+            Assert.Equal(id, document["_id"].AsGuid);
+            Assert.Equal(1, _collection.Count());
 
-                _collection.Save(document);
-                Assert.Equal(2, document.ElementCount);
-                Assert.Equal("_id", document.GetElement(0).Name);
-                Assert.IsType<BsonBinaryData>(document["_id"]);
-                Assert.NotEqual(new BsonBinaryData(Guid.Empty), document["_id"]);
-                Assert.Equal(1, _collection.Count());
-
-                var id = document["_id"].AsGuid;
-                document["A"] = 2;
-                _collection.Save(document);
-                Assert.Equal(id, document["_id"].AsGuid);
-                Assert.Equal(1, _collection.Count());
-
-                document = _collection.FindOneAs<BsonDocument>();
-                Assert.Equal(2, document.ElementCount);
-                Assert.Equal(id, document["_id"].AsGuid);
-                Assert.Equal(2, document["A"].AsInt32);
-            }
-#pragma warning restore 618, 1062
+            document = _collection.FindOneAs<BsonDocument>();
+            Assert.Equal(2, document.ElementCount);
+            Assert.Equal(id, document["_id"].AsGuid);
+            Assert.Equal(2, document["A"].AsInt32);
         }
 
         [Fact]
         public void TestBsonDocumentGeneratedGuid()
         {
-#pragma warning disable 618, 1062
+            _collection.RemoveAll();
+
             var guid = Guid.NewGuid();
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 && BsonDefaults.GuidRepresentation == GuidRepresentation.Unspecified ||
-                BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V3)
+            var document = new BsonDocument
             {
-                var exception = Record.Exception(() => new BsonDocument { { "_id", guid }, { "A", 1 } });
-                exception.Should().BeOfType<InvalidOperationException>();
-            }
-            else
-            {
-                _collection.RemoveAll();
+                { "_id", guid },
+                { "A", 1 }
+            };
+            _collection.Save(document);
+            Assert.Equal(2, document.ElementCount);
+            Assert.Equal("_id", document.GetElement(0).Name);
+            Assert.IsType<BsonBinaryData>(document["_id"]);
+            Assert.Equal(guid, document["_id"].AsGuid);
+            Assert.Equal(1, _collection.Count());
 
-                var document = new BsonDocument
-                {
-                    { "_id", guid },
-                    { "A", 1 }
-                };
-                _collection.Save(document);
-                Assert.Equal(2, document.ElementCount);
-                Assert.Equal("_id", document.GetElement(0).Name);
-                Assert.IsType<BsonBinaryData>(document["_id"]);
-                Assert.Equal(guid, document["_id"].AsGuid);
-                Assert.Equal(1, _collection.Count());
+            var id = document["_id"].AsGuid;
+            document["A"] = 2;
+            _collection.Save(document);
+            Assert.Equal(id, document["_id"].AsGuid);
+            Assert.Equal(1, _collection.Count());
 
-                var id = document["_id"].AsGuid;
-                document["A"] = 2;
-                _collection.Save(document);
-                Assert.Equal(id, document["_id"].AsGuid);
-                Assert.Equal(1, _collection.Count());
-
-                document = _collection.FindOneAs<BsonDocument>();
-                Assert.Equal(2, document.ElementCount);
-                Assert.Equal(id, document["_id"].AsGuid);
-                Assert.Equal(2, document["A"].AsInt32);
-            }
-#pragma warning restore 618, 1062
+            document = _collection.FindOneAs<BsonDocument>();
+            Assert.Equal(2, document.ElementCount);
+            Assert.Equal(id, document["_id"].AsGuid);
+            Assert.Equal(2, document["A"].AsInt32);
         }
 
         [Fact]
@@ -398,54 +374,44 @@ namespace MongoDB.Driver.Tests.Jira.CSharp101
         [Fact]
         public void TestCGuidEmpty()
         {
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 && BsonDefaults.GuidRepresentation != GuidRepresentation.Unspecified)
-            {
-                _collection.RemoveAll();
+            _collection.RemoveAll();
 
-                var document = new CGuid { A = 1 };
-                Assert.Equal(Guid.Empty, document.Id);
-                _collection.Save(document);
-                Assert.NotEqual(Guid.Empty, document.Id);
-                Assert.Equal(1, _collection.Count());
+            var document = new CGuid { A = 1 };
+            Assert.Equal(Guid.Empty, document.Id);
+            _collection.Save(document);
+            Assert.NotEqual(Guid.Empty, document.Id);
+            Assert.Equal(1, _collection.Count());
 
-                var id = document.Id;
-                document.A = 2;
-                _collection.Save(document);
-                Assert.Equal(id, document.Id);
-                Assert.Equal(1, _collection.Count());
+            var id = document.Id;
+            document.A = 2;
+            _collection.Save(document);
+            Assert.Equal(id, document.Id);
+            Assert.Equal(1, _collection.Count());
 
-                document = _collection.FindOneAs<CGuid>();
-                Assert.Equal(id, document.Id);
-                Assert.Equal(2, document.A);
-            }
-#pragma warning restore 618
+            document = _collection.FindOneAs<CGuid>();
+            Assert.Equal(id, document.Id);
+            Assert.Equal(2, document.A);
         }
 
         [Fact]
         public void TestCGuidGenerated()
         {
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 && BsonDefaults.GuidRepresentation != GuidRepresentation.Unspecified)
-            {
-                _collection.RemoveAll();
+            _collection.RemoveAll();
 
-                var id = Guid.NewGuid();
-                var document = new CGuid { Id = id, A = 1 };
-                _collection.Save(document);
-                Assert.Equal(id, document.Id);
-                Assert.Equal(1, _collection.Count());
+            var id = Guid.NewGuid();
+            var document = new CGuid { Id = id, A = 1 };
+            _collection.Save(document);
+            Assert.Equal(id, document.Id);
+            Assert.Equal(1, _collection.Count());
 
-                document.A = 2;
-                _collection.Save(document);
-                Assert.Equal(id, document.Id);
-                Assert.Equal(1, _collection.Count());
+            document.A = 2;
+            _collection.Save(document);
+            Assert.Equal(id, document.Id);
+            Assert.Equal(1, _collection.Count());
 
-                document = _collection.FindOneAs<CGuid>();
-                Assert.Equal(id, document.Id);
-                Assert.Equal(2, document.A);
-            }
-#pragma warning restore 618
+            document = _collection.FindOneAs<CGuid>();
+            Assert.Equal(id, document.Id);
+            Assert.Equal(2, document.A);
         }
 
         [Fact]

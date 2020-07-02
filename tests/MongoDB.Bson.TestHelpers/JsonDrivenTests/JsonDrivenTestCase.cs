@@ -13,10 +13,6 @@
 * limitations under the License.
 */
 
-using MongoDB.Bson.IO;
-using MongoDB.Bson.Serialization;
-using MongoDB.Bson.Serialization.Serializers;
-using System.IO;
 using Xunit.Abstractions;
 
 namespace MongoDB.Bson.TestHelpers.JsonDrivenTests
@@ -51,55 +47,20 @@ namespace MongoDB.Bson.TestHelpers.JsonDrivenTests
         public void Deserialize(IXunitSerializationInfo info)
         {
             _name = info.GetValue<string>(nameof(_name));
-            _shared = DeserializeBsonDocument(info.GetValue<string>(nameof(_shared)));
-            _test = DeserializeBsonDocument(info.GetValue<string>(nameof(_test)));
+            _shared = BsonDocument.Parse(info.GetValue<string>(nameof(_shared)));
+            _test = BsonDocument.Parse(info.GetValue<string>(nameof(_test)));
         }
 
         public void Serialize(IXunitSerializationInfo info)
         {
             info.AddValue(nameof(_name), _name);
-            info.AddValue(nameof(_shared), SerializeBsonDocument(_shared));
-            info.AddValue(nameof(_test), SerializeBsonDocument(_test));
+            info.AddValue(nameof(_shared), _shared.ToJson());
+            info.AddValue(nameof(_test), _shared.ToJson());
         }
 
         public override string ToString()
         {
             return _name;
-        }
-
-        // private methods
-        private BsonDocument DeserializeBsonDocument(string value)
-        {
-            var jsonReaderSettings = new JsonReaderSettings();
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                jsonReaderSettings.GuidRepresentation = GuidRepresentation.Unspecified;
-            }
-#pragma warning restore 618
-            using (var jsonReader = new JsonReader(value, jsonReaderSettings))
-            {
-                var context = BsonDeserializationContext.CreateRoot(jsonReader);
-                return BsonDocumentSerializer.Instance.Deserialize(context);
-            }
-        }
-
-        private string SerializeBsonDocument(BsonDocument value)
-        {
-            var jsonWriterSettings = new JsonWriterSettings();
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                jsonWriterSettings.GuidRepresentation = GuidRepresentation.Unspecified;
-            }
-#pragma warning restore 618
-            using (var stringWriter = new StringWriter())
-            using (var jsonWriter = new JsonWriter(stringWriter, jsonWriterSettings))
-            {
-                var context = BsonSerializationContext.CreateRoot(jsonWriter);
-                BsonDocumentSerializer.Instance.Serialize(context, value);
-                return stringWriter.ToString();
-            }
         }
     }
 }

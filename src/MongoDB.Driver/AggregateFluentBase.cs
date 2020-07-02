@@ -132,49 +132,13 @@ namespace MongoDB.Driver
         }
 
         /// <inheritdoc />
-        public virtual IAggregateFluent<TNewResult> Lookup<TForeignDocument, TAsElement, TAs, TNewResult>(
-            IMongoCollection<TForeignDocument> foreignCollection,
-            BsonDocument let,
-            PipelineDefinition<TForeignDocument, TAsElement> lookupPipeline,
-            FieldDefinition<TNewResult, TAs> @as,
-            AggregateLookupOptions<TForeignDocument, TNewResult> options = null)
-            where TAs : IEnumerable<TAsElement>
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
         public abstract IAggregateFluent<TResult> Match(FilterDefinition<TResult> filter);
-
-        /// <inheritdoc />
-        public virtual IAsyncCursor<TOutput> Merge<TOutput>(IMongoCollection<TOutput> outputCollection, MergeStageOptions<TOutput> mergeOptions = null, CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
-        public virtual Task<IAsyncCursor<TOutput>> MergeAsync<TOutput>(IMongoCollection<TOutput> outputCollection, MergeStageOptions<TOutput> mergeOptions = null, CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException();
-        }
 
         /// <inheritdoc />
         public abstract IAggregateFluent<TNewResult> OfType<TNewResult>(IBsonSerializer<TNewResult> newResultSerializer) where TNewResult : TResult;
 
         /// <inheritdoc />
-        public virtual IAsyncCursor<TResult> Out(IMongoCollection<TResult> outputCollection, CancellationToken cancellationToken)
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
         public virtual IAsyncCursor<TResult> Out(string collectionName, CancellationToken cancellationToken)
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
-        public virtual Task<IAsyncCursor<TResult>> OutAsync(IMongoCollection<TResult> outputCollection, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }
@@ -187,12 +151,6 @@ namespace MongoDB.Driver
 
         /// <inheritdoc />
         public virtual IAggregateFluent<TNewResult> ReplaceRoot<TNewResult>(AggregateExpressionDefinition<TResult, TNewResult> newRoot)
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
-        public virtual IAggregateFluent<TNewResult> ReplaceWith<TNewResult>(AggregateExpressionDefinition<TResult, TNewResult> newRoot)
         {
             throw new NotImplementedException();
         }
@@ -216,30 +174,10 @@ namespace MongoDB.Driver
         }
 
         /// <inheritdoc />
-        public virtual IAggregateFluent<TResult> UnionWith<TWith>(
-            IMongoCollection<TWith> withCollection,
-            PipelineDefinition<TWith, TResult> withPipeline = null)
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
         public abstract IAggregateFluent<TNewResult> Unwind<TNewResult>(FieldDefinition<TResult> field, IBsonSerializer<TNewResult> newResultSerializer);
 
         /// <inheritdoc />
         public virtual IAggregateFluent<TNewResult> Unwind<TNewResult>(FieldDefinition<TResult> field, AggregateUnwindOptions<TNewResult> options)
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
-        public virtual void ToCollection(CancellationToken cancellationToken)
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
-        public virtual Task ToCollectionAsync(CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }

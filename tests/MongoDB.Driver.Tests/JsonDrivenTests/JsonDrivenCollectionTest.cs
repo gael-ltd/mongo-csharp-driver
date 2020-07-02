@@ -15,91 +15,35 @@
 
 using System.Collections.Generic;
 using MongoDB.Bson;
-using MongoDB.Bson.TestHelpers.JsonDrivenTests;
 
 namespace MongoDB.Driver.Tests.JsonDrivenTests
 {
-    public abstract class JsonDrivenCollectionTest : JsonDrivenCommandTest
+    public abstract class JsonDrivenCollectionTest : JsonDrivenDatabaseTest
     {
         // protected fields
         protected IMongoCollection<BsonDocument> _collection;
 
-        // constructors
-        protected JsonDrivenCollectionTest(IMongoCollection<BsonDocument> collection, Dictionary<string, object> objectMap)
-            : base(objectMap)
+        // protected constructors
+        protected JsonDrivenCollectionTest(IMongoClient client, IMongoDatabase database, IMongoCollection<BsonDocument> collection, Dictionary<string, IClientSessionHandle> sessionMap)
+            : base(client, database, sessionMap)
         {
             _collection = collection;
         }
 
-        // public methods
-        public override void Arrange(BsonDocument document)
+        // public properties
+        public IMongoCollection<BsonDocument> Collection => _collection;
+
+        // protected methods
+        protected override void SetReadPreference(ReadPreference value)
         {
-            JsonDrivenHelper.EnsureFieldEquals(document, "object", "collection");
-
-            if (document.TryGetValue("databaseOptions", out var databaseOptions))
-            {
-                ParseDatabaseOptions(databaseOptions.AsBsonDocument);
-            }
-
-            if (document.TryGetValue("collectionOptions", out var collectionOptions))
-            {
-                ParseCollectionOptions(collectionOptions.AsBsonDocument);
-            }
-
-            base.Arrange(document);
+            base.SetReadPreference(value);
+            _collection = _collection.WithReadPreference(value);
         }
 
-        // private methods
-        private void ParseCollectionOptions(BsonDocument document)
+        protected override void SetWriteConcern(WriteConcern value)
         {
-            JsonDrivenHelper.EnsureAllFieldsAreValid(document, "readConcern", "readPreference", "writeConcern");
-
-            if (document.Contains("readConcern"))
-            {
-                var readConcern = ReadConcern.FromBsonDocument(document["readConcern"].AsBsonDocument);
-                _collection = _collection.WithReadConcern(readConcern);
-            }
-
-            if (document.Contains("readPreference"))
-            {
-                var readPreference = ReadPreference.FromBsonDocument(document["readPreference"].AsBsonDocument);
-                _collection = _collection.WithReadPreference(readPreference);
-            }
-
-            if (document.Contains("writeConcern"))
-            {
-                var writeConcern = WriteConcern.FromBsonDocument(document["writeConcern"].AsBsonDocument);
-                _collection = _collection.WithWriteConcern(writeConcern);
-            }
-        }
-
-        private void ParseDatabaseOptions(BsonDocument document)
-        {
-            JsonDrivenHelper.EnsureAllFieldsAreValid(document, "readConcern", "readPreference", "writeConcern");
-
-            var database = _collection.Database;
-            if (document.Contains("readConcern"))
-            {
-                var readConcern = ReadConcern.FromBsonDocument(document["readConcern"].AsBsonDocument);
-                database = database.WithReadConcern(readConcern);
-            }
-
-            if (document.Contains("readPreference"))
-            {
-                var readPreference = ReadPreference.FromBsonDocument(document["readPreference"].AsBsonDocument);
-                database = database.WithReadPreference(readPreference);
-            }
-
-            if (document.Contains("writeConcern"))
-            {
-                var writeConcern = WriteConcern.FromBsonDocument(document["writeConcern"].AsBsonDocument);
-                database = database.WithWriteConcern(writeConcern);
-            }
-
-            // update _collection to be associated with the reconfigured database
-            _collection = database.GetCollection<BsonDocument>(
-                _collection.CollectionNamespace.CollectionName,
-                _collection.Settings);
+            base.SetWriteConcern(value);
+            _collection = _collection.WithWriteConcern(value);
         }
     }
 }

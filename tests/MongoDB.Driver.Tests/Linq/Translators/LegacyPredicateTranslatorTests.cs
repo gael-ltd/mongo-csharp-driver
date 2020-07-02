@@ -286,7 +286,7 @@ namespace MongoDB.Driver.Tests.Linq.Translators
         [Fact]
         public void TestWhereDAAnyWithPredicate()
         {
-            Assert<C>(c => c.DA.Any(d => d.Z == 333), 1, "{ \"da\" : { \"$elemMatch\" : { \"z\" : 333 } } }");
+            Assert<C>(c => c.DA.Any(d => d.Z == 333), 1, "{ \"da.z\" : 333 }");
 
             Assert<C>(c => c.DA.Any(d => d.Z >= 222 && d.Z <= 444), 2, "{ \"da\" : { \"$elemMatch\" : { \"z\" : { \"$gte\" : 222, \"$lte\" : 444 } } } }");
         }
@@ -877,13 +877,11 @@ namespace MongoDB.Driver.Tests.Linq.Translators
             Assert<C>(c => !c.S.Trim().StartsWith("xyz"), 4, "{ \"s\" : { \"$not\" : /^\\s*xyz.*\\s*$/s } }");
         }
 
-#if NET452 || NETCOREAPP1_0        
         [Fact]
         public void TestWhereSTrimStartTrimEndToLowerContainsXyz()
         {
             Assert<C>(c => c.S.TrimStart(' ', '.', '-', '\t').TrimEnd().ToLower().Contains("xyz"), 1, "{ \"s\" : /^[\\ \\.\\-\\t]*.*xyz.*\\s*$/is }");
         }
-#endif    
 
         [Fact]
         public void TestWhereSToLowerEqualsConstantLowerCaseValue()

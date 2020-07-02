@@ -253,7 +253,6 @@ namespace MongoDB.Driver.GridFS
                 var wrappedSort = renderedSort == null ? null : new BsonDocumentSortDefinition<GridFSFileInfo<ObjectId>>(renderedSort);
                 return new GridFSFindOptions<ObjectId>
                 {
-                    AllowDiskUse = options.AllowDiskUse,
                     BatchSize = options.BatchSize,
                     Limit = options.Limit,
                     MaxTime = options.MaxTime,

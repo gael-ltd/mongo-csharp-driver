@@ -23,24 +23,10 @@ namespace MongoDB.Driver
     public class ChangeStreamStageOptions
     {
         // private fields
-        private bool? _allChangesForCluster;
         private ChangeStreamFullDocumentOption _fullDocument = ChangeStreamFullDocumentOption.Default;
         private BsonDocument _resumeAfter;
-        private BsonDocument _startAfter;
-        private BsonTimestamp _startAtOperationTime;
 
         // public properties
-        /// <summary>
-        /// Gets or sets whether to include all changes for an entire cluster in the change stream.
-        /// </summary>
-        /// <value>
-        /// Whether to include all changes for an entire cluster in the change stream.
-        /// </value>
-        public bool? AllChangesForCluster
-        {
-            get { return _allChangesForCluster; }
-            set { _allChangesForCluster = value; }
-        }
         /// <summary>
         /// Gets or sets the full document.
         /// </summary>
@@ -63,30 +49,6 @@ namespace MongoDB.Driver
         {
             get { return _resumeAfter; }
             set { _resumeAfter = value; }
-        }
-
-        /// <summary>
-        /// Get or sets the start after.
-        /// </summary>
-        /// <value>
-        /// The start after.
-        /// </value>
-        public BsonDocument StartAfter
-        {
-            get { return _startAfter; }
-            set { _startAfter = value; }
-        }
-
-        /// <summary>
-        /// Gets or sets the start at operation time.
-        /// </summary>
-        /// <value>
-        /// The start at operation time.
-        /// </value>
-        public BsonTimestamp StartAtOperationTime
-        {
-            get { return _startAtOperationTime; }
-            set { _startAtOperationTime = value; }
         }
     }
 }

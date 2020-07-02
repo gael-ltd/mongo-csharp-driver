@@ -24,7 +24,6 @@ namespace MongoDB.Driver
     /// <summary>
     /// Represents the output mode for an aggregate operation.
     /// </summary>
-    [Obsolete("Server versions 3.6 and newer always use a cursor.")]
     public enum AggregateOutputMode
     {
         /// <summary>
@@ -48,9 +47,7 @@ namespace MongoDB.Driver
         private bool? _bypassDocumentValidation;
         private Collation _collation;
         private TimeSpan? _maxTime;
-#pragma warning disable 618
         private AggregateOutputMode _outputMode = AggregateOutputMode.Inline;
-#pragma warning restore 618
         private IEnumerable<BsonDocument> _pipeline;
 
         // public properties
@@ -115,7 +112,6 @@ namespace MongoDB.Driver
         /// <summary>
         /// Gets or sets the output mode.
         /// </summary>
-        [Obsolete("Server versions 3.6 and newer always use a cursor.")]
         public AggregateOutputMode OutputMode
         {
             get { return _outputMode; }

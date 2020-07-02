@@ -14,11 +14,11 @@
 */
 
 using System;
-#if NET452
+#if NET45
 using System.IO;
 #endif
 using System.Net;
-#if NET452
+#if NET45
 using System.Runtime.Serialization.Formatters.Binary;
 #endif
 using FluentAssertions;
@@ -56,7 +56,7 @@ namespace MongoDB.Driver.Tests.GridFS
             subject.Message.Should().BeSameAs(_message);
         }
 
-#if NET452
+#if NET45
         [Fact]
         public void Serialization_should_work()
         {

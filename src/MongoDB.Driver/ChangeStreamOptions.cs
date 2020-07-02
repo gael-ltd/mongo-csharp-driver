@@ -30,8 +30,6 @@ namespace MongoDB.Driver
         private ChangeStreamFullDocumentOption _fullDocument = ChangeStreamFullDocumentOption.Default;
         private TimeSpan? _maxAwaitTime;
         private BsonDocument _resumeAfter;
-        private BsonDocument _startAfter;
-        private BsonTimestamp _startAtOperationTime;
 
         // public properties
         /// <summary>
@@ -92,30 +90,6 @@ namespace MongoDB.Driver
         {
             get { return _resumeAfter; }
             set { _resumeAfter = value; }
-        }
-
-        /// <summary>
-        /// Gets or sets the start after.
-        /// </summary>
-        /// <value>
-        /// The start after.
-        /// </value>
-        public BsonDocument StartAfter
-        {
-            get { return _startAfter; }
-            set { _startAfter = value; }
-        }
-
-        /// <summary>
-        /// Gets or sets the start at operation time.
-        /// </summary>
-        /// <value>
-        /// The start at operation time.
-        /// </value>
-        public BsonTimestamp StartAtOperationTime
-        {
-            get { return _startAtOperationTime; }
-            set { _startAtOperationTime = value; }
         }
     }
 }

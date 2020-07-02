@@ -16,7 +16,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -33,6 +32,18 @@ namespace MongoDB.Driver.Core.Connections
     internal class CommandEventHelper
     {
         private static readonly string[] __writeConcernIndicators = new[] { "wtimeout", "jnote", "wnote" };
+        private static readonly HashSet<string> __securitySensitiveCommands = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "authenticate",
+            "saslStart",
+            "saslContinue",
+            "getnonce",
+            "createUser",
+            "updateUser",
+            "copydbgetnonce",
+            "copydbsaslstart",
+            "copydb"
+        };
 
         private readonly ConcurrentDictionary<int, CommandState> _state;
         private readonly Action<CommandStartedEvent> _startedEvent;
@@ -271,7 +282,7 @@ namespace MongoDB.Driver.Core.Connections
                 var commandName = command.GetElement(0).Name;
                 var databaseName = command["$db"].AsString;
                 var databaseNamespace = new DatabaseNamespace(databaseName);
-                if (ShouldRedactMessage(commandName, command))
+                if (__securitySensitiveCommands.Contains(commandName))
                 {
                     command = new BsonDocument();
                 }
@@ -318,7 +329,7 @@ namespace MongoDB.Driver.Core.Connections
                 return;
             }
 
-            if (ShouldRedactMessage(state.CommandName, reply))
+            if (__securitySensitiveCommands.Contains(state.CommandName))
             {
                 reply = new BsonDocument();
             }
@@ -594,7 +605,7 @@ namespace MongoDB.Driver.Core.Connections
                     command = decodedMessage.Query;
                     var firstElement = command.GetElement(0);
                     commandName = firstElement.Name;
-                    if (ShouldRedactMessage(commandName, command))
+                    if (__securitySensitiveCommands.Contains(commandName))
                     {
                         command = new BsonDocument();
                     }
@@ -675,7 +686,7 @@ namespace MongoDB.Driver.Core.Connections
                     (state.ExpectedResponseType != ExpectedResponseType.Query && replyMessage.Documents.Count == 0))
                 {
                     var queryFailureDocument = replyMessage.QueryFailureDocument;
-                    if (ShouldRedactMessage(state.CommandName, queryFailureDocument))
+                    if (__securitySensitiveCommands.Contains(state.CommandName))
                     {
                         queryFailureDocument = new BsonDocument();
                     }
@@ -730,7 +741,7 @@ namespace MongoDB.Driver.Core.Connections
                 return;
             }
 
-            if (ShouldRedactMessage(state.CommandName, reply))
+            if (__securitySensitiveCommands.Contains(state.CommandName))
             {
                 reply = new BsonDocument();
             }
@@ -998,9 +1009,7 @@ namespace MongoDB.Driver.Core.Connections
                 { "noCursorTimeout", message.NoCursorTimeout, message.NoCursorTimeout },
                 { "allowPartialResults", message.PartialOk, message.PartialOk },
                 { "tailable", message.TailableCursor, message.TailableCursor },
-#pragma warning disable 618
                 { "oplogReplay", message.OplogReplay, message.OplogReplay }
-#pragma warning restore 618
             };
 
             var query = message.Query;
@@ -1027,9 +1036,8 @@ namespace MongoDB.Driver.Core.Connections
                             // explain is special and gets handled elsewhere
                             break;
                         default:
-                            if (element.Name.StartsWith("$", StringComparison.Ordinal))
+                            if (element.Name.StartsWith("$"))
                             {
-                                // should we actually remove the $ or not?
                                 command[element.Name.Substring(1)] = element.Value;
                             }
                             else
@@ -1086,29 +1094,6 @@ namespace MongoDB.Driver.Core.Connections
         private static bool IsCommand(CollectionNamespace collectionNamespace)
         {
             return collectionNamespace.Equals(collectionNamespace.DatabaseNamespace.CommandCollection);
-        }
-
-        private static bool ShouldRedactMessage(string commandName, BsonDocument command)
-        {
-            switch (commandName.ToLowerInvariant())
-            {
-                case "authenticate":
-                case "saslStart":
-                case "saslContinue":
-                case "getnonce":
-                case "createUser":
-                case "updateUser":
-                case "copydbgetnonce":
-                case "copydbsaslstart":
-                case "copydb":
-                    return true;
-
-                case "isMaster":
-                    return command.Contains("speculativeAuthenticate");
-
-                default:
-                    return false;
-            }
         }
 
         private enum ExpectedResponseType

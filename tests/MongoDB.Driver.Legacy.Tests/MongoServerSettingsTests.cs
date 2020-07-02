@@ -19,6 +19,7 @@ using System.Net.Sockets;
 using System.Security.Authentication;
 using FluentAssertions;
 using MongoDB.Bson;
+using MongoDB.Driver;
 using MongoDB.Driver.Core.Configuration;
 using Xunit;
 
@@ -37,22 +38,6 @@ namespace MongoDB.Driver.Tests
             var settings = new MongoServerSettings { IPv6 = ipv6 };
             Assert.Equal(addressFamily, settings.AddressFamily);
 #pragma warning restore
-        }
-
-        [Fact]
-        public void TestAllowInsecureTls()
-        {
-            var settings = new MongoServerSettings();
-            Assert.Equal(false, settings.AllowInsecureTls);
-
-            var allowInsecureTls = true;
-            settings.AllowInsecureTls = allowInsecureTls;
-            Assert.Equal(allowInsecureTls, settings.AllowInsecureTls);
-            settings.SslSettings.CheckCertificateRevocation.Should().BeFalse();
-
-            settings.Freeze();
-            Assert.Equal(allowInsecureTls, settings.AllowInsecureTls);
-            Assert.Throws<InvalidOperationException>(() => { settings.AllowInsecureTls = allowInsecureTls; });
         }
 
         [Fact]
@@ -85,32 +70,21 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestClone()
         {
-            // set everything to non default values to test except tlsDisableCertificateRevocationCheck
-            // so that all settings are cloned (tlsDisableCertificateRevocationCheck cannot be set with tlsInsecure
-            // in the connection string)
+            // set everything to non default values to test that all settings are cloned
             var connectionString =
                 "mongodb://user1:password1@somehost/?appname=app;" +
-                "connect=direct;connectTimeout=123;ipv6=true;heartbeatInterval=1m;heartbeatTimeout=2m;localThreshold=128;" +
+                "connect=direct;connectTimeout=123;uuidRepresentation=pythonLegacy;ipv6=true;heartbeatInterval=1m;heartbeatTimeout=2m;" +
                 "maxIdleTime=124;maxLifeTime=125;maxPoolSize=126;minPoolSize=127;" +
-                "readPreference=secondary;readPreferenceTags=a:1,b:2;readPreferenceTags=c:3,d:4;socketTimeout=129;" +
+                "readPreference=secondary;readPreferenceTags=a:1,b:2;readPreferenceTags=c:3,d:4;localThreshold=128;socketTimeout=129;" +
                 "serverSelectionTimeout=20s;ssl=true;sslVerifyCertificate=false;waitqueuesize=130;waitQueueTimeout=131;" +
                 "w=1;fsync=true;journal=true;w=2;wtimeout=131;gssapiServiceName=other";
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                connectionString += ";uuidRepresentation=pythonLegacy";
-            }
-#pragma warning restore 618
             var builder = new MongoUrlBuilder(connectionString);
             var url = builder.ToMongoUrl();
             var settings = MongoServerSettings.FromUrl(url);
 
             // a few settings can only be made in code
-#pragma warning disable 618
             settings.Credential = MongoCredential.CreateMongoCRCredential("database", "username", "password").WithMechanismProperty("SERVICE_NAME", "other");
-#pragma warning restore 618
-            settings.SslSettings = new SslSettings { CheckCertificateRevocation = !url.TlsDisableCertificateRevocationCheck };
-            settings.SdamLogFilename = "unimatrix-zero";
+            settings.SslSettings = new SslSettings { CheckCertificateRevocation = false };
 
             var clone = settings.Clone();
             Assert.Equal(settings, clone);
@@ -166,17 +140,13 @@ namespace MongoDB.Driver.Tests
         public void TestDefaults()
         {
             var settings = new MongoServerSettings();
-            Assert.Equal(false, settings.AllowInsecureTls);
             Assert.Equal(null, settings.ApplicationName);
             Assert.Equal(ConnectionMode.Automatic, settings.ConnectionMode);
             Assert.Equal(MongoDefaults.ConnectTimeout, settings.ConnectTimeout);
 #pragma warning disable 618
             Assert.Equal(0, settings.Credentials.Count());
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                Assert.Equal(MongoDefaults.GuidRepresentation, settings.GuidRepresentation);
-            }
-#pragma warning restore 618
+#pragma warning restore
+            Assert.Equal(MongoDefaults.GuidRepresentation, settings.GuidRepresentation);
             Assert.Equal(ServerSettings.DefaultHeartbeatInterval, settings.HeartbeatInterval);
             Assert.Equal(ServerSettings.DefaultHeartbeatTimeout, settings.HeartbeatTimeout);
             Assert.Equal(false, settings.IPv6);
@@ -187,26 +157,16 @@ namespace MongoDB.Driver.Tests
             Assert.Equal(MongoDefaults.OperationTimeout, settings.OperationTimeout);
             Assert.Equal(ReadPreference.Primary, settings.ReadPreference);
             Assert.Equal(null, settings.ReplicaSetName);
-            Assert.Equal(true, settings.RetryReads);
-            Assert.Equal(true, settings.RetryWrites);
-            Assert.Equal(ConnectionStringScheme.MongoDB, settings.Scheme);
-            Assert.Equal(null, settings.SdamLogFilename);
+            Assert.Equal(false, settings.RetryWrites);
             Assert.Equal(_localHost, settings.Server);
             Assert.Equal(_localHost, settings.Servers.First());
             Assert.Equal(1, settings.Servers.Count());
             Assert.Equal(MongoDefaults.ServerSelectionTimeout, settings.ServerSelectionTimeout);
             Assert.Equal(MongoDefaults.SocketTimeout, settings.SocketTimeout);
-            settings.SslSettings.Should().BeNull();
-#pragma warning disable 618
+            Assert.Equal(null, settings.SslSettings);
             Assert.Equal(false, settings.UseSsl);
-#pragma warning restore 618
-            Assert.Equal(false, settings.UseTls);
-#pragma warning disable 618
             Assert.Equal(true, settings.VerifySslCertificate);
-#pragma warning restore 618
-#pragma warning disable 618
             Assert.Equal(MongoDefaults.ComputedWaitQueueSize, settings.WaitQueueSize);
-#pragma warning restore 618
             Assert.Equal(MongoDefaults.WaitQueueTimeout, settings.WaitQueueTimeout);
             Assert.Equal(WriteConcern.Unacknowledged, settings.WriteConcern);
         }
@@ -217,10 +177,6 @@ namespace MongoDB.Driver.Tests
             var settings = new MongoServerSettings();
             var clone = settings.Clone();
             Assert.True(clone.Equals(settings));
-
-            clone = settings.Clone();
-            clone.AllowInsecureTls = !settings.AllowInsecureTls;
-            Assert.False(clone.Equals(settings));
 
             clone = settings.Clone();
             clone.ApplicationName = "app2";
@@ -235,25 +191,16 @@ namespace MongoDB.Driver.Tests
             Assert.False(clone.Equals(settings));
 
             clone = settings.Clone();
-#pragma warning disable 618
             clone.Credential = MongoCredential.CreateMongoCRCredential("db2", "user2", "password2");
-#pragma warning restore 618
             Assert.False(clone.Equals(settings));
 
             clone = settings.Clone();
-#pragma warning disable 618
             clone.Credential = MongoCredential.CreateMongoCRCredential("db1", "user2", "password2");
-#pragma warning restore 618
             Assert.False(clone.Equals(settings));
 
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                clone = settings.Clone();
-                clone.GuidRepresentation = settings.GuidRepresentation == GuidRepresentation.CSharpLegacy ? GuidRepresentation.PythonLegacy : GuidRepresentation.CSharpLegacy;
-                Assert.False(clone.Equals(settings));
-            }
-#pragma warning restore 618
+            clone = settings.Clone();
+            clone.GuidRepresentation = GuidRepresentation.PythonLegacy;
+            Assert.False(clone.Equals(settings));
 
             clone = settings.Clone();
             clone.HeartbeatInterval = new TimeSpan(1, 2, 3);
@@ -265,10 +212,6 @@ namespace MongoDB.Driver.Tests
 
             clone = settings.Clone();
             clone.IPv6 = !settings.IPv6;
-            Assert.False(clone.Equals(settings));
-
-            clone = settings.Clone();
-            clone.LocalThreshold = new TimeSpan(1, 2, 3);
             Assert.False(clone.Equals(settings));
 
             clone = settings.Clone();
@@ -300,19 +243,11 @@ namespace MongoDB.Driver.Tests
             Assert.False(clone.Equals(settings));
 
             clone = settings.Clone();
-            clone.RetryReads = false;
+            clone.RetryWrites = true;
             Assert.False(clone.Equals(settings));
 
             clone = settings.Clone();
-            clone.RetryWrites = false;
-            Assert.False(clone.Equals(settings));
-
-            clone = settings.Clone();
-            clone.Scheme = ConnectionStringScheme.MongoDBPlusSrv;
-            Assert.False(clone.Equals(settings));
-
-            clone = settings.Clone();
-            clone.SdamLogFilename = "osiris";
+            clone.LocalThreshold = new TimeSpan(1, 2, 3);
             Assert.False(clone.Equals(settings));
 
             clone = settings.Clone();
@@ -332,25 +267,15 @@ namespace MongoDB.Driver.Tests
             Assert.False(clone.Equals(settings));
 
             clone = settings.Clone();
-#pragma warning disable 618
             clone.UseSsl = !settings.UseSsl;
-#pragma warning restore 618
             Assert.False(clone.Equals(settings));
 
             clone = settings.Clone();
-            clone.UseTls = !settings.UseTls;
-            Assert.False(clone.Equals(settings));
-
-            clone = settings.Clone();
-#pragma warning disable 618
             clone.VerifySslCertificate = !settings.VerifySslCertificate;
-#pragma warning restore 618
             Assert.False(clone.Equals(settings));
 
             clone = settings.Clone();
-#pragma warning disable 618
             clone.WaitQueueSize = settings.WaitQueueSize + 1;
-#pragma warning restore 618
             Assert.False(clone.Equals(settings));
 
             clone = settings.Clone();
@@ -378,43 +303,21 @@ namespace MongoDB.Driver.Tests
         }
 
         [Fact]
-        public void TestFreezeInvalid()
-        {
-            var settings = new MongoServerSettings();
-            settings.AllowInsecureTls = true;
-            settings.SslSettings.CheckCertificateRevocation = true;
-
-            var exception = Record.Exception(() => settings.Freeze());
-
-            exception.Should().BeOfType<InvalidOperationException>();
-        }
-
-        [Fact]
         public void TestFromClientSettings()
         {
             // set everything to non default values to test that all settings are converted
-            // except tlsDisableCertificateRevocationCheck because setting that with tlsInsecure is not allowed in
-            // a connection string
             var connectionString =
                 "mongodb://user1:password1@somehost/?authSource=db;authMechanismProperties=CANONICALIZE_HOST_NAME:true;" +
-                "appname=app;connect=direct;connectTimeout=123;ipv6=true;heartbeatInterval=1m;heartbeatTimeout=2m;localThreshold=128;" +
+                "appname=app;connect=direct;connectTimeout=123;uuidRepresentation=pythonLegacy;ipv6=true;heartbeatInterval=1m;heartbeatTimeout=2m;" +
                 "maxIdleTime=124;maxLifeTime=125;maxPoolSize=126;minPoolSize=127;" +
-                "readPreference=secondary;readPreferenceTags=a:1,b:2;readPreferenceTags=c:3,d:4;retryReads=false;retryWrites=true;socketTimeout=129;" +
+                "readPreference=secondary;readPreferenceTags=a:1,b:2;readPreferenceTags=c:3,d:4;retryWrites=true;localThreshold=128;socketTimeout=129;" +
                 "serverSelectionTimeout=20s;ssl=true;sslVerifyCertificate=false;waitqueuesize=130;waitQueueTimeout=131;" +
                 "w=1;fsync=true;journal=true;w=2;wtimeout=131;gssapiServiceName=other";
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                connectionString += ";uuidRepresentation=pythonLegacy";
-            }
-#pragma warning restore
             var builder = new MongoUrlBuilder(connectionString);
             var url = builder.ToMongoUrl();
             var clientSettings = MongoClientSettings.FromUrl(url);
-            clientSettings.SdamLogFilename = "section-31";
 
             var settings = MongoServerSettings.FromClientSettings(clientSettings);
-            Assert.Equal(url.AllowInsecureTls, settings.AllowInsecureTls);
             Assert.Equal(url.ApplicationName, settings.ApplicationName);
             Assert.Equal(url.ConnectionMode, settings.ConnectionMode);
             Assert.Equal(url.ConnectTimeout, settings.ConnectTimeout);
@@ -427,82 +330,44 @@ namespace MongoDB.Driver.Tests
             Assert.Equal(true, settings.Credential.GetMechanismProperty<bool>("CANONICALIZE_HOST_NAME", false));
             Assert.Equal(url.AuthenticationSource, settings.Credential.Source);
             Assert.Equal(new PasswordEvidence(builder.Password), settings.Credential.Evidence);
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                Assert.Equal(url.GuidRepresentation, settings.GuidRepresentation);
-            }
-#pragma warning restore 618
+            Assert.Equal(url.GuidRepresentation, settings.GuidRepresentation);
             Assert.Equal(url.HeartbeatInterval, settings.HeartbeatInterval);
             Assert.Equal(url.HeartbeatTimeout, settings.HeartbeatTimeout);
             Assert.Equal(url.IPv6, settings.IPv6);
-            Assert.Equal(url.LocalThreshold, settings.LocalThreshold);
             Assert.Equal(url.MaxConnectionIdleTime, settings.MaxConnectionIdleTime);
             Assert.Equal(url.MaxConnectionLifeTime, settings.MaxConnectionLifeTime);
             Assert.Equal(url.MaxConnectionPoolSize, settings.MaxConnectionPoolSize);
             Assert.Equal(url.MinConnectionPoolSize, settings.MinConnectionPoolSize);
             Assert.Equal(url.ReadPreference, settings.ReadPreference);
             Assert.Equal(url.ReplicaSetName, settings.ReplicaSetName);
-            Assert.Equal(url.RetryReads, settings.RetryReads);
             Assert.Equal(url.RetryWrites, settings.RetryWrites);
-            Assert.Equal(url.Scheme, settings.Scheme);
-            Assert.Equal(clientSettings.SdamLogFilename, settings.SdamLogFilename);
+            Assert.Equal(url.LocalThreshold, settings.LocalThreshold);
             Assert.True(url.Servers.SequenceEqual(settings.Servers));
             Assert.Equal(url.ServerSelectionTimeout, settings.ServerSelectionTimeout);
             Assert.Equal(url.SocketTimeout, settings.SocketTimeout);
-            settings.SslSettings.Should().BeNull();
-#pragma warning disable 618
+            Assert.Equal(null, settings.SslSettings);
             Assert.Equal(url.UseSsl, settings.UseSsl);
-#pragma warning restore 618
-            Assert.Equal(url.UseTls, settings.UseTls);
-#pragma warning disable 618
             Assert.Equal(url.VerifySslCertificate, settings.VerifySslCertificate);
-#pragma warning restore 618
-#pragma warning disable 618
             Assert.Equal(url.ComputedWaitQueueSize, settings.WaitQueueSize);
-#pragma warning restore 618
             Assert.Equal(url.WaitQueueTimeout, settings.WaitQueueTimeout);
             Assert.Equal(url.GetWriteConcern(true), settings.WriteConcern);
-        }
-
-        [Fact]
-        public void TestFromClientSettingsTlsDisableCertificateRevocationCheck()
-        {
-            var connectionString = "mongodb://lcars/?tlsDisableCertificateRevocationCheck=true";
-            var builder = new MongoUrlBuilder(connectionString);
-            var url = builder.ToMongoUrl();
-            var clientSettings = MongoClientSettings.FromUrl(url);
-            clientSettings.SdamLogFilename = "section-31";
-
-            var settings = MongoServerSettings.FromClientSettings(clientSettings);
-            settings.SslSettings.Should().Be(
-                new SslSettings { CheckCertificateRevocation = !url.TlsDisableCertificateRevocationCheck });
         }
 
         [Fact]
         public void TestFromUrl()
         {
             // set everything to non default values to test that all settings are converted
-            // with the exception of tlsDisableCertificateRevocationCheck because setting that with tlsInsecure is
-            // not allowed in a connection string
             var connectionString =
                 "mongodb://user1:password1@somehost/?authSource=db;appname=app;" +
-                "connect=direct;connectTimeout=123;ipv6=true;heartbeatInterval=1m;heartbeatTimeout=2m;localThreshold=128;" +
+                "connect=direct;connectTimeout=123;uuidRepresentation=pythonLegacy;ipv6=true;heartbeatInterval=1m;heartbeatTimeout=2m;" +
                 "maxIdleTime=124;maxLifeTime=125;maxPoolSize=126;minPoolSize=127;" +
-                "readPreference=secondary;readPreferenceTags=a:1,b:2;readPreferenceTags=c:3,d:4;retryReads=false;retryWrites=true;socketTimeout=129;" +
+                "readPreference=secondary;readPreferenceTags=a:1,b:2;readPreferenceTags=c:3,d:4;retryWrites=true;localThreshold=128;socketTimeout=129;" +
                 "serverSelectionTimeout=20s;ssl=true;sslVerifyCertificate=false;waitqueuesize=130;waitQueueTimeout=131;" +
                 "w=1;fsync=true;journal=true;w=2;wtimeout=131";
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                connectionString += ";uuidRepresentation=pythonLegacy";
-            }
-#pragma warning restore 618
             var builder = new MongoUrlBuilder(connectionString);
             var url = builder.ToMongoUrl();
 
             var settings = MongoServerSettings.FromUrl(url);
-            Assert.Equal(url.AllowInsecureTls, settings.AllowInsecureTls);
             Assert.Equal(url.ApplicationName, settings.ApplicationName);
             Assert.Equal(url.ConnectionMode, settings.ConnectionMode);
             Assert.Equal(url.ConnectTimeout, settings.ConnectTimeout);
@@ -513,50 +378,27 @@ namespace MongoDB.Driver.Tests
             Assert.Equal(url.AuthenticationMechanism, settings.Credential.Mechanism);
             Assert.Equal(url.AuthenticationSource, settings.Credential.Source);
             Assert.Equal(new PasswordEvidence(url.Password), settings.Credential.Evidence);
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                Assert.Equal(url.GuidRepresentation, settings.GuidRepresentation);
-            }
-#pragma warning restore 618
+            Assert.Equal(url.GuidRepresentation, settings.GuidRepresentation);
             Assert.Equal(url.HeartbeatInterval, settings.HeartbeatInterval);
             Assert.Equal(url.HeartbeatTimeout, settings.HeartbeatTimeout);
             Assert.Equal(url.IPv6, settings.IPv6);
-            Assert.Equal(url.LocalThreshold, settings.LocalThreshold);
             Assert.Equal(url.MaxConnectionIdleTime, settings.MaxConnectionIdleTime);
             Assert.Equal(url.MaxConnectionLifeTime, settings.MaxConnectionLifeTime);
             Assert.Equal(url.MaxConnectionPoolSize, settings.MaxConnectionPoolSize);
             Assert.Equal(url.MinConnectionPoolSize, settings.MinConnectionPoolSize);
             Assert.Equal(url.ReadPreference, settings.ReadPreference);
             Assert.Equal(url.ReplicaSetName, settings.ReplicaSetName);
-            Assert.Equal(url.RetryReads, settings.RetryReads);
             Assert.Equal(url.RetryWrites, settings.RetryWrites);
-            Assert.Equal(url.Scheme, settings.Scheme);
+            Assert.Equal(url.LocalThreshold, settings.LocalThreshold);
             Assert.True(url.Servers.SequenceEqual(settings.Servers));
             Assert.Equal(url.ServerSelectionTimeout, settings.ServerSelectionTimeout);
             Assert.Equal(url.SocketTimeout, settings.SocketTimeout);
-            settings.SslSettings.Should().BeNull();
-#pragma warning disable 618
+            Assert.Equal(null, settings.SslSettings);
             Assert.Equal(url.UseSsl, settings.UseSsl);
             Assert.Equal(url.VerifySslCertificate, settings.VerifySslCertificate);
-#pragma warning restore 618
-            Assert.Equal(url.UseTls, settings.UseTls);
-#pragma warning disable 618
             Assert.Equal(url.ComputedWaitQueueSize, settings.WaitQueueSize);
-#pragma warning restore 618
             Assert.Equal(url.WaitQueueTimeout, settings.WaitQueueTimeout);
             Assert.Equal(url.GetWriteConcern(false), settings.WriteConcern);
-        }
-
-        [Fact]
-        public void TestFromUrlTlsDisableCertificateRevocationCheck()
-        {
-            var connectionString = "mongodb://unimatrix-zero/?tlsDisableCertificateRevocationCheck=true";
-            var builder = new MongoUrlBuilder(connectionString);
-            var url = builder.ToMongoUrl();
-
-            var settings = MongoServerSettings.FromUrl(url);
-            settings.SslSettings.Should().Be(new SslSettings { CheckCertificateRevocation = !url.TlsDisableCertificateRevocationCheck });
         }
 
         [Fact]
@@ -577,21 +419,16 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestGuidRepresentation()
         {
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                var settings = new MongoServerSettings();
-                Assert.Equal(MongoDefaults.GuidRepresentation, settings.GuidRepresentation);
+            var settings = new MongoServerSettings();
+            Assert.Equal(MongoDefaults.GuidRepresentation, settings.GuidRepresentation);
 
-                var guidRepresentation = GuidRepresentation.PythonLegacy;
-                settings.GuidRepresentation = guidRepresentation;
-                Assert.Equal(guidRepresentation, settings.GuidRepresentation);
+            var guidRepresentation = GuidRepresentation.PythonLegacy;
+            settings.GuidRepresentation = guidRepresentation;
+            Assert.Equal(guidRepresentation, settings.GuidRepresentation);
 
-                settings.Freeze();
-                Assert.Equal(guidRepresentation, settings.GuidRepresentation);
-                Assert.Throws<InvalidOperationException>(() => { settings.GuidRepresentation = guidRepresentation; });
-            }
-#pragma warning restore 618
+            settings.Freeze();
+            Assert.Equal(guidRepresentation, settings.GuidRepresentation);
+            Assert.Throws<InvalidOperationException>(() => { settings.GuidRepresentation = guidRepresentation; });
         }
 
         [Fact]
@@ -637,21 +474,6 @@ namespace MongoDB.Driver.Tests
             settings.Freeze();
             Assert.Equal(ipv6, settings.IPv6);
             Assert.Throws<InvalidOperationException>(() => { settings.IPv6 = ipv6; });
-        }
-
-        [Fact]
-        public void TestLocalThreshold()
-        {
-            var settings = new MongoServerSettings();
-            Assert.Equal(MongoDefaults.LocalThreshold, settings.LocalThreshold);
-
-            var localThreshold = new TimeSpan(1, 2, 3);
-            settings.LocalThreshold = localThreshold;
-            Assert.Equal(localThreshold, settings.LocalThreshold);
-
-            settings.Freeze();
-            Assert.Equal(localThreshold, settings.LocalThreshold);
-            Assert.Throws<InvalidOperationException>(() => { settings.LocalThreshold = localThreshold; });
         }
 
         [Fact]
@@ -760,63 +582,33 @@ namespace MongoDB.Driver.Tests
         }
 
         [Fact]
-        public void TestRetryReads()
-        {
-            var settings = new MongoServerSettings();
-            Assert.Equal(true, settings.RetryReads);
-
-            var retryReads = false;
-            settings.RetryReads = retryReads;
-            Assert.Equal(retryReads, settings.RetryReads);
-
-            settings.Freeze();
-            Assert.Equal(retryReads, settings.RetryReads);
-            Assert.Throws<InvalidOperationException>(() => { settings.RetryReads = true; });
-        }
-
-        [Fact]
         public void TestRetryWrites()
         {
             var settings = new MongoServerSettings();
-            Assert.Equal(true, settings.RetryWrites);
+            Assert.Equal(false, settings.RetryWrites);
 
-            var retryWrites = false;
+            var retryWrites = true;
             settings.RetryWrites = retryWrites;
             Assert.Equal(retryWrites, settings.RetryWrites);
 
             settings.Freeze();
             Assert.Equal(retryWrites, settings.RetryWrites);
-            Assert.Throws<InvalidOperationException>(() => { settings.RetryWrites = true; });
+            Assert.Throws<InvalidOperationException>(() => { settings.RetryWrites = false; });
         }
 
         [Fact]
-        public void TestScheme()
+        public void TestLocalThreshold()
         {
             var settings = new MongoServerSettings();
-            Assert.Equal(ConnectionStringScheme.MongoDB, settings.Scheme);
+            Assert.Equal(MongoDefaults.LocalThreshold, settings.LocalThreshold);
 
-            var scheme = ConnectionStringScheme.MongoDBPlusSrv;
-            settings.Scheme = scheme;
-            Assert.Equal(scheme, settings.Scheme);
-
-            settings.Freeze();
-            Assert.Equal(scheme, settings.Scheme);
-            Assert.Throws<InvalidOperationException>(() => { settings.Scheme = ConnectionStringScheme.MongoDBPlusSrv; });
-        }
-
-        [Fact]
-        public void TestSdamLogFileName()
-        {
-            var settings = new MongoServerSettings();
-            Assert.Equal(null, settings.SdamLogFilename);
-
-            var sdamLogFileName = "advanced-potion-making";
-            settings.SdamLogFilename = sdamLogFileName;
-            Assert.Same(sdamLogFileName, settings.SdamLogFilename);
+            var localThreshold = new TimeSpan(1, 2, 3);
+            settings.LocalThreshold = localThreshold;
+            Assert.Equal(localThreshold, settings.LocalThreshold);
 
             settings.Freeze();
-            Assert.Same(sdamLogFileName, settings.SdamLogFilename);
-            Assert.Throws<InvalidOperationException>(() => { settings.SdamLogFilename = sdamLogFileName; });
+            Assert.Equal(localThreshold, settings.LocalThreshold);
+            Assert.Throws<InvalidOperationException>(() => { settings.LocalThreshold = localThreshold; });
         }
 
         [Fact]
@@ -913,7 +705,7 @@ namespace MongoDB.Driver.Tests
         public void TestSslSettings()
         {
             var settings = new MongoServerSettings();
-            settings.SslSettings.Should().BeNull();
+            Assert.Equal(null, settings.SslSettings);
 
             var sslSettings = new SslSettings { CheckCertificateRevocation = false };
             settings.SslSettings = sslSettings;
@@ -927,7 +719,6 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestUseSsl()
         {
-#pragma warning disable 618
             var settings = new MongoServerSettings();
             Assert.Equal(false, settings.UseSsl);
 
@@ -938,47 +729,26 @@ namespace MongoDB.Driver.Tests
             settings.Freeze();
             Assert.Equal(useSsl, settings.UseSsl);
             Assert.Throws<InvalidOperationException>(() => { settings.UseSsl = useSsl; });
-#pragma warning restore 618
-        }
-
-        [Fact]
-        public void TestUseTls()
-        {
-            var settings = new MongoServerSettings();
-            Assert.Equal(false, settings.UseTls);
-
-            var useTls = true;
-            settings.UseTls = useTls;
-            Assert.Equal(useTls, settings.UseTls);
-
-            settings.Freeze();
-            Assert.Equal(useTls, settings.UseTls);
-            Assert.Throws<InvalidOperationException>(() => { settings.UseTls = useTls; });
         }
 
         [Fact]
         public void TestVerifySslCertificate()
         {
-#pragma warning disable 618
             var settings = new MongoServerSettings();
             Assert.Equal(true, settings.VerifySslCertificate);
 
             var verifySslCertificate = false;
             settings.VerifySslCertificate = verifySslCertificate;
             Assert.Equal(verifySslCertificate, settings.VerifySslCertificate);
-            settings.AllowInsecureTls.Should().BeTrue();
-            settings.SslSettings.CheckCertificateRevocation.Should().BeFalse();
 
             settings.Freeze();
             Assert.Equal(verifySslCertificate, settings.VerifySslCertificate);
             Assert.Throws<InvalidOperationException>(() => { settings.VerifySslCertificate = verifySslCertificate; });
-#pragma warning restore 618
         }
 
         [Fact]
         public void TestWaitQueueSize()
         {
-#pragma warning disable 618
             var settings = new MongoServerSettings();
             Assert.Equal(MongoDefaults.ComputedWaitQueueSize, settings.WaitQueueSize);
 
@@ -989,7 +759,6 @@ namespace MongoDB.Driver.Tests
             settings.Freeze();
             Assert.Equal(waitQueueSize, settings.WaitQueueSize);
             Assert.Throws<InvalidOperationException>(() => { settings.WaitQueueSize = waitQueueSize; });
-#pragma warning restore 618
         }
 
         [Fact]
@@ -1025,10 +794,7 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void ToClusterKey_should_copy_relevant_values()
         {
-            var clusterConfigurator = new Action<ClusterBuilder>(b => { });
-#pragma warning disable 618
             var credential = MongoCredential.CreateMongoCRCredential("source", "username", "password");
-#pragma warning restore 618
             var servers = new[] { new MongoServerAddress("localhost") };
             var sslSettings = new SslSettings
             {
@@ -1038,45 +804,33 @@ namespace MongoDB.Driver.Tests
 
             var subject = new MongoServerSettings
             {
-                AllowInsecureTls = false,
                 ApplicationName = "app",
-                ClusterConfigurator = clusterConfigurator,
                 ConnectionMode = ConnectionMode.Direct,
                 ConnectTimeout = TimeSpan.FromSeconds(1),
                 Credential = credential,
+                GuidRepresentation = GuidRepresentation.Standard,
                 HeartbeatInterval = TimeSpan.FromMinutes(1),
                 HeartbeatTimeout = TimeSpan.FromMinutes(2),
                 IPv6 = true,
-                LocalThreshold = TimeSpan.FromMilliseconds(20),
                 MaxConnectionIdleTime = TimeSpan.FromSeconds(2),
                 MaxConnectionLifeTime = TimeSpan.FromSeconds(3),
                 MaxConnectionPoolSize = 10,
                 MinConnectionPoolSize = 5,
                 ReplicaSetName = "rs",
-                Scheme = ConnectionStringScheme.MongoDBPlusSrv,
-                SdamLogFilename = "navi",
+                LocalThreshold = TimeSpan.FromMilliseconds(20),
                 Servers = servers,
                 ServerSelectionTimeout = TimeSpan.FromSeconds(6),
                 SocketTimeout = TimeSpan.FromSeconds(4),
                 SslSettings = sslSettings,
-                UseTls = true,
-#pragma warning disable 618
+                UseSsl = true,
+                VerifySslCertificate = true,
                 WaitQueueSize = 20,
-#pragma warning restore 618
                 WaitQueueTimeout = TimeSpan.FromSeconds(5)
             };
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                subject.GuidRepresentation = GuidRepresentation.Standard;
-            }
-#pragma warning restore 618
 
             var result = subject.ToClusterKey();
 
-            result.AllowInsecureTls.Should().Be(subject.AllowInsecureTls);
             result.ApplicationName.Should().Be(subject.ApplicationName);
-            result.ClusterConfigurator.Should().BeSameAs(subject.ClusterConfigurator);
             result.ConnectionMode.Should().Be(subject.ConnectionMode);
             result.ConnectTimeout.Should().Be(subject.ConnectTimeout);
 #pragma warning disable 618
@@ -1085,24 +839,19 @@ namespace MongoDB.Driver.Tests
             result.HeartbeatInterval.Should().Be(subject.HeartbeatInterval);
             result.HeartbeatTimeout.Should().Be(subject.HeartbeatTimeout);
             result.IPv6.Should().Be(subject.IPv6);
-            result.LocalThreshold.Should().Be(subject.LocalThreshold);
             result.MaxConnectionIdleTime.Should().Be(subject.MaxConnectionIdleTime);
             result.MaxConnectionLifeTime.Should().Be(subject.MaxConnectionLifeTime);
             result.MaxConnectionPoolSize.Should().Be(subject.MaxConnectionPoolSize);
             result.MinConnectionPoolSize.Should().Be(subject.MinConnectionPoolSize);
-            result.ReceiveBufferSize.Should().Be(MongoDefaults.TcpReceiveBufferSize);
             result.ReplicaSetName.Should().Be(subject.ReplicaSetName);
-            result.Scheme.Should().Be(subject.Scheme);
-            result.SdamLogFilename.Should().Be(subject.SdamLogFilename);
-            result.SendBufferSize.Should().Be(MongoDefaults.TcpSendBufferSize);
+            result.LocalThreshold.Should().Be(subject.LocalThreshold);
             result.Servers.Should().Equal(subject.Servers);
             result.ServerSelectionTimeout.Should().Be(subject.ServerSelectionTimeout);
             result.SocketTimeout.Should().Be(subject.SocketTimeout);
             result.SslSettings.Should().Be(subject.SslSettings);
-            result.UseTls.Should().Be(subject.UseTls);
-#pragma warning disable 618
+            result.UseSsl.Should().Be(subject.UseSsl);
+            result.VerifySslCertificate.Should().Be(subject.VerifySslCertificate);
             result.WaitQueueSize.Should().Be(subject.WaitQueueSize);
-#pragma warning restore 618
             result.WaitQueueTimeout.Should().Be(subject.WaitQueueTimeout);
         }
     }

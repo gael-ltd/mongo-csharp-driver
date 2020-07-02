@@ -65,4 +65,7 @@ src/packages
 # Other
 artifacts
 packages
-/Tools
+Tools/FAKE
+Tools/FAKE.Dotnet
+Tools/xunit.runner.console
+

@@ -18,12 +18,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using FluentAssertions;
 using MongoDB.Bson.IO;
 using MongoDB.Bson.Serialization;
-using MongoDB.Bson.TestHelpers;
-using MongoDB.Bson.TestHelpers.XunitExtensions;
+using FluentAssertions;
 using Xunit;
+using MongoDB.Bson.TestHelpers.XunitExtensions;
 
 namespace MongoDB.Bson.Tests.IO
 {
@@ -46,14 +45,12 @@ namespace MongoDB.Bson.Tests.IO
             {
                 var result = new List<BsonDocument>();
 
-                jsonReader.State.Should().Be(BsonReaderState.Initial);
                 while (!jsonReader.IsAtEndOfFile())
                 {
                     jsonReader.ReadStartDocument();
                     var name = jsonReader.ReadName();
                     var value = jsonReader.ReadInt32();
                     jsonReader.ReadEndDocument();
-                    jsonReader.State.Should().Be(BsonReaderState.Initial);
 
                     var resultDocument = new BsonDocument(name, value);
                     result.Add(resultDocument);
@@ -75,7 +72,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.EndOfDocument, _bsonReader.ReadBsonType());
                 _bsonReader.ReadEndArray();
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonArray>(json).ToJson());
         }
@@ -93,7 +89,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.EndOfDocument, _bsonReader.ReadBsonType());
                 _bsonReader.ReadEndArray();
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonArray>(json).ToJson());
         }
@@ -113,27 +108,15 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.EndOfDocument, _bsonReader.ReadBsonType());
                 _bsonReader.ReadEndArray();
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonArray>(json).ToJson());
         }
 
         [Theory]
         [InlineData("{ $binary : \"AQ==\", $type : 0 }", new byte[] { 1 }, BsonBinarySubType.Binary)]
-        [InlineData("{ $binary : \"AQ==\", $type : 128 }", new byte[] { 1 }, BsonBinarySubType.UserDefined)]
         [InlineData("{ $binary : \"AQ==\", $type : \"0\" }", new byte[] { 1 }, BsonBinarySubType.Binary)]
         [InlineData("{ $binary : \"AQ==\", $type : \"00\" }", new byte[] { 1 }, BsonBinarySubType.Binary)]
-        [InlineData("{ $binary : \"AQ==\", $type : \"80\" }", new byte[] { 1 }, BsonBinarySubType.UserDefined)]
-        [InlineData("{ $binary : { base64 : \"AQ==\", subType : \"0\" } }", new byte[] { 1 }, BsonBinarySubType.Binary)]
-        [InlineData("{ $binary : { base64 : \"AQ==\", subType : \"00\" } }", new byte[] { 1 }, BsonBinarySubType.Binary)]
-        [InlineData("{ $binary : { base64 : \"AQ==\", subType : \"80\" } }", new byte[] { 1 }, BsonBinarySubType.UserDefined)]
-        [InlineData("{ $binary : { subType : \"0\", base64 : \"AQ==\" } }", new byte[] { 1 }, BsonBinarySubType.Binary)]
-        [InlineData("{ $binary : { subType : \"00\", base64 : \"AQ==\" } }", new byte[] { 1 }, BsonBinarySubType.Binary)]
-        [InlineData("{ $binary : { subType : \"80\", base64 : \"AQ==\" } }", new byte[] { 1 }, BsonBinarySubType.UserDefined)]
         [InlineData("BinData(0, \"AQ==\")", new byte[] { 1 }, BsonBinarySubType.Binary)]
-        [InlineData("BinData(128, \"AQ==\")", new byte[] { 1 }, BsonBinarySubType.UserDefined)]
-        [InlineData("HexData(0, \"01\")", new byte[] { 1 }, BsonBinarySubType.Binary)]
-        [InlineData("HexData(128, \"01\")", new byte[] { 1 }, BsonBinarySubType.UserDefined)]
         public void TestBinaryData(string json, byte[] expectedBytes, BsonBinarySubType expectedSubType)
         {
             using (var reader = new JsonReader(json))
@@ -141,100 +124,7 @@ namespace MongoDB.Bson.Tests.IO
                 var result = reader.ReadBinaryData();
 
                 result.Should().Be(new BsonBinaryData(expectedBytes, expectedSubType));
-                reader.State.Should().Be(BsonReaderState.Initial);
                 reader.IsAtEndOfFile().Should().BeTrue();
-            }
-        }
-
-        [Theory]
-        [InlineData("{ $binary")]
-        [InlineData("{ $binary :")]
-        [InlineData("{ $binary : \"AQ==\"")]
-        [InlineData("{ $binary : \"AQ==\",")]
-        [InlineData("{ $binary : \"AQ==\", $type")]
-        [InlineData("{ $binary : \"AQ==\", $type :")]
-        [InlineData("{ $binary : \"AQ==\", $type : 0")]
-        [InlineData("{ $binary : {")]
-        [InlineData("{ $binary : { base64")]
-        [InlineData("{ $binary : { base64 :")]
-        [InlineData("{ $binary : { base64 : \"AQ==\"")]
-        [InlineData("{ $binary : { base64 : \"AQ==\",")]
-        [InlineData("{ $binary : { base64 : \"AQ==\", subType")]
-        [InlineData("{ $binary : { base64 : \"AQ==\", subType :")]
-        [InlineData("{ $binary : { base64 : \"AQ==\", subType : \"0\"")]
-        [InlineData("{ $binary : { base64 : \"AQ==\", subType : \"0\" }")]
-        [InlineData("{ $binary : { subType")]
-        [InlineData("{ $binary : { subType :")]
-        [InlineData("{ $binary : { subType : \"0\"")]
-        [InlineData("{ $binary : { subType : \"0\",")]
-        [InlineData("{ $binary : { subType : \"0\", base64")]
-        [InlineData("{ $binary : { subType : \"0\", base64 :")]
-        [InlineData("{ $binary : { subType : \"0\", base64 : \"AQ==\"")]
-        [InlineData("{ $binary : { subType : \"0\", base64 : \"AQ==\" }")]
-        [InlineData("BinData")]
-        [InlineData("BinData(")]
-        [InlineData("BinData(0")]
-        [InlineData("BinData(0,")]
-        [InlineData("BinData(0, \"AQ==\"")]
-        [InlineData("HexData")]
-        [InlineData("HexData(")]
-        [InlineData("HexData(0")]
-        [InlineData("HexData(0,")]
-        [InlineData("HexData(0, \"01\"")]
-        public void TestBinaryDataEndOfFile(string json)
-        {
-            using (var reader = new JsonReader(json))
-            {
-                var exception = Record.Exception(() => reader.ReadBinaryData());
-
-                exception.Should().BeOfType<FormatException>();
-            }
-        }
-
-        [Theory]
-        [InlineData("{ $binary [")]
-        [InlineData("{ $binary : [")]
-        [InlineData("{ $binary : \"AQ==\" [")]
-        [InlineData("{ $binary : \"AQ==\", [")]
-        [InlineData("{ $binary : \"AQ==\", $type [")]
-        [InlineData("{ $binary : \"AQ==\", $type : [")]
-        [InlineData("{ $binary : \"AQ==\", $type : 0 [")]
-        [InlineData("{ $binary : { [")]
-        [InlineData("{ $binary : { base64 [")]
-        [InlineData("{ $binary : { base64 : [")]
-        [InlineData("{ $binary : { base64 : \"AQ==\" [")]
-        [InlineData("{ $binary : { base64 : \"AQ==\", [")]
-        [InlineData("{ $binary : { base64 : \"AQ==\", subType [")]
-        [InlineData("{ $binary : { base64 : \"AQ==\", subType : [")]
-        [InlineData("{ $binary : { base64 : \"AQ==\", subType : \"\" [")]
-        [InlineData("{ $binary : { base64 : \"AQ==\", subType : \"0\" [")]
-        [InlineData("{ $binary : { base64 : \"AQ==\", subType : \"0\" } [")]
-        [InlineData("{ $binary : { subType [")]
-        [InlineData("{ $binary : { subType : [")]
-        [InlineData("{ $binary : { subType : \"\" [")]
-        [InlineData("{ $binary : { subType : \"0\" [")]
-        [InlineData("{ $binary : { subType : \"0\", [")]
-        [InlineData("{ $binary : { subType : \"0\", base64 [")]
-        [InlineData("{ $binary : { subType : \"0\", base64 : [")]
-        [InlineData("{ $binary : { subType : \"0\", base64 : \"AQ==\" [")]
-        [InlineData("{ $binary : { subType : \"0\", base64 : \"AQ==\" } [")]
-        [InlineData("BinData [")]
-        [InlineData("BinData( [")]
-        [InlineData("BinData(0 [")]
-        [InlineData("BinData(0, [")]
-        [InlineData("BinData(0, \"AQ==\" [")]
-        [InlineData("HexData [")]
-        [InlineData("HexData( [")]
-        [InlineData("HexData(0 [")]
-        [InlineData("HexData(0, [")]
-        [InlineData("HexData(0, \"01\" [")]
-        public void TestBinaryDataInvalidToken(string json)
-        {
-            using (var reader = new JsonReader(json))
-            {
-                var exception = Record.Exception(() => reader.ReadBinaryData());
-
-                exception.Should().BeOfType<FormatException>();
             }
         }
 
@@ -296,7 +186,7 @@ namespace MongoDB.Bson.Tests.IO
                 _bsonReader.ReadEndDocument();
 
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
+
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonDocument>(json).ToJson());
         }
@@ -310,7 +200,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.Boolean, _bsonReader.ReadBsonType());
                 Assert.Equal(false, _bsonReader.ReadBoolean());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<bool>(json).ToJson());
         }
@@ -324,7 +213,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.Boolean, _bsonReader.ReadBsonType());
                 Assert.Equal(true, _bsonReader.ReadBoolean());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<bool>(json).ToJson());
         }
@@ -359,7 +247,6 @@ namespace MongoDB.Bson.Tests.IO
                 var result = reader.ReadDateTime();
 
                 result.Should().Be(expectedResult);
-                reader.State.Should().Be(BsonReaderState.Initial);
                 reader.IsAtEndOfFile().Should().BeTrue();
             }
         }
@@ -373,7 +260,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.DateTime, _bsonReader.ReadBsonType());
                 Assert.Equal(-9223372036854775808, _bsonReader.ReadDateTime());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonDateTime>(json).ToJson());
         }
@@ -387,7 +273,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.DateTime, _bsonReader.ReadBsonType());
                 Assert.Equal(9223372036854775807, _bsonReader.ReadDateTime());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonDateTime>(json).ToJson());
         }
@@ -436,7 +321,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.DateTime, _bsonReader.ReadBsonType());
                 Assert.Equal(expectedResult, _bsonReader.ReadDateTime());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             var jsonSettings = new JsonWriterSettings { OutputMode = JsonOutputMode.Shell };
             Assert.Equal(canonicalJson, BsonSerializer.Deserialize<DateTime>(json).ToJson(jsonSettings));
@@ -451,11 +335,8 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.DateTime, _bsonReader.ReadBsonType());
                 Assert.Equal(0, _bsonReader.ReadDateTime());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
-#pragma warning disable 618
             var jsonSettings = new JsonWriterSettings { OutputMode = JsonOutputMode.Strict };
-#pragma warning restore 618
             Assert.Equal(json, BsonSerializer.Deserialize<DateTime>(json).ToJson(jsonSettings));
         }
 
@@ -468,28 +349,10 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.DateTime, _bsonReader.ReadBsonType());
                 Assert.Equal(0, _bsonReader.ReadDateTime());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             var expected = "{ \"$date\" : 0 }"; // it's still not ISO8601 on the way out
-#pragma warning disable 618
             var jsonSettings = new JsonWriterSettings { OutputMode = JsonOutputMode.Strict };
-#pragma warning restore 618
             Assert.Equal(expected, BsonSerializer.Deserialize<DateTime>(json).ToJson(jsonSettings));
-        }
-
-        [Theory]
-        [InlineData("{ $date: { \"$numberLong\": \"1552949630483\" } }", 1552949630483L)]
-        [InlineData("{ $date: { $numberLong: \"1552949630483\" } }", 1552949630483L)]
-        public void TestDateTimeWithNumberLong(string json, long expectedResult)
-        {
-            using (var reader = new JsonReader(json))
-            {
-                var result = reader.ReadDateTime();
-
-                result.Should().Be(expectedResult);
-                reader.State.Should().Be(BsonReaderState.Initial);
-                reader.IsAtEndOfFile().Should().BeTrue();
-            }
         }
 
         [Theory]
@@ -503,18 +366,14 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.Decimal128, _bsonReader.ReadBsonType());
                 Assert.Equal(Decimal128.Parse(expectedValueString), _bsonReader.ReadDecimal128());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(expectedJson, BsonSerializer.Deserialize<BsonDecimal128>(json).ToJson());
         }
 
         [Theory]
         [InlineData("{ $numberDecimal : 1 }", "1", "NumberDecimal(\"1\")")]
-        [InlineData("{ $numberDecimal : 2147483648 }", "2147483648", "NumberDecimal(\"2147483648\")")]
+        [InlineData("{ $numberDecimal : 2147483648 })", "2147483648", "NumberDecimal(\"2147483648\")")]
         [InlineData("{ $numberDecimal : \"1.5\" }", "1.5", "NumberDecimal(\"1.5\")")]
-        [InlineData("{ $numberDecimal : \"Infinity\" }", "Infinity", "NumberDecimal(\"Infinity\")")]
-        [InlineData("{ $numberDecimal : \"-Infinity\" }", "-Infinity", "NumberDecimal(\"-Infinity\")")]
-        [InlineData("{ $numberDecimal : \"NaN\" }", "NaN", "NumberDecimal(\"NaN\")")]
         public void TestDecimal128ExtendedJson(string json, string expectedValueString, string expectedJson)
         {
             using (_bsonReader = new JsonReader(json))
@@ -522,7 +381,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.Decimal128, _bsonReader.ReadBsonType());
                 Assert.Equal(Decimal128.Parse(expectedValueString), _bsonReader.ReadDecimal128());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(expectedJson, BsonSerializer.Deserialize<BsonDecimal128>(json).ToJson());
         }
@@ -538,7 +396,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.EndOfDocument, _bsonReader.ReadBsonType());
                 _bsonReader.ReadEndDocument();
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonDocument>(json).ToJson());
         }
@@ -565,7 +422,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.EndOfDocument, _bsonReader.ReadBsonType());
                 _bsonReader.ReadEndDocument();
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonDocument>(json).ToJson());
         }
@@ -584,7 +440,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.EndOfDocument, _bsonReader.ReadBsonType());
                 _bsonReader.ReadEndDocument();
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonDocument>(json).ToJson());
         }
@@ -606,64 +461,12 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.EndOfDocument, _bsonReader.ReadBsonType());
                 _bsonReader.ReadEndDocument();
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonDocument>(json).ToJson());
         }
 
-        [Theory]
-        [InlineData("1.0", 1.0)]
-        [InlineData("-1.0", -1.0)]
-        [InlineData("1.5", 1.5)]
-        [InlineData("{ $numberDouble : 1 }", 1.0)]
-        [InlineData("{ $numberDouble : 1.0 }", 1.0)]
-        [InlineData("{ $numberDouble : \"1\" }", 1.0)]
-        [InlineData("{ $numberDouble : \"-1\" }", -1.0)]
-        [InlineData("{ $numberDouble : \"1.5\" }", 1.5)]
-        [InlineData("{ $numberDouble : \"Infinity\" }", double.PositiveInfinity)]
-        [InlineData("{ $numberDouble : \"-Infinity\" }", double.NegativeInfinity)]
-        [InlineData("{ $numberDouble : \"NaN\" }", double.NaN)]
-        public void TestDouble(string json, double expectedValue)
-        {
-            using (var reader = new JsonReader(json))
-            {
-                reader.ReadBsonType().Should().Be(BsonType.Double);
-                reader.ReadDouble().Should().Be(expectedValue);
-                reader.State.Should().Be(BsonReaderState.Initial);
-                reader.IsAtEndOfFile().Should().BeTrue();
-            }
-        }
-
-        [Theory]
-        [InlineData("{ $numberDouble")]
-        [InlineData("{ $numberDouble :")]
-        [InlineData("{ $numberDouble : \"1\"")]
-        public void TestDoubleEndOfFile(string json)
-        {
-            using (var reader = new JsonReader(json))
-            {
-                var exception = Record.Exception(() => reader.ReadDouble());
-
-                exception.Should().BeOfType<FormatException>();
-            }
-        }
-
-        [Theory]
-        [InlineData("{ $numberDouble [")]
-        [InlineData("{ $numberDouble : [")]
-        [InlineData("{ $numberDouble : \"1\" [")]
-        public void TestDoubleInvalidToken(string json)
-        {
-            using (var reader = new JsonReader(json))
-            {
-                var exception = Record.Exception(() => reader.ReadDouble());
-
-                exception.Should().BeOfType<FormatException>();
-            }
-        }
-
         [Fact]
-        public void TestDoubleRoundTrip()
+        public void TestDouble()
         {
             var json = "1.5";
             using (_bsonReader = new JsonReader(json))
@@ -671,20 +474,13 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.Double, _bsonReader.ReadBsonType());
                 Assert.Equal(1.5, _bsonReader.ReadDouble());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<double>(json).ToJson());
         }
 
-        [Theory]
-        [ParameterAttributeData]
-        [ResetGuidModeAfterTest]
-        public void TestGuid(
-            [ClassValues(typeof(GuidModeValues))] GuidMode mode)
+        [Fact]
+        public void TestGuid()
         {
-            mode.Set();
-
-#pragma warning disable 618
             var guid = new Guid("B5F21E0C2A0D42D6AD03D827008D8AB6");
             var json = "CSUUID(\"B5F21E0C2A0D42D6AD03D827008D8AB6\")";
             using (_bsonReader = new JsonReader(json))
@@ -693,33 +489,11 @@ namespace MongoDB.Bson.Tests.IO
                 var binaryData = _bsonReader.ReadBinaryData();
                 Assert.True(binaryData.Bytes.SequenceEqual(guid.ToByteArray()));
                 Assert.Equal(BsonBinarySubType.UuidLegacy, binaryData.SubType);
-                if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-                {
-                    Assert.Equal(GuidRepresentation.CSharpLegacy, binaryData.GuidRepresentation);
-                }
+                Assert.Equal(GuidRepresentation.CSharpLegacy, binaryData.GuidRepresentation);
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
-            var guidRepresentation = BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 ? BsonDefaults.GuidRepresentation : GuidRepresentation.Unspecified;
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 && guidRepresentation != GuidRepresentation.Unspecified)
-            {
-                string expected;
-                switch (guidRepresentation)
-                {
-                    case GuidRepresentation.CSharpLegacy: expected = "CSUUID(\"b5f21e0c-2a0d-42d6-ad03-d827008d8ab6\")"; break;
-                    case GuidRepresentation.JavaLegacy: expected = "JUUID(\"b5f21e0c-2a0d-42d6-ad03-d827008d8ab6\")"; break;
-                    case GuidRepresentation.PythonLegacy: expected = "PYUUID(\"b5f21e0c-2a0d-42d6-ad03-d827008d8ab6\")"; break;
-                    case GuidRepresentation.Standard: expected = "UUID(\"b5f21e0c-2a0d-42d6-ad03-d827008d8ab6\")"; break;
-                    default: throw new Exception("Unexpected GuidRepresentation.");
-                }
-                Assert.Equal(expected, BsonSerializer.Deserialize<Guid>(json).ToJson(new JsonWriterSettings()));
-            }
-            else
-            {
-                var exception = Record.Exception(() => guid.ToJson(new JsonWriterSettings()));
-                exception.Should().BeOfType<BsonSerializationException>();
-            }
-#pragma warning restore 618
+            var expected = "CSUUID(\"b5f21e0c-2a0d-42d6-ad03-d827008d8ab6\")";
+            Assert.Equal(expected, BsonSerializer.Deserialize<Guid>(json).ToJson());
         }
 
         [Fact]
@@ -733,7 +507,6 @@ namespace MongoDB.Bson.Tests.IO
                 var bytes = _bsonReader.ReadBytes();
                 Assert.True(expectedBytes.SequenceEqual(bytes));
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             var expectedJson = "new BinData(0, \"ASM=\")";
             Assert.Equal(expectedJson, BsonSerializer.Deserialize<byte[]>(json).ToJson());
@@ -748,47 +521,8 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.Int32, _bsonReader.ReadBsonType());
                 Assert.Equal(123, _bsonReader.ReadInt32());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<int>(json).ToJson());
-        }
-
-        [Theory]
-        [InlineData("{ $numberInt : 1 }", 1)]
-        [InlineData("{ $numberInt : -2147483648 }", -2147483648)]
-        [InlineData("{ $numberInt : 2147483647 }", 2147483647)]
-        [InlineData("{ $numberInt : \"1\" }", 1)]
-        [InlineData("{ $numberInt : \"-2147483648\" }", -2147483648)]
-        [InlineData("{ $numberInt : \"2147483647\" }", 2147483647)]
-        public void TestInt32ExtendedJson(string json, int expectedResult)
-        {
-            using (var reader = new JsonReader(json))
-            {
-                var result = reader.ReadInt32();
-
-                result.Should().Be(expectedResult);
-                reader.State.Should().Be(BsonReaderState.Initial);
-                reader.IsAtEndOfFile().Should().BeTrue();
-            }
-        }
-
-        [Theory]
-        // truncated input
-        [InlineData("{ $numberInt")]
-        [InlineData("{ $numberInt :")]
-        [InlineData("{ $numberInt : 1")]
-        // invalid extended json
-        [InlineData("{ $numberInt ,")]
-        [InlineData("{ $numberInt : \"abc\"")]
-        [InlineData("{ $numberInt : 1,")]
-        public void TestInt32ExtendedJsonInvalid(string json)
-        {
-            using (var reader = new JsonReader(json))
-            {
-                var execption = Record.Exception(() => reader.ReadInt32());
-
-                execption.Should().BeOfType<FormatException>();
-            }
         }
 
         [Theory]
@@ -801,7 +535,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.Int32, _bsonReader.ReadBsonType());
                 Assert.Equal(123, _bsonReader.ReadInt32());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             var canonicalJson = "123";
             Assert.Equal(canonicalJson, BsonSerializer.Deserialize<int>(new StringReader(json)).ToJson());
@@ -827,7 +560,6 @@ namespace MongoDB.Bson.Tests.IO
                 var result = reader.ReadInt64();
 
                 result.Should().Be(expectedResult);
-                reader.State.Should().Be(BsonReaderState.Initial);
                 reader.IsAtEndOfFile().Should().BeTrue();
             }
         }
@@ -841,7 +573,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.Int64, _bsonReader.ReadBsonType());
                 Assert.Equal(123456789012, _bsonReader.ReadInt64());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<long>(json).ToJson());
         }
@@ -855,7 +586,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.Int64, _bsonReader.ReadBsonType());
                 Assert.Equal(123, _bsonReader.ReadInt64());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<long>(json).ToJson());
         }
@@ -868,11 +598,9 @@ namespace MongoDB.Bson.Tests.IO
             using (var jsonReader = new JsonReader(json))
             {
                 var count = 0;
-                jsonReader.State.Should().Be(BsonReaderState.Initial);
                 while (!jsonReader.IsAtEndOfFile())
                 {
                     var array = BsonSerializer.Deserialize<BsonArray>(jsonReader);
-                    jsonReader.State.Should().Be(BsonReaderState.Initial);
                     var expected = new BsonArray { 1, 2 };
                     Assert.Equal(expected, array);
                     count += 1;
@@ -889,11 +617,9 @@ namespace MongoDB.Bson.Tests.IO
             using (var jsonReader = new JsonReader(json))
             {
                 var count = 0;
-                jsonReader.State.Should().Be(BsonReaderState.Initial);
                 while (!jsonReader.IsAtEndOfFile())
                 {
                     var document = BsonSerializer.Deserialize<BsonDocument>(jsonReader);
-                    jsonReader.State.Should().Be(BsonReaderState.Initial);
                     var expected = new BsonDocument("x", 1);
                     Assert.Equal(expected, document);
                     count += 1;
@@ -911,7 +637,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.Int64, _bsonReader.ReadBsonType());
                 Assert.Equal(123, _bsonReader.ReadInt64());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             var canonicalJson = "NumberLong(123)";
             Assert.Equal(canonicalJson, BsonSerializer.Deserialize<long>(new StringReader(json)).ToJson());
@@ -926,7 +651,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.JavaScript, _bsonReader.ReadBsonType());
                 Assert.Equal("function f() { return 1; }", _bsonReader.ReadJavaScript());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonJavaScript>(json).ToJson());
         }
@@ -945,7 +669,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(1, _bsonReader.ReadInt32());
                 _bsonReader.ReadEndDocument();
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonJavaScriptWithScope>(json).ToJson());
         }
@@ -959,7 +682,6 @@ namespace MongoDB.Bson.Tests.IO
             {
                 reader.ReadMaxKey();
 
-                reader.State.Should().Be(BsonReaderState.Initial);
                 reader.IsAtEndOfFile().Should().BeTrue();
             }
         }
@@ -973,7 +695,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.MaxKey, _bsonReader.ReadBsonType());
                 _bsonReader.ReadMaxKey();
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             var canonicalJson = "MaxKey";
             Assert.Equal(canonicalJson, BsonSerializer.Deserialize<BsonMaxKey>(new StringReader(json)).ToJson());
@@ -988,7 +709,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.MaxKey, _bsonReader.ReadBsonType());
                 _bsonReader.ReadMaxKey();
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             var canonicalJson = "MaxKey";
             Assert.Equal(canonicalJson, BsonSerializer.Deserialize<BsonMaxKey>(new StringReader(json)).ToJson());
@@ -1003,7 +723,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.MaxKey, _bsonReader.ReadBsonType());
                 _bsonReader.ReadMaxKey();
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonMaxKey>(new StringReader(json)).ToJson());
         }
@@ -1017,7 +736,6 @@ namespace MongoDB.Bson.Tests.IO
             {
                 reader.ReadMinKey();
 
-                reader.State.Should().Be(BsonReaderState.Initial);
                 reader.IsAtEndOfFile().Should().BeTrue();
             }
         }
@@ -1031,7 +749,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.MinKey, _bsonReader.ReadBsonType());
                 _bsonReader.ReadMinKey();
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             var canonicalJson = "MinKey";
             Assert.Equal(canonicalJson, BsonSerializer.Deserialize<BsonMinKey>(new StringReader(json)).ToJson());
@@ -1046,7 +763,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.MinKey, _bsonReader.ReadBsonType());
                 _bsonReader.ReadMinKey();
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             var canonicalJson = "MinKey";
             Assert.Equal(canonicalJson, BsonSerializer.Deserialize<BsonMinKey>(new StringReader(json)).ToJson());
@@ -1061,7 +777,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.MinKey, _bsonReader.ReadBsonType());
                 _bsonReader.ReadMinKey();
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonMinKey>(new StringReader(json)).ToJson());
         }
@@ -1082,7 +797,6 @@ namespace MongoDB.Bson.Tests.IO
                 _bsonReader.ReadEndArray();
                 _bsonReader.ReadEndDocument();
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonDocument>(json).ToJson());
         }
@@ -1105,7 +819,6 @@ namespace MongoDB.Bson.Tests.IO
                 _bsonReader.ReadEndDocument();
                 _bsonReader.ReadEndDocument();
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonDocument>(json).ToJson());
         }
@@ -1119,7 +832,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.Null, _bsonReader.ReadBsonType());
                 _bsonReader.ReadNull();
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonNull>(json).ToJson());
         }
@@ -1134,7 +846,6 @@ namespace MongoDB.Bson.Tests.IO
                 var result = reader.ReadObjectId();
 
                 result.Should().Be(ObjectId.Parse(expectedResult));
-                reader.State.Should().Be(BsonReaderState.Initial);
                 reader.IsAtEndOfFile().Should().BeTrue();
             }
         }
@@ -1149,7 +860,6 @@ namespace MongoDB.Bson.Tests.IO
                 var objectId = _bsonReader.ReadObjectId();
                 Assert.Equal("4d0ce088e447ad08b4721a37", objectId.ToString());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<ObjectId>(json).ToJson());
         }
@@ -1164,29 +874,14 @@ namespace MongoDB.Bson.Tests.IO
                 var objectId = _bsonReader.ReadObjectId();
                 Assert.Equal("4d0ce088e447ad08b4721a37", objectId.ToString());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
-#pragma warning disable 618
             var jsonSettings = new JsonWriterSettings { OutputMode = JsonOutputMode.Strict };
-#pragma warning restore 618
             Assert.Equal(json, BsonSerializer.Deserialize<ObjectId>(json).ToJson(jsonSettings));
         }
 
         [Theory]
-        [InlineData("{ $regex : \"\", $options : \"\" }", "", "")]
         [InlineData("{ $regex : \"abc\", $options : \"i\" }", "abc", "i")]
         [InlineData("{ $regex : \"abc/\", $options : \"i\" }", "abc/", "i")]
-        [InlineData("{ $regularExpression : { pattern : \"\", options : \"\" } }", "", "")]
-        [InlineData("{ $regularExpression : { pattern : \"abc\", options : \"i\" } }", "abc", "i")]
-        [InlineData("{ $regularExpression : { pattern : \"abc/\", options : \"i\" } }", "abc/", "i")]
-        [InlineData("{ $regularExpression : { options : \"\", pattern : \"\" } }", "", "")]
-        [InlineData("{ $regularExpression : { options : \"i\", pattern : \"abc\" } }", "abc", "i")]
-        [InlineData("{ $regularExpression : { options : \"i\", pattern : \"abc/\" } }", "abc/", "i")]
-        [InlineData("RegExp(\"\")", "", "")]
-        [InlineData("RegExp(\"\", \"\")", "", "")]
-        [InlineData("RegExp(\"abc\")", "abc", "")]
-        [InlineData("RegExp(\"abc\", \"i\")", "abc", "i")]
-        [InlineData("//", "", "")]
         [InlineData("/abc/i", "abc", "i")]
         [InlineData("/abc\\//i", "abc/", "i")]
         public void TestRegularExpression(string json, string expectedPattern, string expectedOptions)
@@ -1196,105 +891,21 @@ namespace MongoDB.Bson.Tests.IO
                 var result = reader.ReadRegularExpression();
 
                 result.Should().Be(new BsonRegularExpression(expectedPattern, expectedOptions));
-                reader.State.Should().Be(BsonReaderState.Initial);
                 reader.IsAtEndOfFile().Should().BeTrue();
-            }
-        }
-
-        [Theory]
-        [InlineData("{ $regex")]
-        [InlineData("{ $regex :")]
-        [InlineData("{ $regex : \"abc\"")]
-        [InlineData("{ $regex : \"abc\",")]
-        [InlineData("{ $regex : \"abc\", $options")]
-        [InlineData("{ $regex : \"abc\", $options :")]
-        [InlineData("{ $regex : \"abc\", $options : \"i\"")]
-        [InlineData("{ $regularExpression")]
-        [InlineData("{ $regularExpression :")]
-        [InlineData("{ $regularExpression : {")]
-        [InlineData("{ $regularExpression : { pattern")]
-        [InlineData("{ $regularExpression : { pattern :")]
-        [InlineData("{ $regularExpression : { pattern : \"abc\"")]
-        [InlineData("{ $regularExpression : { pattern : \"abc\",")]
-        [InlineData("{ $regularExpression : { pattern : \"abc\", options")]
-        [InlineData("{ $regularExpression : { pattern : \"abc\", options :")]
-        [InlineData("{ $regularExpression : { pattern : \"abc\", options : \"i\"")]
-        [InlineData("{ $regularExpression : { pattern : \"abc\", options : \"i\" }")]
-        [InlineData("{ $regularExpression : { options")]
-        [InlineData("{ $regularExpression : { options :")]
-        [InlineData("{ $regularExpression : { options : \"i\"")]
-        [InlineData("{ $regularExpression : { options : \"i\",")]
-        [InlineData("{ $regularExpression : { options : \"i\", pattern")]
-        [InlineData("{ $regularExpression : { options : \"i\", pattern :")]
-        [InlineData("{ $regularExpression : { options : \"i\", pattern : \"abc\"")]
-        [InlineData("{ $regularExpression : { options : \"i\", pattern : \"abc\" }")]
-        [InlineData("RegExp(")]
-        [InlineData("RegExp(\"abc\"")]
-        [InlineData("RegExp(\"abc\",")]
-        [InlineData("RegExp(\"abc\", \"i\"")]
-        public void TestRegularExpressionEndOfFile(string json)
-        {
-            using (var reader = new JsonReader(json))
-            {
-                var exception = Record.Exception(() => reader.ReadRegularExpression());
-
-                exception.Should().BeOfType<FormatException>();
-            }
-        }
-
-        [Theory]
-        [InlineData("{ $regex [")]
-        [InlineData("{ $regex : [")]
-        [InlineData("{ $regex : \"abc\" [")]
-        [InlineData("{ $regex : \"abc\", [")]
-        [InlineData("{ $regex : \"abc\", $options [")]
-        [InlineData("{ $regex : \"abc\", $options : [")]
-        [InlineData("{ $regex : \"abc\", $options : \"i\" [")]
-        [InlineData("{ $regularExpression [")]
-        [InlineData("{ $regularExpression : [")]
-        [InlineData("{ $regularExpression : { [")]
-        [InlineData("{ $regularExpression : { pattern [")]
-        [InlineData("{ $regularExpression : { pattern : [")]
-        [InlineData("{ $regularExpression : { pattern : \"abc\" [")]
-        [InlineData("{ $regularExpression : { pattern : \"abc\", [")]
-        [InlineData("{ $regularExpression : { pattern : \"abc\", options [")]
-        [InlineData("{ $regularExpression : { pattern : \"abc\", options : [")]
-        [InlineData("{ $regularExpression : { pattern : \"abc\", options : \"i\" [")]
-        [InlineData("{ $regularExpression : { pattern : \"abc\", options : \"i\" } [")]
-        [InlineData("{ $regularExpression : { options [")]
-        [InlineData("{ $regularExpression : { options : [")]
-        [InlineData("{ $regularExpression : { options : \"i\" [")]
-        [InlineData("{ $regularExpression : { options : \"i\", [")]
-        [InlineData("{ $regularExpression : { options : \"i\", pattern [")]
-        [InlineData("{ $regularExpression : { options : \"i\", pattern : [")]
-        [InlineData("{ $regularExpression : { options : \"i\", pattern : \"abc\" [")]
-        [InlineData("{ $regularExpression : { options : \"i\", pattern : \"abc\" } [")]
-        [InlineData("RegExp(")]
-        [InlineData("RegExp(\"abc\"")]
-        [InlineData("RegExp(\"abc\",")]
-        [InlineData("RegExp(\"abc\", \"i\"")]
-        public void TestRegularExpressionInvalidToken(string json)
-        {
-            using (var reader = new JsonReader(json))
-            {
-                var exception = Record.Exception(() => reader.ReadRegularExpression());
-
-                exception.Should().BeOfType<FormatException>();
             }
         }
 
         [Fact]
         public void TestRegularExpressionShell()
         {
-            var json = "/pattern/imsx";
+            var json = "/pattern/imxs";
             using (_bsonReader = new JsonReader(json))
             {
                 Assert.Equal(BsonType.RegularExpression, _bsonReader.ReadBsonType());
                 var regex = _bsonReader.ReadRegularExpression();
                 Assert.Equal("pattern", regex.Pattern);
-                Assert.Equal("imsx", regex.Options);
+                Assert.Equal("imxs", regex.Options);
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonRegularExpression>(json).ToJson());
         }
@@ -1302,19 +913,16 @@ namespace MongoDB.Bson.Tests.IO
         [Fact]
         public void TestRegularExpressionStrict()
         {
-            var json = "{ \"$regex\" : \"pattern\", \"$options\" : \"imsx\" }";
+            var json = "{ \"$regex\" : \"pattern\", \"$options\" : \"imxs\" }";
             using (_bsonReader = new JsonReader(json))
             {
                 Assert.Equal(BsonType.RegularExpression, _bsonReader.ReadBsonType());
                 var regex = _bsonReader.ReadRegularExpression();
                 Assert.Equal("pattern", regex.Pattern);
-                Assert.Equal("imsx", regex.Options);
+                Assert.Equal("imxs", regex.Options);
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
-#pragma warning disable 618
             var settings = new JsonWriterSettings { OutputMode = JsonOutputMode.Strict };
-#pragma warning restore 618
             Assert.Equal(json, BsonSerializer.Deserialize<BsonRegularExpression>(json).ToJson(settings));
         }
 
@@ -1327,7 +935,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.String, _bsonReader.ReadBsonType());
                 Assert.Equal("abc", _bsonReader.ReadString());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<string>(json).ToJson());
         }
@@ -1341,7 +948,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.String, _bsonReader.ReadBsonType());
                 Assert.Equal("", _bsonReader.ReadString());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<string>(json).ToJson());
         }
@@ -1355,18 +961,14 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.Symbol, _bsonReader.ReadBsonType());
                 Assert.Equal("symbol", _bsonReader.ReadSymbol());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonSymbol>(json).ToJson());
         }
 
         [Theory]
         [InlineData("{ $timestamp : { t : 1, i : 2 } }", 0x100000002L)]
-        [InlineData("{ $timestamp : { i : 2, t : 1 } }", 0x100000002L)]
         [InlineData("{ $timestamp : { t : -2147483648, i : -2147483648 } }", unchecked((long)0x8000000080000000UL))]
-        [InlineData("{ $timestamp : { i : -2147483648, t : -2147483648 } }", unchecked((long)0x8000000080000000UL))]
         [InlineData("{ $timestamp : { t : 2147483647, i : 2147483647 } }", 0x7fffffff7fffffff)]
-        [InlineData("{ $timestamp : { i : 2147483647, t : 2147483647 } }", 0x7fffffff7fffffff)]
         [InlineData("Timestamp(1, 2)", 0x100000002L)]
         [InlineData("Timestamp(-2147483648, -2147483648)", unchecked((long)0x8000000080000000UL))]
         [InlineData("Timestamp(2147483647, 2147483647)", 0x7fffffff7fffffff)]
@@ -1377,7 +979,6 @@ namespace MongoDB.Bson.Tests.IO
                 var result = reader.ReadTimestamp();
 
                 result.Should().Be(expectedResult);
-                reader.State.Should().Be(BsonReaderState.Initial);
                 reader.IsAtEndOfFile().Should().BeTrue();
             }
         }
@@ -1391,54 +992,22 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.Timestamp, _bsonReader.ReadBsonType());
                 Assert.Equal(new BsonTimestamp(1, 2).Value, _bsonReader.ReadTimestamp());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonTimestamp>(new StringReader(json)).ToJson());
         }
 
-        [Theory]
-        [InlineData("{ \"$timestamp\" : { \"t\" : 1, \"i\" : 2 } }")]
-        [InlineData("{ \"$timestamp\" : { \"i\" : 2, \"t\" : 1 } }")]
-        public void TestTimestampExtendedJsonNewRepresentation(string json)
+        [Fact]
+        public void TestTimestampExtendedJsonNewRepresentation()
         {
+            var json = "{ \"$timestamp\" : { \"t\" : 1, \"i\" : 2 } }";
             using (_bsonReader = new JsonReader(json))
             {
                 Assert.Equal(BsonType.Timestamp, _bsonReader.ReadBsonType());
                 Assert.Equal(new BsonTimestamp(1, 2).Value, _bsonReader.ReadTimestamp());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             var canonicalJson = "Timestamp(1, 2)";
             Assert.Equal(canonicalJson, BsonSerializer.Deserialize<BsonTimestamp>(new StringReader(json)).ToJson());
-        }
-
-        [Theory]
-        // truncated input
-        [InlineData("{ \"$timestamp\" : {")]
-        [InlineData("{ \"$timestamp\" : { \"t\"")]
-        [InlineData("{ \"$timestamp\" : { \"t\" :")]
-        [InlineData("{ \"$timestamp\" : { \"t\" : 1")]
-        [InlineData("{ \"$timestamp\" : { \"t\" : 1,")]
-        [InlineData("{ \"$timestamp\" : { \"t\" : 1, \"i\"")]
-        [InlineData("{ \"$timestamp\" : { \"t\" : 1, \"i\" :")]
-        [InlineData("{ \"$timestamp\" : { \"t\" : 1, \"i\" : 2")]
-        [InlineData("{ \"$timestamp\" : { \"t\" : 1, \"i\" : 2 }")]
-        // valid JSON but not a valid extended JSON BsonTimestamp
-        [InlineData("{ \"$timestamp\" : { }")]
-        [InlineData("{ \"$timestamp\" : { \"t\" : 1 } }")]
-        [InlineData("{ \"$timestamp\" : { \"i\" : 2 } }")]
-        [InlineData("{ \"$timestamp\" : { \"t\" : 1, \"i\" : 2.0 } }")]
-        [InlineData("{ \"$timestamp\" : { \"t\" : 1.0, \"x\" : 2 } }")]
-        [InlineData("{ \"$timestamp\" : { \"t\" : 1, \"x\" : 2 } }")]
-        [InlineData("{ \"$timestamp\" : { \"i\" : 2, \"x\" : 1 } }")]
-        public void TestTimestampExtendedJsonNewRepresentationWhenInvalid(string json)
-        {
-            using (_bsonReader = new JsonReader(json))
-            {
-                var exception = Record.Exception(() => _bsonReader.ReadBsonType());
-
-                exception.Should().BeOfType<FormatException>();
-            }
         }
 
         [Fact]
@@ -1450,7 +1019,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.Timestamp, _bsonReader.ReadBsonType());
                 Assert.Equal(1234L, _bsonReader.ReadTimestamp());
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             var canonicalJson = "Timestamp(0, 1234)";
             Assert.Equal(canonicalJson, BsonSerializer.Deserialize<BsonTimestamp>(new StringReader(json)).ToJson());
@@ -1465,7 +1033,6 @@ namespace MongoDB.Bson.Tests.IO
             {
                 reader.ReadUndefined();
 
-                reader.State.Should().Be(BsonReaderState.Initial);
                 reader.IsAtEndOfFile().Should().BeTrue();
             }
         }
@@ -1479,7 +1046,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.Undefined, _bsonReader.ReadBsonType());
                 _bsonReader.ReadUndefined();
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             var canonicalJson = "undefined";
             Assert.Equal(canonicalJson, BsonSerializer.Deserialize<BsonUndefined>(new StringReader(json)).ToJson());
@@ -1494,7 +1060,6 @@ namespace MongoDB.Bson.Tests.IO
                 Assert.Equal(BsonType.Undefined, _bsonReader.ReadBsonType());
                 _bsonReader.ReadUndefined();
                 Assert.Equal(BsonReaderState.Initial, _bsonReader.State);
-                Assert.True(_bsonReader.IsAtEndOfFile());
             }
             Assert.Equal(json, BsonSerializer.Deserialize<BsonUndefined>(json).ToJson());
         }
@@ -1575,73 +1140,6 @@ namespace MongoDB.Bson.Tests.IO
                 var document = BsonSerializer.Deserialize<BsonDocument>(streamReader);
                 Assert.Equal(1, document["x"].AsInt32);
             }
-        }
-
-        [Theory]
-        [InlineData("")]
-        [InlineData("000")]
-        [InlineData("/")]
-        [InlineData(":")]
-        [InlineData("@")]
-        [InlineData("G")]
-        [InlineData("`")]
-        [InlineData("g")]
-        [InlineData("0/")]
-        [InlineData("0:")]
-        [InlineData("0@")]
-        [InlineData("0G")]
-        [InlineData("0`")]
-        [InlineData("0g")]
-        [InlineData("/0")]
-        [InlineData(":0")]
-        [InlineData("@0")]
-        [InlineData("G0")]
-        [InlineData("`0")]
-        [InlineData("g0")]
-        public void IsValidBinaryDataSubTypeString_should_return_false_when_value_is_valid(string value)
-        {
-            using (var reader = new JsonReader(""))
-            {
-                var result = reader.IsValidBinaryDataSubTypeString(value);
-
-                result.Should().BeFalse();
-            }
-        }
-
-        [Theory]
-        [InlineData("0")]
-        [InlineData("9")]
-        [InlineData("a")]
-        [InlineData("f")]
-        [InlineData("A")]
-        [InlineData("F")]
-        [InlineData("00")]
-        [InlineData("09")]
-        [InlineData("0a")]
-        [InlineData("0f")]
-        [InlineData("0A")]
-        [InlineData("0F")]
-        [InlineData("90")]
-        [InlineData("a0")]
-        [InlineData("f0")]
-        [InlineData("A0")]
-        [InlineData("F0")]
-        public void IsValidBinaryDataSubTypeString_should_return_true_when_value_is_valid(string value)
-        {
-            using (var reader = new JsonReader(""))
-            {
-                var result = reader.IsValidBinaryDataSubTypeString(value);
-
-                result.Should().BeTrue();
-            }
-        }
-    }
-
-    public static class JsonReaderReflector
-    {
-        public static bool IsValidBinaryDataSubTypeString(this JsonReader reader, string value)
-        {
-            return (bool)Reflector.Invoke(reader, nameof(IsValidBinaryDataSubTypeString), value);
         }
     }
 }

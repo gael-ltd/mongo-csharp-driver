@@ -19,7 +19,6 @@ using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using MongoDB.Driver.Core.Misc;
-using MongoDB.Driver.Core.Operations;
 using MongoDB.Driver.Linq;
 
 namespace MongoDB.Driver
@@ -41,7 +40,7 @@ namespace MongoDB.Driver
         public static IAggregateFluent<TDocument> Aggregate<TDocument>(this IMongoCollection<TDocument> collection, AggregateOptions options = null)
         {
             var emptyPipeline = new EmptyPipelineDefinition<TDocument>(collection.DocumentSerializer);
-            return new CollectionAggregateFluent<TDocument, TDocument>(null, collection, emptyPipeline, options ?? new AggregateOptions());
+            return new AggregateFluent<TDocument, TDocument>(null, collection, emptyPipeline, options ?? new AggregateOptions());
         }
 
         /// <summary>
@@ -58,7 +57,7 @@ namespace MongoDB.Driver
         {
             Ensure.IsNotNull(session, nameof(session));
             var emptyPipeline = new EmptyPipelineDefinition<TDocument>(collection.DocumentSerializer);
-            return new CollectionAggregateFluent<TDocument, TDocument>(session, collection, emptyPipeline, options ?? new AggregateOptions());
+            return new AggregateFluent<TDocument, TDocument>(session, collection, emptyPipeline, options ?? new AggregateOptions());
         }
 
         /// <summary>
@@ -71,24 +70,10 @@ namespace MongoDB.Driver
         public static IMongoQueryable<TDocument> AsQueryable<TDocument>(this IMongoCollection<TDocument> collection, AggregateOptions aggregateOptions = null)
         {
             Ensure.IsNotNull(collection, nameof(collection));
-
-            return AsQueryableHelper(collection, session: null, aggregateOptions);
-        }
-
-        /// <summary>
-        /// Creates a queryable source of documents.
-        /// </summary>
-        /// <typeparam name="TDocument">The type of the document.</typeparam>
-        /// <param name="collection">The collection.</param>
-        /// <param name="session">The session.</param>
-        /// <param name="aggregateOptions">The aggregate options</param>
-        /// <returns>A queryable source of documents.</returns>
-        public static IMongoQueryable<TDocument> AsQueryable<TDocument>(this IMongoCollection<TDocument> collection, IClientSessionHandle session, AggregateOptions aggregateOptions = null)
-        {
-            Ensure.IsNotNull(collection, nameof(collection));
-            Ensure.IsNotNull(session, nameof(session));
-
-            return AsQueryableHelper(collection, session, aggregateOptions);
+            
+            aggregateOptions = aggregateOptions ?? new AggregateOptions();
+            var provider = new MongoQueryProviderImpl<TDocument>(collection, aggregateOptions);
+            return new MongoQueryableImpl<TDocument, TDocument>(provider);
         }
 
         /// <summary>
@@ -102,7 +87,6 @@ namespace MongoDB.Driver
         /// <returns>
         /// The number of documents in the collection.
         /// </returns>
-        [Obsolete("Use CountDocuments or EstimatedDocumentCount instead.")]
         public static long Count<TDocument>(this IMongoCollection<TDocument> collection, Expression<Func<TDocument, bool>> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             Ensure.IsNotNull(collection, nameof(collection));
@@ -123,7 +107,6 @@ namespace MongoDB.Driver
         /// <returns>
         /// The number of documents in the collection.
         /// </returns>
-        [Obsolete("Use CountDocuments or EstimatedDocumentCount instead.")]
         public static long Count<TDocument>(this IMongoCollection<TDocument> collection, IClientSessionHandle session, Expression<Func<TDocument, bool>> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             Ensure.IsNotNull(collection, nameof(collection));
@@ -144,7 +127,6 @@ namespace MongoDB.Driver
         /// <returns>
         /// The number of documents in the collection.
         /// </returns>
-        [Obsolete("Use CountDocumentsAsync or EstimatedDocumentCountAsync instead.")]
         public static Task<long> CountAsync<TDocument>(this IMongoCollection<TDocument> collection, Expression<Func<TDocument, bool>> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             Ensure.IsNotNull(collection, nameof(collection));
@@ -165,7 +147,6 @@ namespace MongoDB.Driver
         /// <returns>
         /// The number of documents in the collection.
         /// </returns>
-        [Obsolete("Use CountDocumentsAsync or EstimatedDocumentCountAsync instead.")]
         public static Task<long> CountAsync<TDocument>(this IMongoCollection<TDocument> collection, IClientSessionHandle session, Expression<Func<TDocument, bool>> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             Ensure.IsNotNull(collection, nameof(collection));
@@ -173,90 +154,6 @@ namespace MongoDB.Driver
             Ensure.IsNotNull(filter, nameof(filter));
 
             return collection.CountAsync(session, new ExpressionFilterDefinition<TDocument>(filter), options, cancellationToken);
-        }
-
-        /// <summary>
-        /// Counts the number of documents in the collection.
-        /// For a fast estimate of the total documents in a collection see <see cref="IMongoCollection{TDocument}.EstimatedDocumentCount"/>.
-        /// </summary>
-        /// <typeparam name="TDocument">The type of the document.</typeparam>
-        /// <param name="collection">The collection.</param>
-        /// <param name="filter">The filter.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>
-        /// The number of documents in the collection.
-        /// </returns>
-        public static long CountDocuments<TDocument>(this IMongoCollection<TDocument> collection, Expression<Func<TDocument, bool>> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            Ensure.IsNotNull(collection, nameof(collection));
-            Ensure.IsNotNull(filter, nameof(filter));
-
-            return collection.CountDocuments(new ExpressionFilterDefinition<TDocument>(filter), options, cancellationToken);
-        }
-
-        /// <summary>
-        /// Counts the number of documents in the collection.
-        /// For a fast estimate of the total documents in a collection see <see cref="IMongoCollection{TDocument}.EstimatedDocumentCount"/>.
-        /// </summary>
-        /// <typeparam name="TDocument">The type of the document.</typeparam>
-        /// <param name="session">The session.</param>
-        /// <param name="collection">The collection.</param>
-        /// <param name="filter">The filter.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>
-        /// The number of documents in the collection.
-        /// </returns>
-        public static long CountDocuments<TDocument>(this IMongoCollection<TDocument> collection, IClientSessionHandle session, Expression<Func<TDocument, bool>> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            Ensure.IsNotNull(collection, nameof(collection));
-            Ensure.IsNotNull(session, nameof(session));
-            Ensure.IsNotNull(filter, nameof(filter));
-
-            return collection.CountDocuments(session, new ExpressionFilterDefinition<TDocument>(filter), options, cancellationToken);
-        }
-
-        /// <summary>
-        /// Counts the number of documents in the collection.
-        /// For a fast estimate of the total documents in a collection see <see cref="IMongoCollection{TDocument}.EstimatedDocumentCountAsync"/>.
-        /// </summary>
-        /// <typeparam name="TDocument">The type of the document.</typeparam>
-        /// <param name="collection">The collection.</param>
-        /// <param name="filter">The filter.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>
-        /// The number of documents in the collection.
-        /// </returns>
-        public static Task<long> CountDocumentsAsync<TDocument>(this IMongoCollection<TDocument> collection, Expression<Func<TDocument, bool>> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            Ensure.IsNotNull(collection, nameof(collection));
-            Ensure.IsNotNull(filter, nameof(filter));
-
-            return collection.CountDocumentsAsync(new ExpressionFilterDefinition<TDocument>(filter), options, cancellationToken);
-        }
-
-        /// <summary>
-        /// Counts the number of documents in the collection.
-        /// For a fast estimate of the total documents in a collection see <see cref="IMongoCollection{TDocument}.EstimatedDocumentCountAsync"/>.
-        /// </summary>
-        /// <typeparam name="TDocument">The type of the document.</typeparam>
-        /// <param name="collection">The collection.</param>
-        /// <param name="session">The session.</param>
-        /// <param name="filter">The filter.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>
-        /// The number of documents in the collection.
-        /// </returns>
-        public static Task<long> CountDocumentsAsync<TDocument>(this IMongoCollection<TDocument> collection, IClientSessionHandle session, Expression<Func<TDocument, bool>> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            Ensure.IsNotNull(collection, nameof(collection));
-            Ensure.IsNotNull(session, nameof(session));
-            Ensure.IsNotNull(filter, nameof(filter));
-
-            return collection.CountDocumentsAsync(session, new ExpressionFilterDefinition<TDocument>(filter), options, cancellationToken);
         }
 
         /// <summary>
@@ -852,26 +749,16 @@ namespace MongoDB.Driver
             {
                 genericOptions = new FindOptions<TDocument>
                 {
-                    AllowDiskUse = options.AllowDiskUse,
                     AllowPartialResults = options.AllowPartialResults,
                     BatchSize = options.BatchSize,
                     Collation = options.Collation,
                     Comment = options.Comment,
                     CursorType = options.CursorType,
-                    Hint = options.Hint,
-                    Max = options.Max,
                     MaxAwaitTime = options.MaxAwaitTime,
                     MaxTime = options.MaxTime,
-                    Min = options.Min,
-#pragma warning disable 618
                     Modifiers = options.Modifiers,
-#pragma warning restore 618
                     NoCursorTimeout = options.NoCursorTimeout,
-#pragma warning disable 618
-                    OplogReplay = options.OplogReplay,
-#pragma warning restore 618
-                    ReturnKey = options.ReturnKey,
-                    ShowRecordId = options.ShowRecordId,
+                    OplogReplay = options.OplogReplay
                 };
             }
 
@@ -1884,35 +1771,12 @@ namespace MongoDB.Driver
         /// <returns>
         /// The result of the replacement.
         /// </returns>
-        public static ReplaceOneResult ReplaceOne<TDocument>(this IMongoCollection<TDocument> collection, Expression<Func<TDocument, bool>> filter, TDocument replacement, ReplaceOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
+        public static ReplaceOneResult ReplaceOne<TDocument>(this IMongoCollection<TDocument> collection, Expression<Func<TDocument, bool>> filter, TDocument replacement, UpdateOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             Ensure.IsNotNull(collection, nameof(collection));
             Ensure.IsNotNull(filter, nameof(filter));
 
             return collection.ReplaceOne(new ExpressionFilterDefinition<TDocument>(filter), replacement, options, cancellationToken);
-        }
-
-        /// <summary>
-        /// Replaces a single document.
-        /// </summary>
-        /// <typeparam name="TDocument">The type of the document.</typeparam>
-        /// <param name="collection">The collection.</param>
-        /// <param name="filter">The filter.</param>
-        /// <param name="replacement">The replacement.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>
-        /// The result of the replacement.
-        /// </returns>
-        [Obsolete("Use the overload that takes a ReplaceOptions instead of an UpdateOptions.")]
-        public static ReplaceOneResult ReplaceOne<TDocument>(this IMongoCollection<TDocument> collection, Expression<Func<TDocument, bool>> filter, TDocument replacement, UpdateOptions options, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            Ensure.IsNotNull(collection, nameof(collection));
-            Ensure.IsNotNull(filter, nameof(filter));
-
-#pragma warning disable 618
-            return collection.ReplaceOne(new ExpressionFilterDefinition<TDocument>(filter), replacement, options, cancellationToken);
-#pragma warning restore 618
         }
 
         /// <summary>
@@ -1928,7 +1792,7 @@ namespace MongoDB.Driver
         /// <returns>
         /// The result of the replacement.
         /// </returns>
-        public static ReplaceOneResult ReplaceOne<TDocument>(this IMongoCollection<TDocument> collection, IClientSessionHandle session, Expression<Func<TDocument, bool>> filter, TDocument replacement, ReplaceOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
+        public static ReplaceOneResult ReplaceOne<TDocument>(this IMongoCollection<TDocument> collection, IClientSessionHandle session, Expression<Func<TDocument, bool>> filter, TDocument replacement, UpdateOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             Ensure.IsNotNull(collection, nameof(collection));
             Ensure.IsNotNull(session, nameof(session));
@@ -1942,7 +1806,6 @@ namespace MongoDB.Driver
         /// </summary>
         /// <typeparam name="TDocument">The type of the document.</typeparam>
         /// <param name="collection">The collection.</param>
-        /// <param name="session">The session.</param>
         /// <param name="filter">The filter.</param>
         /// <param name="replacement">The replacement.</param>
         /// <param name="options">The options.</param>
@@ -1950,31 +1813,7 @@ namespace MongoDB.Driver
         /// <returns>
         /// The result of the replacement.
         /// </returns>
-        [Obsolete("Use the overload that takes a ReplaceOptions instead of an UpdateOptions.")]
-        public static ReplaceOneResult ReplaceOne<TDocument>(this IMongoCollection<TDocument> collection, IClientSessionHandle session, Expression<Func<TDocument, bool>> filter, TDocument replacement, UpdateOptions options, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            Ensure.IsNotNull(collection, nameof(collection));
-            Ensure.IsNotNull(session, nameof(session));
-            Ensure.IsNotNull(filter, nameof(filter));
-
-#pragma warning disable 618
-            return collection.ReplaceOne(session, new ExpressionFilterDefinition<TDocument>(filter), replacement, options, cancellationToken);
-#pragma warning restore 618
-        }
-
-        /// <summary>
-        /// Replaces a single document.
-        /// </summary>
-        /// <typeparam name="TDocument">The type of the document.</typeparam>
-        /// <param name="collection">The collection.</param>
-        /// <param name="filter">The filter.</param>
-        /// <param name="replacement">The replacement.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>
-        /// The result of the replacement.
-        /// </returns>
-        public static Task<ReplaceOneResult> ReplaceOneAsync<TDocument>(this IMongoCollection<TDocument> collection, Expression<Func<TDocument, bool>> filter, TDocument replacement, ReplaceOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
+        public static Task<ReplaceOneResult> ReplaceOneAsync<TDocument>(this IMongoCollection<TDocument> collection, Expression<Func<TDocument, bool>> filter, TDocument replacement, UpdateOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             Ensure.IsNotNull(collection, nameof(collection));
             Ensure.IsNotNull(filter, nameof(filter));
@@ -1987,29 +1826,6 @@ namespace MongoDB.Driver
         /// </summary>
         /// <typeparam name="TDocument">The type of the document.</typeparam>
         /// <param name="collection">The collection.</param>
-        /// <param name="filter">The filter.</param>
-        /// <param name="replacement">The replacement.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>
-        /// The result of the replacement.
-        /// </returns>
-        [Obsolete("Use the overload that takes a ReplaceOptions instead of an UpdateOptions.")]
-        public static Task<ReplaceOneResult> ReplaceOneAsync<TDocument>(this IMongoCollection<TDocument> collection, Expression<Func<TDocument, bool>> filter, TDocument replacement, UpdateOptions options, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            Ensure.IsNotNull(collection, nameof(collection));
-            Ensure.IsNotNull(filter, nameof(filter));
-
-#pragma warning disable 618
-            return collection.ReplaceOneAsync(new ExpressionFilterDefinition<TDocument>(filter), replacement, options, cancellationToken);
-#pragma warning restore 618
-        }
-
-        /// <summary>
-        /// Replaces a single document.
-        /// </summary>
-        /// <typeparam name="TDocument">The type of the document.</typeparam>
-        /// <param name="collection">The collection.</param>
         /// <param name="session">The session.</param>
         /// <param name="filter">The filter.</param>
         /// <param name="replacement">The replacement.</param>
@@ -2018,38 +1834,13 @@ namespace MongoDB.Driver
         /// <returns>
         /// The result of the replacement.
         /// </returns>
-        public static Task<ReplaceOneResult> ReplaceOneAsync<TDocument>(this IMongoCollection<TDocument> collection, IClientSessionHandle session, Expression<Func<TDocument, bool>> filter, TDocument replacement, ReplaceOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
+        public static Task<ReplaceOneResult> ReplaceOneAsync<TDocument>(this IMongoCollection<TDocument> collection, IClientSessionHandle session, Expression<Func<TDocument, bool>> filter, TDocument replacement, UpdateOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             Ensure.IsNotNull(collection, nameof(collection));
             Ensure.IsNotNull(session, nameof(session));
             Ensure.IsNotNull(filter, nameof(filter));
 
             return collection.ReplaceOneAsync(session, new ExpressionFilterDefinition<TDocument>(filter), replacement, options, cancellationToken);
-        }
-
-        /// <summary>
-        /// Replaces a single document.
-        /// </summary>
-        /// <typeparam name="TDocument">The type of the document.</typeparam>
-        /// <param name="collection">The collection.</param>
-        /// <param name="session">The session.</param>
-        /// <param name="filter">The filter.</param>
-        /// <param name="replacement">The replacement.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>
-        /// The result of the replacement.
-        /// </returns>
-        [Obsolete("Use the overload that takes a ReplaceOptions instead of an UpdateOptions.")]
-        public static Task<ReplaceOneResult> ReplaceOneAsync<TDocument>(this IMongoCollection<TDocument> collection, IClientSessionHandle session, Expression<Func<TDocument, bool>> filter, TDocument replacement, UpdateOptions options, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            Ensure.IsNotNull(collection, nameof(collection));
-            Ensure.IsNotNull(session, nameof(session));
-            Ensure.IsNotNull(filter, nameof(filter));
-
-#pragma warning disable 618
-            return collection.ReplaceOneAsync(session, new ExpressionFilterDefinition<TDocument>(filter), replacement, options, cancellationToken);
-#pragma warning restore 618
         }
 
         /// <summary>
@@ -2248,7 +2039,7 @@ namespace MongoDB.Driver
         /// <returns>
         /// A change stream.
         /// </returns>
-        public static IChangeStreamCursor<ChangeStreamDocument<TDocument>> Watch<TDocument>(
+        public static IAsyncCursor<ChangeStreamDocument<TDocument>> Watch<TDocument>(
             this IMongoCollection<TDocument> collection,
             ChangeStreamOptions options = null,
             CancellationToken cancellationToken = default(CancellationToken))
@@ -2269,7 +2060,7 @@ namespace MongoDB.Driver
         /// <returns>
         /// A change stream.
         /// </returns>
-        public static IChangeStreamCursor<ChangeStreamDocument<TDocument>> Watch<TDocument>(
+        public static IAsyncCursor<ChangeStreamDocument<TDocument>> Watch<TDocument>(
             this IMongoCollection<TDocument> collection,
             IClientSessionHandle session,
             ChangeStreamOptions options = null,
@@ -2291,7 +2082,7 @@ namespace MongoDB.Driver
         /// <returns>
         /// A change stream.
         /// </returns>
-        public static Task<IChangeStreamCursor<ChangeStreamDocument<TDocument>>> WatchAsync<TDocument>(
+        public static Task<IAsyncCursor<ChangeStreamDocument<TDocument>>> WatchAsync<TDocument>(
             this IMongoCollection<TDocument> collection,
             ChangeStreamOptions options = null,
             CancellationToken cancellationToken = default(CancellationToken))
@@ -2312,7 +2103,7 @@ namespace MongoDB.Driver
         /// <returns>
         /// A change stream.
         /// </returns>
-        public static Task<IChangeStreamCursor<ChangeStreamDocument<TDocument>>> WatchAsync<TDocument>(
+        public static Task<IAsyncCursor<ChangeStreamDocument<TDocument>>> WatchAsync<TDocument>(
             this IMongoCollection<TDocument> collection,
             IClientSessionHandle session,
             ChangeStreamOptions options = null,
@@ -2322,14 +2113,6 @@ namespace MongoDB.Driver
             Ensure.IsNotNull(session, nameof(session));
             var emptyPipeline = new EmptyPipelineDefinition<ChangeStreamDocument<TDocument>>();
             return collection.WatchAsync(session, emptyPipeline, options, cancellationToken);
-        }
-
-        // private static methods
-        private static IMongoQueryable<TDocument> AsQueryableHelper<TDocument>(IMongoCollection<TDocument> collection, IClientSessionHandle session, AggregateOptions aggregateOptions)
-        {
-            aggregateOptions = aggregateOptions ?? new AggregateOptions();
-            var provider = new MongoQueryProviderImpl<TDocument>(collection, session, aggregateOptions);
-            return new MongoQueryableImpl<TDocument, TDocument>(provider);
         }
     }
 }

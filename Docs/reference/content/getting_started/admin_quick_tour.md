@@ -176,12 +176,12 @@ collection.InsertMany(new []
 
 // find them using the text index
 var filter = Builders<BsonDocument>.Filter.Text("textual content -irrelevant");
-var matchCount = collection.CountDocuments(filter);
+var matchCount = collection.Count(filter);
 Console.WriteLine("Text search matches: {0}", matchCount);
 
 // find them using the text index with the $language operator
 var englishFilter = Builders<BsonDocument>.Filter.Text("textual content -irrelevant", "english");
-var matchCount = collection.CountDocuments(filter);
+var matchCount = collection.Count(filter);
 Console.WriteLine("Text search matches (english): {0}", matchCount);
 
 // find the highest scoring match
@@ -200,12 +200,12 @@ await collection.InsertManyAsync(new []
 
 // find them using the text index
 var filter = Builders<BsonDocument>.Filter.Text("textual content -irrelevant");
-var matchCount = await collection.CountDocumentsAsync(filter);
+var matchCount = await collection.CountAsync(filter);
 Console.WriteLine("Text search matches: {0}", matchCount);
 
 // find them using the text index with the $language operator
 var englishFilter = Builders<BsonDocument>.Filter.Text("textual content -irrelevant", "english");
-var matchCount = await collection.CountDocumentsAsync(filter);
+var matchCount = await collection.CountAsync(filter);
 Console.WriteLine("Text search matches (english): {0}", matchCount);
 
 // find the highest scoring match
@@ -233,8 +233,8 @@ Not all commands have a specific helper, however you can run any command by usin
 var buildInfoCommand = new BsonDocument("buildinfo", 1);
 ```
 ```csharp
-var result = database.RunCommand<BsonDocument>(buildInfoCommand);
+var result = database.RunCommand(buildInfoCommand);
 ```
 ```csharp
-var result = await database.RunCommandAsync<BsonDocument>(buildInfoCommand);
+var result = await database.RunCommandAsync(buildInfoCommand);
 ```

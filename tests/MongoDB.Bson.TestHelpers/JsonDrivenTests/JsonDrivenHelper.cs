@@ -31,18 +31,5 @@ namespace MongoDB.Bson.TestHelpers.JsonDrivenTests
                 }
             }
         }
-
-        public static void EnsureFieldEquals(BsonDocument document, string name, BsonValue value)
-        {
-            if (!document.Contains(name))
-            {
-                throw new FormatException($"Missing field: \"{name}\".");
-            }
-
-            if (!document[name].Equals(value))
-            {
-                throw new FormatException($"Field \"{name}\" has an invalid value: {value.ToJson()}.");
-            }
-        }
     }
 }

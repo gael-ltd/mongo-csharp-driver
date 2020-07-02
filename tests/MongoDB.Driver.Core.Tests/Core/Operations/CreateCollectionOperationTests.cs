@@ -38,10 +38,8 @@ namespace MongoDB.Driver.Core.Operations
         {
             var subject = new CreateCollectionOperation(_collectionNamespace, _messageEncoderSettings);
 
-#pragma warning disable 618
             subject.AutoIndexId = value;
             var result = subject.AutoIndexId;
-#pragma warning restore
 
             result.Should().Be(value);
         }
@@ -83,9 +81,7 @@ namespace MongoDB.Driver.Core.Operations
             subject.CollectionNamespace.Should().BeSameAs(_collectionNamespace);
             subject.MessageEncoderSettings.Should().BeSameAs(_messageEncoderSettings);
 
-#pragma warning disable 618
             subject.AutoIndexId.Should().NotHaveValue();
-#pragma warning restore
             subject.Capped.Should().NotHaveValue();
             subject.Collation.Should().BeNull();
             subject.IndexOptionDefaults.Should().BeNull();
@@ -131,12 +127,10 @@ namespace MongoDB.Driver.Core.Operations
             [Values(null, false, true)]
             bool? autoIndexId)
         {
-#pragma warning disable 618
             var subject = new CreateCollectionOperation(_collectionNamespace, _messageEncoderSettings)
             {
                 AutoIndexId = autoIndexId
             };
-#pragma warning restore
             var session = OperationTestHelper.CreateSession();
             var connectionDescription = OperationTestHelper.CreateConnectionDescription();
 
@@ -478,12 +472,10 @@ namespace MongoDB.Driver.Core.Operations
         {
             RequireServer.Check().VersionLessThan("3.7.0");
             DropCollection();
-#pragma warning disable 618
             var subject = new CreateCollectionOperation(_collectionNamespace, _messageEncoderSettings)
             {
                 AutoIndexId = autoIndexId
             };
-#pragma warning restore
 
             BsonDocument info;
             using (var binding = CreateReadWriteBinding())
@@ -555,12 +547,11 @@ namespace MongoDB.Driver.Core.Operations
             [Values(false, true)]
             bool async)
         {
-            RequireServer.Check().Supports(Feature.IndexOptionsDefaults).ClusterTypes(ClusterType.Standalone, ClusterType.ReplicaSet);
+            RequireServer.Check().Supports(Feature.IndexOptionsDefaults);
             DropCollection();
-            var storageEngine = CoreTestConfiguration.GetStorageEngine();
             var indexOptionDefaults = new BsonDocument
             {
-                {  "storageEngine", new BsonDocument(storageEngine, new BsonDocument()) }
+                {  "storageEngine", new BsonDocument("mmapv1", new BsonDocument()) }
             };
             var subject = new CreateCollectionOperation(_collectionNamespace, _messageEncoderSettings)
             {

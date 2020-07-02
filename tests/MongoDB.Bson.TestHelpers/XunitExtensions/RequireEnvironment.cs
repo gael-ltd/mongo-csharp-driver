@@ -14,7 +14,6 @@
 */
 
 using System;
-using Xunit;
 
 namespace MongoDB.Bson.TestHelpers.XunitExtensions
 {
@@ -34,7 +33,7 @@ namespace MongoDB.Bson.TestHelpers.XunitExtensions
             {
                 return this;
             }
-            throw new SkipException($"Test skipped because environment variable '{name}' {(actualIsDefined ? "is" : "is not")} defined.");
+            throw new SkipTestException($"Test skipped because environment variable '{name}' {(actualIsDefined ? "is" : "is not")} defined.");
         }
     }
 }

@@ -13,7 +13,6 @@
 * limitations under the License.
 */
 
-using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,33 +26,20 @@ namespace MongoDB.Driver.Tests.JsonDrivenTests
     {
         // private fields
         private BsonDocument _command;
-        private ReadConcern _readConcern = new ReadConcern();
         private ReadPreference _readPreference;
         private BsonDocument _result;
-        private IClientSessionHandle _session;
 
         // public constructors
-        public JsonDrivenRunCommandTest(IMongoDatabase database, Dictionary<string, object> objectMap)
-            : base(database, objectMap)
+        public JsonDrivenRunCommandTest(IMongoClient client, IMongoDatabase database, Dictionary<string, IClientSessionHandle> sessionMap)
+            : base(client, database, sessionMap)
         {
         }
 
         // public methods
         public override void Arrange(BsonDocument document)
         {
-            var expectedNames = new[] { "name", "object", "command_name", "arguments", "result", "databaseOptions" };
-            JsonDrivenHelper.EnsureAllFieldsAreValid(document, expectedNames);
+            JsonDrivenHelper.EnsureAllFieldsAreValid(document, "name", "arguments", "result");
             base.Arrange(document);
-
-            if (document.Contains("command_name"))
-            {
-                var actualCommandName = _command.GetElement(0).Name;
-                var expectedCommandName = document["command_name"].AsString;
-                if (actualCommandName != expectedCommandName)
-                {
-                    throw new FormatException($"Actual command name \"{actualCommandName}\" does not match expected command name \"{expectedCommandName}\".");
-                }
-            }
         }
 
         // protected methods
@@ -65,34 +51,22 @@ namespace MongoDB.Driver.Tests.JsonDrivenTests
 
         protected override void CallMethod(CancellationToken cancellationToken)
         {
-            if (_session == null)
-            {
-                _result = _database
-                    .WithReadConcern(_readConcern)
-                    .RunCommand<BsonDocument>(_command, _readPreference, cancellationToken);
-            }
-            else
-            {
-                _result = _database
-                    .WithReadConcern(_readConcern)
-                    .RunCommand<BsonDocument>(_session, _command, _readPreference, cancellationToken);
-            }
+            _result = _database.RunCommand<BsonDocument>(_command, _readPreference, cancellationToken);
+        }
+
+        protected override void CallMethod(IClientSessionHandle session, CancellationToken cancellationToken)
+        {
+            _result = _database.RunCommand<BsonDocument>(session, _command, _readPreference, cancellationToken);
         }
 
         protected override async Task CallMethodAsync(CancellationToken cancellationToken)
         {
-            if (_session == null)
-            {
-                _result = await _database
-                    .WithReadConcern(_readConcern)
-                    .RunCommandAsync<BsonDocument>(_command, _readPreference, cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                _result = await _database
-                    .WithReadConcern(_readConcern)
-                    .RunCommandAsync<BsonDocument>(_session, _command, _readPreference, cancellationToken).ConfigureAwait(false);
-            }
+            _result = await _database.RunCommandAsync<BsonDocument>(_command, _readPreference, cancellationToken);
+        }
+
+        protected override async Task CallMethodAsync(IClientSessionHandle session, CancellationToken cancellationToken)
+        {
+            _result = await _database.RunCommandAsync<BsonDocument>(session, _command, _readPreference, cancellationToken);
         }
 
         protected override void SetArgument(string name, BsonValue value)
@@ -103,19 +77,8 @@ namespace MongoDB.Driver.Tests.JsonDrivenTests
                     _command = value.AsBsonDocument;
                     return;
 
-                case "databaseOptions":
-                    if (value.AsBsonDocument.TryGetValue("readConcern", out var readConcernValue))
-                    {
-                        _readConcern = ReadConcern.FromBsonDocument(readConcernValue.AsBsonDocument);
-                    }
-                    return;
-
                 case "readPreference":
                     _readPreference = ReadPreference.FromBsonDocument(value.AsBsonDocument);
-                    return;
-
-                case "session":
-                    _session = (IClientSessionHandle)_objectMap[value.AsString];
                     return;
             }
 

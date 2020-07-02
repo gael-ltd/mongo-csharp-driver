@@ -26,7 +26,7 @@ namespace MongoDB.Driver
     /// <summary>
     /// Represents an immutable URL style connection string. See also MongoUrlBuilder.
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     public class MongoUrl : IEquatable<MongoUrl>
@@ -36,12 +36,10 @@ namespace MongoDB.Driver
         private static Dictionary<string, MongoUrl> __cache = new Dictionary<string, MongoUrl>();
 
         // private fields
-        private readonly bool _allowInsecureTls;
         private readonly string _applicationName;
         private readonly string _authenticationMechanism;
         private readonly IEnumerable<KeyValuePair<string, string>> _authenticationMechanismProperties;
         private readonly string _authenticationSource;
-        private readonly IReadOnlyList<CompressorConfiguration> _compressors;
         private readonly ConnectionMode _connectionMode;
         private readonly TimeSpan _connectTimeout;
         private readonly string _databaseName;
@@ -50,7 +48,6 @@ namespace MongoDB.Driver
         private readonly TimeSpan _heartbeatInterval;
         private readonly TimeSpan _heartbeatTimeout;
         private readonly bool _ipv6;
-        private readonly bool _isResolved;
         private readonly bool? _journal;
         private readonly TimeSpan _maxConnectionIdleTime;
         private readonly TimeSpan _maxConnectionLifeTime;
@@ -60,16 +57,15 @@ namespace MongoDB.Driver
         private readonly ReadConcernLevel? _readConcernLevel;
         private readonly ReadPreference _readPreference;
         private readonly string _replicaSetName;
-        private readonly bool? _retryReads;
         private readonly bool? _retryWrites;
         private readonly TimeSpan _localThreshold;
         private readonly ConnectionStringScheme _scheme;
         private readonly IEnumerable<MongoServerAddress> _servers;
         private readonly TimeSpan _serverSelectionTimeout;
         private readonly TimeSpan _socketTimeout;
-        private readonly bool _tlsDisableCertificateRevocationCheck;
         private readonly string _username;
-        private readonly bool _useTls;
+        private readonly bool _useSsl;
+        private readonly bool _verifySslCertificate;
         private readonly WriteConcern.WValue _w;
         private readonly double _waitQueueMultiple;
         private readonly int _waitQueueSize;
@@ -88,26 +84,18 @@ namespace MongoDB.Driver
             _originalUrl = url;
 
             var builder = new MongoUrlBuilder(url); // parses url
-            _allowInsecureTls = builder.AllowInsecureTls;
             _applicationName = builder.ApplicationName;
             _authenticationMechanism = builder.AuthenticationMechanism;
             _authenticationMechanismProperties = builder.AuthenticationMechanismProperties;
             _authenticationSource = builder.AuthenticationSource;
-            _compressors = builder.Compressors;
             _connectionMode = builder.ConnectionMode;
             _connectTimeout = builder.ConnectTimeout;
             _databaseName = builder.DatabaseName;
             _fsync = builder.FSync;
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                _guidRepresentation = builder.GuidRepresentation;
-            }
-#pragma warning restore 618
+            _guidRepresentation = builder.GuidRepresentation;
             _heartbeatInterval = builder.HeartbeatInterval;
             _heartbeatTimeout = builder.HeartbeatTimeout;
             _ipv6 = builder.IPv6;
-            _isResolved = builder.Scheme != ConnectionStringScheme.MongoDBPlusSrv;
             _journal = builder.Journal;
             _localThreshold = builder.LocalThreshold;
             _maxConnectionIdleTime = builder.MaxConnectionIdleTime;
@@ -118,42 +106,23 @@ namespace MongoDB.Driver
             _readConcernLevel = builder.ReadConcernLevel;
             _readPreference = builder.ReadPreference;
             _replicaSetName = builder.ReplicaSetName;
-            _retryReads = builder.RetryReads;
             _retryWrites = builder.RetryWrites;
             _scheme = builder.Scheme;
             _servers = builder.Servers;
             _serverSelectionTimeout = builder.ServerSelectionTimeout;
             _socketTimeout = builder.SocketTimeout;
-            _tlsDisableCertificateRevocationCheck = builder.TlsDisableCertificateRevocationCheck;
             _username = builder.Username;
-            _useTls = builder.UseTls;
+            _useSsl = builder.UseSsl;
+            _verifySslCertificate = builder.VerifySslCertificate;
             _w = builder.W;
-#pragma warning disable 618
             _waitQueueMultiple = builder.WaitQueueMultiple;
             _waitQueueSize = builder.WaitQueueSize;
-#pragma warning restore 618
             _waitQueueTimeout = builder.WaitQueueTimeout;
             _wTimeout = builder.WTimeout;
             _url = builder.ToString(); // keep canonical form
         }
 
-        internal MongoUrl(string url, bool isResolved)
-            : this(url)
-        {
-            if (!isResolved && _scheme != ConnectionStringScheme.MongoDBPlusSrv)
-            {
-                throw new ArgumentException("Only connection strings with scheme MongoDBPlusSrv can be unresolved.", nameof(isResolved));
-            }
-
-            _isResolved = isResolved;
-        }
-
         // public properties
-        /// <summary>
-        /// Gets whether to relax TLS constraints as much as possible.
-        /// </summary>
-        public bool AllowInsecureTls => _allowInsecureTls;
-
         /// <summary>
         /// Gets the application name.
         /// </summary>
@@ -187,17 +156,8 @@ namespace MongoDB.Driver
         }
 
         /// <summary>
-        /// Gets the compressors.
-        /// </summary>
-        public IReadOnlyList<CompressorConfiguration> Compressors
-        {
-            get { return _compressors; }
-        }
-
-        /// <summary>
         /// Gets the actual wait queue size (either WaitQueueSize or WaitQueueMultiple x MaxConnectionPoolSize).
         /// </summary>
-        [Obsolete("This property will be removed in a later release.")]
         public int ComputedWaitQueueSize
         {
             get
@@ -248,17 +208,9 @@ namespace MongoDB.Driver
         /// <summary>
         /// Gets the representation to use for Guids.
         /// </summary>
-        [Obsolete("Configure serializers instead.")]
         public GuidRepresentation GuidRepresentation
         {
-            get
-            {
-                if (BsonDefaults.GuidRepresentationMode != GuidRepresentationMode.V2)
-                {
-                    throw new InvalidOperationException("MongoUrl.GuidRepresentation can only be used when BsonDefaults.GuidRepresentationMode is V2.");
-                }
-                return _guidRepresentation;
-            }
+            get { return _guidRepresentation; }
         }
 
         /// <summary>
@@ -271,8 +223,9 @@ namespace MongoDB.Driver
                 return
                     _username != null ||
                     _password != null ||
-                    _authenticationMechanism != null;
-            }
+                    _authenticationMechanism != null ||
+                    _authenticationSource != null;
+            }              
         }
 
         /// <summary>
@@ -297,14 +250,6 @@ namespace MongoDB.Driver
         public bool IPv6
         {
             get { return _ipv6; }
-        }
-
-        /// <summary>
-        /// Gets a value indicating whether a connection string with scheme MongoDBPlusSrv has been resolved.
-        /// </summary>
-        public bool IsResolved
-        {
-            get { return _isResolved; }
         }
 
         /// <summary>
@@ -388,14 +333,6 @@ namespace MongoDB.Driver
         }
 
         /// <summary>
-        /// Gets whether reads will be retried.
-        /// </summary>
-        public bool? RetryReads
-        {
-            get { return _retryReads; }
-        }
-
-        /// <summary>
         /// Gets whether writes will be retried.
         /// </summary>
         public bool? RetryWrites
@@ -404,7 +341,7 @@ namespace MongoDB.Driver
         }
 
         /// <summary>
-        /// Gets the connection string scheme.
+        /// Gets the scheme.
         /// </summary>
         public ConnectionStringScheme Scheme
         {
@@ -444,11 +381,6 @@ namespace MongoDB.Driver
         }
 
         /// <summary>
-        /// Gets whether or not to disable checking certificate revocation status during the TLS handshake.
-        /// </summary>
-        public bool TlsDisableCertificateRevocationCheck => _tlsDisableCertificateRevocationCheck;
-
-        /// <summary>
         /// Gets the URL (in canonical form).
         /// </summary>
         public string Url
@@ -467,19 +399,18 @@ namespace MongoDB.Driver
         /// <summary>
         /// Gets a value indicating whether to use SSL.
         /// </summary>
-        [Obsolete("Use UseTls instead.")]
-        public bool UseSsl => _useTls;
-
-        /// <summary>
-        /// Gets a value indicating whether to use TLS.
-        /// </summary>
-        public bool UseTls => _useTls;
+        public bool UseSsl
+        {
+            get { return _useSsl; }
+        }
 
         /// <summary>
         /// Gets a value indicating whether to verify an SSL certificate.
         /// </summary>
-        [Obsolete("Use AllowInsecureTls instead.")]
-        public bool VerifySslCertificate => !_allowInsecureTls;
+        public bool VerifySslCertificate
+        {
+            get { return _verifySslCertificate; }
+        }
 
         /// <summary>
         /// Gets the W component of the write concern.
@@ -492,7 +423,6 @@ namespace MongoDB.Driver
         /// <summary>
         /// Gets the wait queue multiple (the actual wait queue size will be WaitQueueMultiple x MaxConnectionPoolSize).
         /// </summary>
-        [Obsolete("This property will be removed in a later release.")]
         public double WaitQueueMultiple
         {
             get { return _waitQueueMultiple; }
@@ -501,7 +431,6 @@ namespace MongoDB.Driver
         /// <summary>
         /// Gets the wait queue size.
         /// </summary>
-        [Obsolete("This property will be removed in a later release.")]
         public int WaitQueueSize
         {
             get { return _waitQueueSize; }
@@ -620,8 +549,7 @@ namespace MongoDB.Driver
             {
                 return MongoCredential.FromComponents(
                     _authenticationMechanism,
-                    _authenticationSource,
-                    _databaseName,
+                    _authenticationSource ?? _databaseName,
                     _username,
                     _password);
             }
@@ -659,32 +587,19 @@ namespace MongoDB.Driver
         /// Resolves a connection string. If the connection string indicates more information is available
         /// in the DNS system, it will acquire that information as well.
         /// </summary>
-        /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns>A resolved MongoURL.</returns>
-        public MongoUrl Resolve(CancellationToken cancellationToken = default(CancellationToken))
+        public MongoUrl Resolve()
         {
-            return Resolve(resolveHosts: true, cancellationToken);
-        }
-
-        /// <summary>
-        /// Resolves a connection string. If the connection string indicates more information is available
-        /// in the DNS system, it will acquire that information as well.
-        /// </summary>
-        /// <param name="resolveHosts">Whether to resolve hosts.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>A resolved MongoURL.</returns>
-        public MongoUrl Resolve(bool resolveHosts, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            if (_isResolved)
+            if (_scheme == ConnectionStringScheme.MongoDB)
             {
                 return this;
             }
 
             var connectionString = new ConnectionString(_originalUrl);
 
-            var resolved = connectionString.Resolve(resolveHosts, cancellationToken);
+            var resolved = connectionString.Resolve();
 
-            return new MongoUrl(resolved.ToString(), isResolved: true);
+            return new MongoUrl(resolved.ToString());
         }
 
         /// <summary>
@@ -693,30 +608,18 @@ namespace MongoDB.Driver
         /// </summary>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns>A resolved MongoURL.</returns>
-        public Task<MongoUrl> ResolveAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public async Task<MongoUrl> ResolveAsync(CancellationToken cancellationToken = default(CancellationToken))
         {
-            return ResolveAsync(resolveHosts: true);
-        }
-
-        /// <summary>
-        /// Resolves a connection string. If the connection string indicates more information is available
-        /// in the DNS system, it will acquire that information as well.
-        /// </summary>
-        /// <param name="resolveHosts">Whether to resolve hosts.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>A resolved MongoURL.</returns>
-        public async Task<MongoUrl> ResolveAsync(bool resolveHosts, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            if (_isResolved)
+            if (_scheme == ConnectionStringScheme.MongoDB)
             {
                 return this;
             }
 
             var connectionString = new ConnectionString(_originalUrl);
 
-            var resolved = await connectionString.ResolveAsync(resolveHosts, cancellationToken).ConfigureAwait(false);
+            var resolved = await connectionString.ResolveAsync(cancellationToken).ConfigureAwait(false);
 
-            return new MongoUrl(resolved.ToString(), isResolved: true);
+            return new MongoUrl(resolved.ToString());
         }
 
         /// <summary>

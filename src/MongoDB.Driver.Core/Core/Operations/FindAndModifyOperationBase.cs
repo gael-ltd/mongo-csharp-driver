@@ -204,14 +204,18 @@ namespace MongoDB.Driver.Core.Operations
         {
             var binaryReaderSettings = new BsonBinaryReaderSettings
             {
-                Encoding = _messageEncoderSettings.GetOrDefault<UTF8Encoding>(MessageEncoderSettingsName.ReadEncoding, Utf8Encodings.Strict)
+                Encoding = _messageEncoderSettings.GetOrDefault<UTF8Encoding>(MessageEncoderSettingsName.ReadEncoding, Utf8Encodings.Strict),
+                GuidRepresentation = _messageEncoderSettings.GetOrDefault<GuidRepresentation>(MessageEncoderSettingsName.GuidRepresentation, GuidRepresentation.CSharpLegacy)
             };
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
+
+            BsonValue writeConcernError;
+            if (rawBsonDocument.TryGetValue("writeConcernError", out writeConcernError))
             {
-                binaryReaderSettings.GuidRepresentation = _messageEncoderSettings.GetOrDefault<GuidRepresentation>(MessageEncoderSettingsName.GuidRepresentation, GuidRepresentation.CSharpLegacy);
+                var message = writeConcernError["errmsg"].AsString;
+                var response = rawBsonDocument.Materialize(binaryReaderSettings);
+                var writeConcernResult = new WriteConcernResult(response);
+                throw new MongoWriteConcernException(connectionId, message, writeConcernResult);
             }
-#pragma warning restore 618
 
             using (var stream = new ByteBufferStream(rawBsonDocument.Slice, ownsBuffer: false))
             using (var reader = new BsonBinaryReader(stream, binaryReaderSettings))

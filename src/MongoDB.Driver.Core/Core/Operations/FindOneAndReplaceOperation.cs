@@ -14,6 +14,10 @@
 */
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Bson.IO;
 using MongoDB.Bson.Serialization;
@@ -35,7 +39,6 @@ namespace MongoDB.Driver.Core.Operations
         // fields
         private bool? _bypassDocumentValidation;
         private readonly BsonDocument _filter;
-        private BsonValue _hint;
         private bool _isUpsert;
         private TimeSpan? _maxTime;
         private BsonDocument _projection;
@@ -82,18 +85,6 @@ namespace MongoDB.Driver.Core.Operations
         public BsonDocument Filter
         {
             get { return _filter; }
-        }
-
-        /// <summary>
-        /// Gets or sets the hint.
-        /// </summary>
-        /// <value>
-        /// The hint.
-        /// </value>
-        public BsonValue Hint
-        {
-            get { return _hint; }
-            set { _hint = value; }
         }
 
         /// <summary>
@@ -172,13 +163,6 @@ namespace MongoDB.Driver.Core.Operations
         {
             var serverVersion = connectionDescription.ServerVersion;
             Feature.Collation.ThrowIfNotSupported(serverVersion, Collation);
-            if (Feature.HintForFindAndModifyFeature.DriverMustThrowIfNotSupported(serverVersion) || (WriteConcern != null && !WriteConcern.IsAcknowledged))
-            {
-                if (_hint != null)
-                {
-                    throw new NotSupportedException($"Server version {serverVersion} does not support hints.");
-                }
-            }
 
             var writeConcern = WriteConcernHelper.GetWriteConcernForCommand(session, WriteConcern, serverVersion, Feature.FindAndModifyWriteConcern);
             return new BsonDocument
@@ -194,7 +178,6 @@ namespace MongoDB.Driver.Core.Operations
                 { "writeConcern", writeConcern, writeConcern != null },
                 { "bypassDocumentValidation", () => _bypassDocumentValidation.Value, _bypassDocumentValidation.HasValue && Feature.BypassDocumentValidation.IsSupported(serverVersion) },
                 { "collation", () => Collation.ToBsonDocument(), Collation != null },
-                { "hint", () => _hint, _hint != null },
                 { "txnNumber", () => transactionNumber, transactionNumber.HasValue }
             };
         }

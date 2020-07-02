@@ -32,12 +32,10 @@ namespace MongoDB.Driver.Linq
     {
         private readonly IMongoCollection<TDocument> _collection;
         private readonly AggregateOptions _options;
-        private readonly IClientSessionHandle _session;
 
-        public MongoQueryProviderImpl(IMongoCollection<TDocument> collection, IClientSessionHandle session, AggregateOptions options)
+        public MongoQueryProviderImpl(IMongoCollection<TDocument> collection, AggregateOptions options)
         {
             _collection = Ensure.IsNotNull(collection, nameof(collection));
-            _session = session; // can be null
             _options = Ensure.IsNotNull(options, nameof(options));
         }
 
@@ -109,12 +107,12 @@ namespace MongoDB.Driver.Linq
 
         internal object ExecuteModel(QueryableExecutionModel model)
         {
-            return model.Execute(_collection, _session, _options);
+            return model.Execute(_collection, _options);
         }
 
-        internal Task ExecuteModelAsync(QueryableExecutionModel model, CancellationToken cancellationToken)
+        private Task ExecuteModelAsync(QueryableExecutionModel model, CancellationToken cancellationToken)
         {
-            return model.ExecuteAsync(_collection, _session, _options, cancellationToken);
+            return model.ExecuteAsync(_collection, _options, cancellationToken);
         }
 
         private Expression Prepare(Expression expression)

@@ -66,10 +66,7 @@ namespace MongoDB.Driver.Core.Operations
         private ReadCommandOperation<BsonDocument> CreateOperation()
         {
             var command = CreateCommand();
-            return new ReadCommandOperation<BsonDocument>(DatabaseNamespace.Admin, command, BsonDocumentSerializer.Instance, _messageEncoderSettings)
-            {
-                RetryRequested = false
-            };
+            return new ReadCommandOperation<BsonDocument>(DatabaseNamespace.Admin, command, BsonDocumentSerializer.Instance, _messageEncoderSettings);
         }
 
         /// <inheritdoc/>

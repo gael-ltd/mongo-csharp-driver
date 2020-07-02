@@ -30,10 +30,9 @@ namespace MongoDB.Driver.Core.Operations
         private IEnumerable<BsonDocument> _arrayFilters;
         private Collation _collation;
         private readonly BsonDocument _filter;
-        private BsonValue _hint;
         private bool _isMulti;
         private bool _isUpsert;
-        private readonly BsonValue _update;
+        private readonly BsonDocument _update;
         private UpdateType _updateType;
 
         // constructors
@@ -43,12 +42,16 @@ namespace MongoDB.Driver.Core.Operations
         /// <param name="updateType">The update type.</param>
         /// <param name="filter">The filter.</param>
         /// <param name="update">The update.</param>
-        public UpdateRequest(UpdateType updateType, BsonDocument filter, BsonValue update)
+        public UpdateRequest(UpdateType updateType, BsonDocument filter, BsonDocument update)
             : base(WriteRequestType.Update)
         {
             _updateType = updateType;
             _filter = Ensure.IsNotNull(filter, nameof(filter));
-            _update = EnsureUpdateIsValid(update, updateType);
+            _update = Ensure.IsNotNull(update, nameof(update));
+            if (updateType == UpdateType.Update && _update.ElementCount == 0)
+            {
+                throw new ArgumentException("Updates must have at least 1 update operator.", nameof(update));
+            }
         }
 
         // properties
@@ -82,15 +85,6 @@ namespace MongoDB.Driver.Core.Operations
         }
 
         /// <summary>
-        /// Gets or sets the hint.
-        /// </summary>
-        public BsonValue Hint
-        {
-            get { return _hint; }
-            set { _hint = value; }
-        }
-
-        /// <summary>
         /// Gets or sets a value indicating whether this update should affect all matching documents.
         /// </summary>
         /// <value>
@@ -117,7 +111,7 @@ namespace MongoDB.Driver.Core.Operations
         /// <summary>
         /// Gets the update specification.
         /// </summary>
-        public BsonValue Update
+        public BsonDocument Update
         {
             get { return _update; }
         }
@@ -135,43 +129,6 @@ namespace MongoDB.Driver.Core.Operations
         public override bool IsRetryable(ConnectionDescription connectionDescription)
         {
             return !_isMulti;
-        }
-
-        // private methods
-        private BsonValue EnsureUpdateIsValid(BsonValue update, UpdateType updateType)
-        {
-            Ensure.IsNotNull(update, nameof(update));
-
-            if (updateType == UpdateType.Update)
-            {
-                switch (update)
-                {
-                    case BsonDocument document:
-                        {
-                            if (document.ElementCount == 0)
-                            {
-                                throw new ArgumentException("Updates must have at least 1 update operator.",
-                                    nameof(update));
-                            }
-
-                            break;
-                        }
-                    case BsonArray array:
-                        {
-                            if (array.Count == 0)
-                            {
-                                throw new ArgumentException("Updates must have at least 1 update operator in a pipeline.",
-                                    nameof(update));
-                            }
-
-                            break;
-                        }
-                    default:
-                        throw new ArgumentException("Updates must be BsonDocument or BsonArray.", nameof(update));
-                }
-            }
-
-            return update;
         }
     }
 }

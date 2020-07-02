@@ -63,7 +63,7 @@ namespace MongoDB.Driver.Tests
                 subject.Descending("a"));
 
             Action act = () => Render(combined);
-
+            
             act.ShouldThrow<MongoException>();
         }
 
@@ -134,10 +134,8 @@ namespace MongoDB.Driver.Tests
         {
             var subject = CreateSubject<BsonDocument>();
 
-#pragma warning disable 618
             Assert(subject.GeoHaystack("a"), "{a: 'geoHaystack'}");
             Assert(subject.GeoHaystack("a", "b"), "{a: 'geoHaystack', b: 1 }");
-#pragma warning restore 618
         }
 
         [Fact]
@@ -145,11 +143,9 @@ namespace MongoDB.Driver.Tests
         {
             var subject = CreateSubject<Person>();
 
-#pragma warning disable 618
             Assert(subject.GeoHaystack(x => x.FirstName), "{fn: 'geoHaystack'}");
             Assert(subject.GeoHaystack(x => x.FirstName, x => x.LastName), "{fn: 'geoHaystack', ln: 1}");
             Assert(subject.GeoHaystack("FirstName", "LastName"), "{fn: 'geoHaystack', ln: 1}");
-#pragma warning restore 618
         }
 
         [Fact]
@@ -188,33 +184,11 @@ namespace MongoDB.Driver.Tests
             Assert(subject.Text("$**"), "{'$**': 'text'}");
         }
 
-        [Fact]
-        public void Wildcard_should_return_expected_result()
-        {
-            var subject = CreateSubject<BsonDocument>();
-
-            Assert(subject.Wildcard("a"), "{ 'a.$**' : 1 }");
-            Assert(subject.Wildcard(), "{ '$**' : 1 }");
-        }
-
-        [Fact]
-        public void Wildcard_typed_should_return_expected_result()
-        {
-            var subject = CreateSubject<Person>();
-
-            Assert(subject.Wildcard(person => person.FirstName), "{ 'fn.$**' : 1 }"); // with BsonElement attribute
-            Assert(subject.Wildcard(person => person.Info), "{ 'Info.$**' : 1 }");
-            Assert(subject.Wildcard(person => person.Age), "{ 'Age.$**' : 1 }");
-            Assert(subject.Wildcard(person => person.Job), "{ 'Job.$**' : 1 }");
-            Assert(subject.Wildcard(person => person.Interviews), "{ 'Interviews.$**' : 1 }");
-        }
-
-
         private void Assert<TDocument>(IndexKeysDefinition<TDocument> keys, string expectedJson)
         {
-            var rendered = Render(keys);
+            var renderedSort = Render<TDocument>(keys);
 
-            rendered.Should().Be(expectedJson);
+            renderedSort.Should().Be(expectedJson);
         }
 
         private BsonDocument Render<TDocument>(IndexKeysDefinition<TDocument> keys)
@@ -235,19 +209,6 @@ namespace MongoDB.Driver.Tests
 
             [BsonElement("ln")]
             public string LastName { get; set; }
-
-            public string Info { get; set; }
-
-            public int Age { get; set; }
-
-            public Job Job { get; set; }
-
-            public Job[] Interviews { get; set; }
-        }
-
-        public class Job
-        {
-            public string Title { get; set; }
         }
     }
 }

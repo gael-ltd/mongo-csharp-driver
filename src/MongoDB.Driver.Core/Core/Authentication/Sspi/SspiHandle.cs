@@ -14,7 +14,7 @@
 */
 
 using System;
-#if NET452
+#if NET45
 using System.Runtime.ConstrainedExecution;
 #endif
 using System.Runtime.InteropServices;
@@ -60,7 +60,7 @@ namespace MongoDB.Driver.Core.Authentication.Sspi
         /// <summary>
         /// Sets to invalid.
         /// </summary>
-#if NET452
+#if NET45
         [ReliabilityContract(Consistency.WillNotCorruptState, Cer.Success)]
 #endif
         public void SetToInvalid()

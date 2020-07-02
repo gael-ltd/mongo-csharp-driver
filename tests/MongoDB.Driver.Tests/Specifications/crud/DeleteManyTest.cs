@@ -34,9 +34,6 @@ namespace MongoDB.Driver.Tests.Specifications.crud
                 case "collation":
                     _options.Collation = Collation.FromBsonDocument(value.AsBsonDocument);
                     return true;
-                case "hint":
-                    _options.Hint = value;
-                    return true;
             }
 
             return false;
@@ -45,9 +42,9 @@ namespace MongoDB.Driver.Tests.Specifications.crud
         protected override DeleteResult ConvertExpectedResult(BsonValue expectedResult)
         {
             return new DeleteResult.Acknowledged(expectedResult["deletedCount"].ToInt64());
-        }
 
-        protected override DeleteResult ExecuteAndGetResult(IMongoDatabase database, IMongoCollection<BsonDocument> collection, bool async)
+        }
+        protected override DeleteResult ExecuteAndGetResult(IMongoCollection<BsonDocument> collection, bool async)
         {
             if (async)
             {

@@ -16,8 +16,8 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
+using Xunit;
 
 namespace MongoDB.Driver.Tests.Linq
 {
@@ -25,18 +25,11 @@ namespace MongoDB.Driver.Tests.Linq
     {
         protected static IMongoCollection<Root> __collection;
         protected static IMongoCollection<Other> __otherCollection;
-        protected static IMongoCollection<Root> __customCollection;
-        protected static List<Root> __customDocuments;
-
         private static ConcurrentDictionary<Type, bool> __oneTimeSetupTracker = new ConcurrentDictionary<Type, bool>();
 
         protected IntegrationTestBase()
         {
             __oneTimeSetupTracker.GetOrAdd(GetType(), OneTimeSetup); // run OneTimeSetup once per subclass
-        }
-
-        protected virtual void FillCustomDocuments(List<Root> customDocuments)
-        {
         }
 
         private bool OneTimeSetup(Type type)
@@ -45,34 +38,20 @@ namespace MongoDB.Driver.Tests.Linq
             var db = client.GetDatabase(DriverTestConfiguration.DatabaseNamespace.DatabaseName);
             __collection = db.GetCollection<Root>(DriverTestConfiguration.CollectionNamespace.CollectionName);
             __otherCollection = db.GetCollection<Other>(DriverTestConfiguration.CollectionNamespace.CollectionName + "_other");
-            __customCollection = db.GetCollection<Root>(DriverTestConfiguration.CollectionNamespace.CollectionName + "_custom");
             db.DropCollection(__collection.CollectionNamespace.CollectionName);
             db.DropCollection(__collection.CollectionNamespace.CollectionName + "_other");
 
             InsertFirst();
             InsertSecond();
             InsertJoin();
-            ConfigureCustomCollection(db);
 
             return true;
-        }
-
-        private void ConfigureCustomCollection(IMongoDatabase db)
-        {
-            __customDocuments = new List<Root>();
-            FillCustomDocuments(__customDocuments);
-            db.DropCollection(__customCollection.CollectionNamespace.CollectionName);
-            if (__customDocuments.Count > 0)
-            {
-                __customCollection.InsertMany(__customDocuments);
-            }
         }
 
         private void InsertFirst()
         {
             var root = new Root
             {
-                ObjectId = ObjectId.Parse("555925bfb69aa7d5be29126b"),
                 A = "Awesome",
                 B = "Balloon",
                 C = new C
@@ -100,66 +79,8 @@ namespace MongoDB.Driver.Tests.Linq
                             S = new [] {
                                     new C
                                     {
-                                        D = "Delilah",
-                                        Z = new []
-                                        {
-                                            new E()
-                                            {
-                                                F = 1,
-                                                I = new [] { "I1", "I2" },
-                                            }
-                                        }
+                                        D = "Delilah"
                                     }
-                            },
-                            Ids = new [] { new ObjectId("111111111111111111111111") },
-                            Y = new C
-                            {
-                                D = "Don't",
-                                E = new E
-                                {
-                                    F = 33,
-                                    H = 44,
-                                    I = new [] { "ignanimous"}
-                                },
-                                S = new [] {
-                                    new C
-                                    {
-                                        D = "Delilah",
-                                        Z = new []
-                                        {
-                                            new E
-                                            {
-                                                F = 1,
-                                                I = new [] { "I1", "I2" },
-                                                C = new C
-                                                {
-                                                    D = "D",
-                                                    E = new E
-                                                    {
-                                                        C = new C
-                                                        {
-                                                            X = new []
-                                                            {
-                                                                new E
-                                                                {
-                                                                    F = 2
-                                                                }
-                                                            }
-                                                        }
-                                                    },
-                                                    X = new []
-                                                    {
-                                                        new E
-                                                        {
-                                                            F = 4
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                },
-                                Ids = new [] { new ObjectId("111111111111111111111111") }
                             }
                         },
                         new C
@@ -183,11 +104,7 @@ namespace MongoDB.Driver.Tests.Linq
                 R = new DateTime(2013, 1, 2, 3, 4, 5, 6, DateTimeKind.Utc),
                 T = new Dictionary<string, int> { { "one", 1 }, { "two", 2 } },
                 U = 1.23456571661743267789m,
-                V = "2017-02-08T12:10:40.787",
-                W = 8,
-                X = 9,
-                Y = 10,
-                Z = 11
+                V = "2017-02-08T12:10:40.787"
             };
             __collection.InsertOne(root);
         }
@@ -217,19 +134,6 @@ namespace MongoDB.Driver.Tests.Linq
                                 F = 333,
                                 H = 444,
                                 I = new [] { "igloo" }
-                            },
-                            X = new E[]
-                            {
-                                new E()
-                                {
-                                    S = "value 1",
-                                    C = new C()
-                                    {
-                                        D = "value 2",
-                                        Ids = new [] { new ObjectId("222222222222222222222222") }
-                                    },
-                                    I = new [] { "value 3" }
-                                }
                             }
                         },
                         new C
@@ -250,8 +154,7 @@ namespace MongoDB.Driver.Tests.Linq
                 M = new[] { 3, 5, 6 },
                 O = new List<long> { 100, 200, 300 },
                 P = 1.1,
-                U = -1.234565723762724332233489m,
-                Z = 10
+                U = -1.234565723762724332233489m
             };
             __collection.InsertOne(root);
         }
@@ -289,8 +192,6 @@ namespace MongoDB.Driver.Tests.Linq
 
         public class Root : IRoot
         {
-            public ObjectId ObjectId { get; set; }
-
             public int Id { get; set; }
 
             public string A { get; set; }
@@ -321,14 +222,6 @@ namespace MongoDB.Driver.Tests.Linq
             public decimal U { get; set; }
 
             public string V { get; set; }
-
-            public double W { get; set; }
-
-            public long X { get; set; }
-
-            public int Y { get; set; }
-
-            public decimal Z { get; set; }
         }
 
         public class RootDescended : Root
@@ -338,8 +231,6 @@ namespace MongoDB.Driver.Tests.Linq
 
         public class C
         {
-            public IEnumerable<ObjectId> Ids { get; set; }
-
             public string D { get; set; }
 
             public E E { get; set; }
@@ -347,8 +238,6 @@ namespace MongoDB.Driver.Tests.Linq
             public IEnumerable<C> S { get; set; }
 
             public IEnumerable<E> X { get; set; }
-            public C Y { get; set; }
-            public IEnumerable<E> Z { get; set; }
         }
 
         public class E
@@ -356,10 +245,8 @@ namespace MongoDB.Driver.Tests.Linq
             public int F { get; set; }
 
             public int H { get; set; }
-            public string S { get; set; }
 
             public IEnumerable<string> I { get; set; }
-            public C C { get; set; }
         }
 
         public class V : E

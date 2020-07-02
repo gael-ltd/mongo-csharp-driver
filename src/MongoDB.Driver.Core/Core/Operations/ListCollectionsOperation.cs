@@ -36,8 +36,6 @@ namespace MongoDB.Driver.Core.Operations
         private BsonDocument _filter;
         private readonly DatabaseNamespace _databaseNamespace;
         private readonly MessageEncoderSettings _messageEncoderSettings;
-        private bool? _nameOnly;
-        private bool _retryRequested;
 
         // constructors
         /// <summary>
@@ -88,30 +86,6 @@ namespace MongoDB.Driver.Core.Operations
             get { return _messageEncoderSettings; }
         }
 
-        /// <summary>
-        /// Gets or sets the name only option.
-        /// </summary>
-        /// <value>
-        /// The name only option.
-        /// </value>
-        public bool? NameOnly
-        {
-            get { return _nameOnly; }
-            set { _nameOnly = value; }
-        }
-
-        /// <summary>
-        /// Gets or sets whether or not retry was requested.
-        /// </summary>
-        /// <value>
-        /// Whether retry was requested.
-        /// </value>
-        public bool RetryRequested
-        {
-            get => _retryRequested;
-            set => _retryRequested = value;
-        }
-
         // public methods
         /// <inheritdoc/>
         public IAsyncCursor<BsonDocument> Execute(IReadBinding binding, CancellationToken cancellationToken)
@@ -119,10 +93,12 @@ namespace MongoDB.Driver.Core.Operations
             Ensure.IsNotNull(binding, nameof(binding));
 
             using (EventContext.BeginOperation())
-            using (var context = RetryableReadContext.Create(binding, _retryRequested, cancellationToken))
+            using (var channelSource = binding.GetReadChannelSource(cancellationToken))
+            using (var channel = channelSource.GetChannel(cancellationToken))
+            using (var channelBinding = new ChannelReadBinding(channelSource.Server, channel, binding.ReadPreference, binding.Session.Fork()))
             {
-                var operation = CreateOperation(context.Channel);
-                return operation.Execute(context, cancellationToken);
+                var operation = CreateOperation(channel);
+                return operation.Execute(channelBinding, cancellationToken);
             }
         }
 
@@ -132,32 +108,25 @@ namespace MongoDB.Driver.Core.Operations
             Ensure.IsNotNull(binding, nameof(binding));
 
             using (EventContext.BeginOperation())
-            using (var context = await RetryableReadContext.CreateAsync(binding, _retryRequested, cancellationToken).ConfigureAwait(false))
+            using (var channelSource = await binding.GetReadChannelSourceAsync(cancellationToken).ConfigureAwait(false))
+            using (var channel = await channelSource.GetChannelAsync(cancellationToken).ConfigureAwait(false))
+            using (var channelBinding = new ChannelReadBinding(channelSource.Server, channel, binding.ReadPreference, binding.Session.Fork()))
             {
-                var operation = CreateOperation(context.Channel);
-                return await operation.ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
+                var operation = CreateOperation(channel);
+                return await operation.ExecuteAsync(channelBinding, cancellationToken).ConfigureAwait(false);
             }
         }
 
         // private methods
-        private IExecutableInRetryableReadContext<IAsyncCursor<BsonDocument>> CreateOperation(IChannel channel)
+        private IReadOperation<IAsyncCursor<BsonDocument>> CreateOperation(IChannel channel)
         {
             if (Feature.ListCollectionsCommand.IsSupported(channel.ConnectionDescription.ServerVersion))
             {
-                return new ListCollectionsUsingCommandOperation(_databaseNamespace, _messageEncoderSettings)
-                {
-                    Filter = _filter,
-                    NameOnly = _nameOnly,
-                    RetryRequested = _retryRequested // might be overridden by retryable read context
-                };
+                return new ListCollectionsUsingCommandOperation(_databaseNamespace, _messageEncoderSettings) { Filter = _filter };
             }
             else
             {
-                return new ListCollectionsUsingQueryOperation(_databaseNamespace, _messageEncoderSettings)
-                {
-                    Filter = _filter,
-                    RetryRequested = _retryRequested // might be overridden by retryable read context
-                };
+                return new ListCollectionsUsingQueryOperation(_databaseNamespace, _messageEncoderSettings) { Filter = _filter };
             }
         }
     }

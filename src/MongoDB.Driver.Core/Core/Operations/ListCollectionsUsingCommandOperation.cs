@@ -13,6 +13,8 @@
 * limitations under the License.
 */
 
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -28,14 +30,12 @@ namespace MongoDB.Driver.Core.Operations
     /// <summary>
     /// Represents a list collections operation.
     /// </summary>
-    public class ListCollectionsUsingCommandOperation : IReadOperation<IAsyncCursor<BsonDocument>>, IExecutableInRetryableReadContext<IAsyncCursor<BsonDocument>>
+    public class ListCollectionsUsingCommandOperation : IReadOperation<IAsyncCursor<BsonDocument>>
     {
         // fields
         private BsonDocument _filter;
         private readonly DatabaseNamespace _databaseNamespace;
         private readonly MessageEncoderSettings _messageEncoderSettings;
-        private bool? _nameOnly;
-        private bool _retryRequested;
 
         // constructors
         /// <summary>
@@ -86,52 +86,18 @@ namespace MongoDB.Driver.Core.Operations
             get { return _messageEncoderSettings; }
         }
 
-        /// <summary>
-        /// Gets or sets the name only option.
-        /// </summary>
-        /// <value>
-        /// The name only option.
-        /// </value>
-        public bool? NameOnly
-        {
-            get { return _nameOnly; }
-            set { _nameOnly = value; }
-        }
-
-        /// <summary>
-        /// Gets or sets whether or not retry was requested.
-        /// </summary>
-        /// <value>
-        /// Whether retry was requested.
-        /// </value>
-        public bool RetryRequested
-        {
-            get { return _retryRequested; }
-            set { _retryRequested = value; }
-        }
-
         // public methods
         /// <inheritdoc/>
         public IAsyncCursor<BsonDocument> Execute(IReadBinding binding, CancellationToken cancellationToken)
         {
             Ensure.IsNotNull(binding, nameof(binding));
 
-            using (var context = RetryableReadContext.Create(binding, _retryRequested, cancellationToken))
-            {
-                return Execute(context, cancellationToken);
-            }
-        }
-
-        /// <inheritdoc/>
-        public IAsyncCursor<BsonDocument> Execute(RetryableReadContext context, CancellationToken cancellationToken)
-        {
-            Ensure.IsNotNull(context, nameof(context));
-
             using (EventContext.BeginOperation())
+            using (var channelSource = binding.GetReadChannelSource(cancellationToken))
             {
                 var operation = CreateOperation();
-                var result = operation.Execute(context, cancellationToken);
-                return CreateCursor(context.ChannelSource, operation.Command, result);
+                var result = operation.Execute(channelSource, binding.ReadPreference, binding.Session, cancellationToken);
+                return CreateCursor(channelSource, operation.Command, result);
             }
         }
 
@@ -140,22 +106,12 @@ namespace MongoDB.Driver.Core.Operations
         {
             Ensure.IsNotNull(binding, nameof(binding));
 
-            using (var context = await RetryableReadContext.CreateAsync(binding, _retryRequested, cancellationToken).ConfigureAwait(false))
-            {
-                return Execute(context, cancellationToken);
-            }
-        }
-
-        /// <inheritdoc/>
-        public async Task<IAsyncCursor<BsonDocument>> ExecuteAsync(RetryableReadContext context, CancellationToken cancellationToken)
-        {
-            Ensure.IsNotNull(context, nameof(context));
-
             using (EventContext.BeginOperation())
+            using (var channelSource = await binding.GetReadChannelSourceAsync(cancellationToken).ConfigureAwait(false))
             {
                 var operation = CreateOperation();
-                var result = await operation.ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
-                return CreateCursor(context.ChannelSource, operation.Command, result);
+                var result = await operation.ExecuteAsync(channelSource, binding.ReadPreference, binding.Session, cancellationToken).ConfigureAwait(false);
+                return CreateCursor(channelSource, operation.Command, result);
             }
         }
 
@@ -165,13 +121,9 @@ namespace MongoDB.Driver.Core.Operations
             var command = new BsonDocument
             {
                 { "listCollections", 1 },
-                { "filter", _filter, _filter != null },
-                { "nameOnly", () => _nameOnly.Value, _nameOnly.HasValue }
+                { "filter", _filter, _filter != null }
             };
-            return new ReadCommandOperation<BsonDocument>(_databaseNamespace, command, BsonDocumentSerializer.Instance, _messageEncoderSettings)
-            {
-                RetryRequested = _retryRequested // might be overridden by retryable read context
-            };
+            return new ReadCommandOperation<BsonDocument>(_databaseNamespace, command, BsonDocumentSerializer.Instance, _messageEncoderSettings);
         }
 
         private IAsyncCursor<BsonDocument> CreateCursor(IChannelSourceHandle channelSource, BsonDocument command, BsonDocument result)

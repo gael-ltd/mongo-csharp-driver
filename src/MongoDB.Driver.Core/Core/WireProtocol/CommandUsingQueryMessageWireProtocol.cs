@@ -28,7 +28,6 @@ using MongoDB.Driver.Core.Bindings;
 using MongoDB.Driver.Core.Connections;
 using MongoDB.Driver.Core.Misc;
 using MongoDB.Driver.Core.Operations;
-using MongoDB.Driver.Core.Servers;
 using MongoDB.Driver.Core.WireProtocol.Messages;
 using MongoDB.Driver.Core.WireProtocol.Messages.Encoders;
 using MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders;
@@ -86,9 +85,9 @@ namespace MongoDB.Driver.Core.WireProtocol
         private QueryMessage CreateMessage(ConnectionDescription connectionDescription, out bool messageContainsSessionId)
         {
             var commandWithPayloads = CombineCommandWithPayloads(connectionDescription);
-            var wrappedCommand = WrapCommandForQueryMessage(commandWithPayloads, connectionDescription, out messageContainsSessionId, out var slaveOk);
+            var wrappedCommand = WrapCommandForQueryMessage(commandWithPayloads, connectionDescription, out messageContainsSessionId);
+            var slaveOk = _readPreference != null && _readPreference.ReadPreferenceMode != ReadPreferenceMode.Primary;
 
-#pragma warning disable 618
             return new QueryMessage(
                 RequestMessage.GetNextRequestId(),
                 _databaseNamespace.CommandCollection,
@@ -107,7 +106,6 @@ namespace MongoDB.Driver.Core.WireProtocol
                 PostWriteAction = _postWriteAction,
                 ResponseHandling = _responseHandling
             };
-#pragma warning restore 618
         }
 
         public TCommandResult Execute(IConnection connection, CancellationToken cancellationToken)
@@ -248,12 +246,7 @@ namespace MongoDB.Driver.Core.WireProtocol
                 if (_messageEncoderSettings != null)
                 {
                     binaryReaderSettings.Encoding = _messageEncoderSettings.GetOrDefault<UTF8Encoding>(MessageEncoderSettingsName.ReadEncoding, Utf8Encodings.Strict);
-#pragma warning disable 618
-                    if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-                    {
-                        binaryReaderSettings.GuidRepresentation = _messageEncoderSettings.GetOrDefault<GuidRepresentation>(MessageEncoderSettingsName.GuidRepresentation, GuidRepresentation.CSharpLegacy);
-                    }
-#pragma warning restore 618
+                    binaryReaderSettings.GuidRepresentation = _messageEncoderSettings.GetOrDefault<GuidRepresentation>(MessageEncoderSettingsName.GuidRepresentation, GuidRepresentation.CSharpLegacy);
                 };
 
                 BsonValue clusterTime;
@@ -280,7 +273,7 @@ namespace MongoDB.Driver.Core.WireProtocol
                         commandName = _command["$query"].AsBsonDocument.GetElement(0).Name;
                     }
 
-                    var notPrimaryOrNodeIsRecoveringException = ExceptionMapper.MapNotPrimaryOrNodeIsRecovering(connectionId, _command, materializedDocument, "errmsg");
+                    var notPrimaryOrNodeIsRecoveringException = ExceptionMapper.MapNotPrimaryOrNodeIsRecovering(connectionId, materializedDocument, "errmsg");
                     if (notPrimaryOrNodeIsRecoveringException != null)
                     {
                         throw notPrimaryOrNodeIsRecoveringException;
@@ -307,15 +300,6 @@ namespace MongoDB.Driver.Core.WireProtocol
                     throw new MongoCommandException(connectionId, message, _command, materializedDocument);
                 }
 
-                if (rawDocument.Contains("writeConcernError"))
-                {
-                    var materializedDocument = rawDocument.Materialize(binaryReaderSettings);
-                    var writeConcernError = materializedDocument["writeConcernError"].AsBsonDocument;
-                    var message = writeConcernError.AsBsonDocument.GetValue("errmsg", null)?.AsString;
-                    var writeConcernResult = new WriteConcernResult(materializedDocument);
-                    throw new MongoWriteConcernException(connectionId, message, writeConcernResult);
-                }
-
                 using (var stream = new ByteBufferStream(rawDocument.Slice, ownsBuffer: false))
                 {
                     var encoderFactory = new BinaryMessageEncoderFactory(stream, _messageEncoderSettings);
@@ -329,7 +313,7 @@ namespace MongoDB.Driver.Core.WireProtocol
             }
         }
 
-        private BsonDocument WrapCommandForQueryMessage(BsonDocument command, ConnectionDescription connectionDescription, out bool messageContainsSessionId, out bool slaveOk)
+        private BsonDocument WrapCommandForQueryMessage(BsonDocument command, ConnectionDescription connectionDescription, out bool messageContainsSessionId)
         {
             messageContainsSessionId = false;
             var extraElements = new List<BsonElement>();
@@ -355,18 +339,16 @@ namespace MongoDB.Driver.Core.WireProtocol
                 var clusterTime = new BsonElement("$clusterTime", _session.ClusterTime);
                 extraElements.Add(clusterTime);
             }
-#pragma warning disable 618
-            Action<BsonWriterSettings> writerSettingsConfigurator = null;
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                writerSettingsConfigurator = s => s.GuidRepresentation = GuidRepresentation.Unspecified;
-            }
-#pragma warning restore 618
+            Action<BsonWriterSettings> writerSettingsConfigurator = s => s.GuidRepresentation = GuidRepresentation.Unspecified;
             var appendExtraElementsSerializer = new ElementAppendingSerializer<BsonDocument>(BsonDocumentSerializer.Instance, extraElements, writerSettingsConfigurator);
             var commandWithExtraElements = new BsonDocumentWrapper(command, appendExtraElementsSerializer);
 
-            var serverType = connectionDescription != null ? connectionDescription.IsMasterResult.ServerType : ServerType.Unknown;
-            var readPreferenceDocument = QueryHelper.CreateReadPreferenceDocument(serverType, _readPreference, out slaveOk);
+            BsonDocument readPreferenceDocument = null;
+            if (connectionDescription != null)
+            {
+                var serverType = connectionDescription.IsMasterResult.ServerType;
+                readPreferenceDocument = QueryHelper.CreateReadPreferenceDocument(serverType, _readPreference);
+            }
 
             var wrappedCommand = new BsonDocument
             {

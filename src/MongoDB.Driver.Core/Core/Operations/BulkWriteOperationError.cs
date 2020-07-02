@@ -26,7 +26,7 @@ namespace MongoDB.Driver.Core.Operations
     /// <summary>
     /// Represents the details of a write error for a particular request.
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     public sealed class BulkWriteOperationError
@@ -64,7 +64,7 @@ namespace MongoDB.Driver.Core.Operations
         {
             get
             {
-                switch (_code)
+                switch(_code)
                 {
                     case 50:
                         return ServerErrorCategory.ExecutionTimeout;

@@ -29,14 +29,6 @@ namespace MongoDB.Driver
     public class ReadConcernTests
     {
         [Fact]
-        public void Available_should_return_expected_result()
-        {
-            var result = ReadConcern.Available;
-
-            result.Level.Should().Be(ReadConcernLevel.Available);
-        }
-
-        [Fact]
         public void Default_should_return_expected_result()
         {
             var result = ReadConcern.Default;
@@ -111,7 +103,6 @@ namespace MongoDB.Driver
         }
 
         [Theory]
-        [InlineData(ReadConcernLevel.Available, "{ level: 'available' }")]
         [InlineData(ReadConcernLevel.Linearizable, "{ level: 'linearizable' }")]
         [InlineData(ReadConcernLevel.Local, "{ level: 'local' }")]
         [InlineData(ReadConcernLevel.Majority, "{ level: 'majority' }")]

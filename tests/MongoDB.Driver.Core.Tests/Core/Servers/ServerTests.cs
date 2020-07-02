@@ -14,17 +14,13 @@
 */
 
 using System;
-using System.IO;
 using System.Net;
-using System.Net.Sockets;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using MongoDB.Bson;
 using MongoDB.Bson.IO;
 using MongoDB.Bson.Serialization.Serializers;
-using MongoDB.Bson.TestHelpers;
 using MongoDB.Bson.TestHelpers.XunitExtensions;
 using MongoDB.Driver.Core.Bindings;
 using MongoDB.Driver.Core.Clusters;
@@ -33,7 +29,6 @@ using MongoDB.Driver.Core.Configuration;
 using MongoDB.Driver.Core.ConnectionPools;
 using MongoDB.Driver.Core.Connections;
 using MongoDB.Driver.Core.Events;
-using MongoDB.Driver.Core.TestHelpers;
 using MongoDB.Driver.Core.TestHelpers.XunitExtensions;
 using MongoDB.Driver.Core.WireProtocol;
 using MongoDB.Driver.Core.WireProtocol.Messages.Encoders;
@@ -72,7 +67,6 @@ namespace MongoDB.Driver.Core.Servers
                 .Returns(_mockConnectionPool.Object);
 
             _mockServerMonitor = new Mock<IServerMonitor>();
-            _mockServerMonitor.Setup(m => m.Description).Returns(new ServerDescription(new ServerId(_clusterId, _endPoint), _endPoint));
             _mockServerMonitorFactory = new Mock<IServerMonitorFactory>();
             _mockServerMonitorFactory.Setup(f => f.Create(It.IsAny<ServerId>(), _endPoint)).Returns(_mockServerMonitor.Object);
 
@@ -155,61 +149,6 @@ namespace MongoDB.Driver.Core.Servers
 
         [Theory]
         [ParameterAttributeData]
-        public void GetChannel_should_clear_connection_pool_when_opening_connection_throws_MongoAuthenticationException(
-            [Values(false, true)] bool async)
-        {
-            var connectionId = new ConnectionId(new ServerId(_clusterId, _endPoint));
-            var mockConnectionHandle = new Mock<IConnectionHandle>();
-            mockConnectionHandle
-                .Setup(c => c.Open(It.IsAny<CancellationToken>()))
-                .Throws(new MongoAuthenticationException(connectionId, "Invalid login."));
-            mockConnectionHandle
-                .Setup(c => c.OpenAsync(It.IsAny<CancellationToken>()))
-                .Throws(new MongoAuthenticationException(connectionId, "Invalid login."));
-
-            var mockConnectionPool = new Mock<IConnectionPool>();
-            mockConnectionPool
-                .Setup(p => p.AcquireConnection(It.IsAny<CancellationToken>()))
-                .Returns(mockConnectionHandle.Object);
-            mockConnectionPool
-                .Setup(p => p.AcquireConnectionAsync(It.IsAny<CancellationToken>()))
-                .Returns(Task.FromResult(mockConnectionHandle.Object));
-            mockConnectionPool.Setup(p => p.Clear());
-
-            var mockConnectionPoolFactory = new Mock<IConnectionPoolFactory>();
-            mockConnectionPoolFactory
-                .Setup(f => f.CreateConnectionPool(It.IsAny<ServerId>(), _endPoint))
-                .Returns(mockConnectionPool.Object);
-
-            var server = new Server(
-                _clusterId,
-                _clusterClock,
-                _clusterConnectionMode,
-                _settings,
-                _endPoint,
-                mockConnectionPoolFactory.Object,
-                _mockServerMonitorFactory.Object,
-                _capturedEvents);
-            server.Initialize();
-
-            var exception = Record.Exception(() =>
-            {
-                if (async)
-                {
-                    server.GetChannelAsync(CancellationToken.None).GetAwaiter().GetResult();
-                }
-                else
-                {
-                    server.GetChannel(CancellationToken.None);
-                }
-            });
-
-            exception.Should().BeOfType<MongoAuthenticationException>();
-            mockConnectionPool.Verify(p => p.Clear(), Times.Once());
-        }
-
-        [Theory]
-        [ParameterAttributeData]
         public void GetChannel_should_throw_when_not_initialized(
             [Values(false, true)]
             bool async)
@@ -269,116 +208,6 @@ namespace MongoDB.Driver.Core.Servers
             channel.Should().NotBeNull();
         }
 
-        [Theory]
-        [ParameterAttributeData]
-        public void GetChannel_should_update_topology_and_clear_connection_pool_on_network_error_or_timeout(
-            [Values("TimedOutSocketException", "NetworkUnreachableSocketException")] string errorType,
-            [Values(false, true)] bool async)
-        {
-            var serverId = new ServerId(_clusterId, _endPoint);
-            var connectionId = new ConnectionId(serverId);
-            var innerMostException = CoreExceptionHelper.CreateException(errorType);
-
-            var openConnectionException = new MongoConnectionException(connectionId, "Oops", new IOException("Cry", innerMostException));
-            var mockConnection = new Mock<IConnectionHandle>();
-            mockConnection.Setup(c => c.Open(It.IsAny<CancellationToken>())).Throws(openConnectionException);
-            mockConnection.Setup(c => c.OpenAsync(It.IsAny<CancellationToken>())).ThrowsAsync(openConnectionException);
-            var mockConnectionPool = new Mock<IConnectionPool>();
-            mockConnectionPool.Setup(p => p.AcquireConnection(It.IsAny<CancellationToken>())).Returns(mockConnection.Object);
-            mockConnectionPool.Setup(p => p.AcquireConnectionAsync(It.IsAny<CancellationToken>())).ReturnsAsync(mockConnection.Object);
-            var mockConnectionPoolFactory = new Mock<IConnectionPoolFactory>();
-            mockConnectionPoolFactory
-                .Setup(f => f.CreateConnectionPool(It.IsAny<ServerId>(), _endPoint))
-                .Returns(mockConnectionPool.Object);
-            var mockMonitorServerDescription = new ServerDescription(serverId, _endPoint);
-            var mockServerMonitor = new Mock<IServerMonitor>();
-            mockServerMonitor.SetupGet(m => m.Description).Returns(mockMonitorServerDescription);
-            var mockServerMonitorFactory = new Mock<IServerMonitorFactory>();
-            mockServerMonitorFactory.Setup(f => f.Create(It.IsAny<ServerId>(), _endPoint)).Returns(mockServerMonitor.Object);
-
-            var subject = new Server(_clusterId, _clusterClock, _clusterConnectionMode, _settings, _endPoint, mockConnectionPoolFactory.Object, mockServerMonitorFactory.Object, _capturedEvents);
-            subject.Initialize();
-
-            IChannelHandle channel = null;
-            Exception exception;
-            if (async)
-            {
-                exception = Record.Exception(() => channel = subject.GetChannelAsync(CancellationToken.None).GetAwaiter().GetResult());
-            }
-            else
-            {
-                exception  = Record.Exception(() => channel = subject.GetChannel(CancellationToken.None));
-            }
-
-            channel.Should().BeNull();
-            exception.Should().Be(openConnectionException);
-            subject.Description.Type.Should().Be(ServerType.Unknown);
-            subject.Description.ReasonChanged.Should().Contain("ChannelException during handshake");
-            mockConnectionPool.Verify(p => p.Clear(), Times.Once);
-        }
-
-        [Theory]
-        [InlineData(nameof(MongoConnectionException), true)]
-        [InlineData("MongoConnectionExceptionWithSocketTimeout", false)]
-        public void HandleChannelException_should_update_topology_as_expected_on_network_error_or_timeout(
-            string errorType, bool shouldUpdateTopology)
-        {
-            var serverId = new ServerId(_clusterId, _endPoint);
-            var connectionId = new ConnectionId(serverId);
-            Exception innerMostException;
-            switch (errorType)
-            {
-                case "MongoConnectionExceptionWithSocketTimeout":
-                    innerMostException = new SocketException((int)SocketError.TimedOut);
-                    break;
-                case nameof(MongoConnectionException):
-                    innerMostException = new SocketException((int)SocketError.NetworkUnreachable);
-                    break;
-                default: throw new ArgumentException("Unknown error type.");
-            }
-
-            var operationUsingChannelException = new MongoConnectionException(connectionId, "Oops", new IOException("Cry", innerMostException));
-            var mockConnection = new Mock<IConnectionHandle>();
-            var isMasterResult = new IsMasterResult(new BsonDocument { {"compressors", new BsonArray()}});
-            // the server version doesn't matter when we're not testing MongoNotPrimaryExceptions, but is needed when
-            // Server calls ShouldClearConnectionPoolForException
-            var buildInfoResult = new BuildInfoResult(new BsonDocument { {"version", "4.4.0"} });
-            mockConnection.SetupGet(c => c.Description)
-                .Returns(new ConnectionDescription(new ConnectionId(serverId, 0), isMasterResult, buildInfoResult));
-            var mockConnectionPool = new Mock<IConnectionPool>();
-            mockConnectionPool.Setup(p => p.AcquireConnection(It.IsAny<CancellationToken>())).Returns(mockConnection.Object);
-            mockConnectionPool.Setup(p => p.AcquireConnectionAsync(It.IsAny<CancellationToken>())).ReturnsAsync(mockConnection.Object);
-            var mockConnectionPoolFactory = new Mock<IConnectionPoolFactory>();
-            mockConnectionPoolFactory
-                .Setup(f => f.CreateConnectionPool(It.IsAny<ServerId>(), _endPoint))
-                .Returns(mockConnectionPool.Object);
-            var mockMonitorServerInitialDescription = new ServerDescription(serverId, _endPoint).With(reasonChanged: "Initial D", type: ServerType.Unknown);
-            var mockServerMonitor = new Mock<IServerMonitor>();
-            mockServerMonitor.SetupGet(m => m.Description).Returns(mockMonitorServerInitialDescription);
-            var mockServerMonitorFactory = new Mock<IServerMonitorFactory>();
-            mockServerMonitorFactory.Setup(f => f.Create(It.IsAny<ServerId>(), _endPoint)).Returns(mockServerMonitor.Object);
-            var subject = new Server(_clusterId, _clusterClock, _clusterConnectionMode, _settings, _endPoint, mockConnectionPoolFactory.Object, mockServerMonitorFactory.Object, _capturedEvents);
-            subject.Initialize();
-            var heartbeatDescription = mockMonitorServerInitialDescription.With(reasonChanged: "Heartbeat", type: ServerType.Standalone);
-            mockServerMonitor.Setup(m => m.Description).Returns(heartbeatDescription);
-            mockServerMonitor.Raise(
-                m => m.DescriptionChanged += null,
-                new ServerDescriptionChangedEventArgs(mockMonitorServerInitialDescription, heartbeatDescription));
-            subject.Description.Should().Be(heartbeatDescription);
-
-            subject.HandleChannelException(mockConnection.Object, operationUsingChannelException);
-
-            if (shouldUpdateTopology)
-            {
-                subject.Description.Type.Should().Be(ServerType.Unknown);
-                subject.Description.ReasonChanged.Should().Contain("ChannelException");
-            }
-            else
-            {
-                subject.Description.Should().Be(heartbeatDescription);
-            }
-        }
-
         [Fact]
         public void Initialize_should_initialize_the_server()
         {
@@ -392,13 +221,14 @@ namespace MongoDB.Driver.Core.Servers
         }
 
         [Fact]
-        public void Invalidate_should_clear_the_connection_pool()
+        public void Invalidate_should_tell_the_monitor_to_invalidate_and_clear_the_connection_pool()
         {
             _subject.Initialize();
             _capturedEvents.Clear();
 
-            _subject.Invalidate("Test", responseTopologyDescription: null);
+            _subject.Invalidate();
             _mockConnectionPool.Verify(p => p.Clear(), Times.Once);
+            _mockServerMonitor.Verify(m => m.Invalidate(), Times.Once);
         }
 
         [Fact]
@@ -421,202 +251,6 @@ namespace MongoDB.Driver.Core.Servers
             _mockServerMonitor.Raise(m => m.DescriptionChanged += null, new ServerDescriptionChangedEventArgs(description, description));
 
             _mockConnectionPool.Verify(p => p.Clear(), Times.Once);
-        }
-
-        [Theory]
-        [InlineData((ServerErrorCode)(-1), false)]
-        [InlineData(ServerErrorCode.NotMaster, true)]
-        [InlineData(ServerErrorCode.NotMasterNoSlaveOk, true)]
-        [InlineData(ServerErrorCode.NotMasterOrSecondary, false)]
-        internal void IsNotMaster_should_return_expected_result_for_code(ServerErrorCode code, bool expectedResult)
-        {
-            _subject.Initialize();
-
-            var result = _subject.IsNotMaster(code, null);
-
-            result.Should().Be(expectedResult);
-            if (result)
-            {
-                _subject.IsRecovering(code, null).Should().BeFalse();
-            }
-        }
-
-        [Theory]
-        [InlineData(null, false)]
-        [InlineData("abc", false)]
-        [InlineData("not master", true)]
-        [InlineData("not master or secondary", false)]
-        internal void IsNotMaster_should_return_expected_result_for_message(string message, bool expectedResult)
-        {
-            _subject.Initialize();
-
-            var result = _subject.IsNotMaster((ServerErrorCode)(-1), message);
-
-            result.Should().Be(expectedResult);
-            if (result)
-            {
-                _subject.IsRecovering((ServerErrorCode)(-1), message).Should().BeFalse();
-            }
-        }
-
-        [Theory]
-        [InlineData((ServerErrorCode)(-1), false)]
-        [InlineData(ServerErrorCode.NotMaster, true)]
-        [InlineData(ServerErrorCode.InterruptedAtShutdown, true)]
-        internal void IsStateChangeError_should_return_expected_result(ServerErrorCode code, bool expectedResult)
-        {
-            _subject.Initialize();
-
-            var result = _subject.IsStateChangeError(code, null);
-
-            result.Should().Be(expectedResult);
-        }
-
-        [Theory]
-        [InlineData((ServerErrorCode)(-1), false)]
-        [InlineData(ServerErrorCode.InterruptedAtShutdown, true)]
-        [InlineData(ServerErrorCode.InterruptedDueToReplStateChange, true)]
-        [InlineData(ServerErrorCode.NotMasterOrSecondary, true)]
-        [InlineData(ServerErrorCode.PrimarySteppedDown, true)]
-        [InlineData(ServerErrorCode.ShutdownInProgress, true)]
-        internal void IsRecovering_should_return_expected_result_for_code(ServerErrorCode code, bool expectedResult)
-        {
-            _subject.Initialize();
-
-            var result = _subject.IsRecovering(code, null);
-
-            result.Should().Be(expectedResult);
-            if (result)
-            {
-                _subject.IsNotMaster(code, null).Should().BeFalse();
-            }
-        }
-
-        [Theory]
-        [InlineData(null, false)]
-        [InlineData("abc", false)]
-        [InlineData("node is recovering", true)]
-        [InlineData("not master or secondary", true)]
-        internal void IsRecovering_should_return_expected_result_for_message(string message, bool expectedResult)
-        {
-            _subject.Initialize();
-
-            var result = _subject.IsRecovering((ServerErrorCode)(-1), message);
-
-            result.Should().Be(expectedResult);
-            if (result)
-            {
-                _subject.IsNotMaster((ServerErrorCode)(-1), message).Should().BeFalse();
-            }
-        }
-
-        [Theory]
-        [InlineData(nameof(EndOfStreamException), true)]
-        [InlineData(nameof(Exception), false)]
-        [InlineData(nameof(IOException), true)]
-        [InlineData(nameof(MongoConnectionException), true)]
-        [InlineData(nameof(MongoNodeIsRecoveringException), true)]
-        [InlineData(nameof(MongoNotPrimaryException), true)]
-        [InlineData(nameof(SocketException), true)]
-        [InlineData(nameof(TimeoutException), false)]
-        [InlineData("MongoConnectionExceptionWithSocketTimeout", false)]
-        [InlineData(nameof(MongoExecutionTimeoutException), false)]
-        internal void ShouldInvalidateServer_should_return_expected_result_for_exceptionType(string exceptionTypeName, bool expectedResult)
-        {
-            _subject.Initialize();
-            Exception exception;
-            var clusterId = new ClusterId(1);
-            var serverId = new ServerId(clusterId, new DnsEndPoint("localhost", 27017));
-            var connectionId = new ConnectionId(serverId);
-            var command = new BsonDocument("command", 1);
-            var notMasterResult = new BsonDocument {{ "code", ServerErrorCode.NotMaster}};
-            var nodeIsRecoveringResult = new BsonDocument("code", ServerErrorCode.InterruptedAtShutdown);
-
-            switch (exceptionTypeName)
-            {
-                case nameof(EndOfStreamException): exception = new EndOfStreamException(); break;
-                case nameof(Exception): exception = new Exception(); break;
-                case nameof(IOException): exception = new IOException(); break;
-                case nameof(MongoConnectionException): exception = new MongoConnectionException(connectionId, "message"); break;
-                case nameof(MongoNodeIsRecoveringException): exception = new MongoNodeIsRecoveringException(connectionId, command, notMasterResult); break;
-                case nameof(MongoNotPrimaryException): exception = new MongoNotPrimaryException(connectionId, command, nodeIsRecoveringResult); break;
-                case nameof(SocketException): exception = new SocketException(); break;
-                case "MongoConnectionExceptionWithSocketTimeout":
-                    var innermostException =  new SocketException((int)SocketError.TimedOut);
-                    var innerException = new IOException("Execute Order 66", innermostException);
-                    exception = new MongoConnectionException(connectionId, "Yes, Lord Sidious", innerException);
-                    break;
-                case nameof(TimeoutException): exception = new TimeoutException(); break;
-                case nameof(MongoExecutionTimeoutException): exception = new MongoExecutionTimeoutException(connectionId, "message"); break;
-                default: throw new Exception($"Invalid exceptionTypeName: {exceptionTypeName}.");
-            }
-
-            var result = _subject.ShouldInvalidateServer(new Mock<IConnectionHandle>().Object, exception, new ServerDescription(_subject.ServerId, _subject.EndPoint), out _);
-
-            result.Should().Be(expectedResult);
-        }
-
-        [Theory]
-        [InlineData(null, null, false)]
-        [InlineData((ServerErrorCode)(-1), null, false)]
-        [InlineData(ServerErrorCode.NotMaster, null, true)]
-        [InlineData(ServerErrorCode.InterruptedAtShutdown, null, true)]
-        [InlineData(null, "abc", false)]
-        [InlineData(null, "not master", true)]
-        [InlineData(null, "not master or secondary", true)]
-        [InlineData(null, "node is recovering", true)]
-        internal void ShouldInvalidateServer_should_return_expected_result_for_MongoCommandException(ServerErrorCode? code, string message, bool expectedResult)
-        {
-            _subject.Initialize();
-            var clusterId = new ClusterId(1);
-            var serverId = new ServerId(clusterId, new DnsEndPoint("localhost", 27017));
-            var connectionId = new ConnectionId(serverId);
-            var command = new BsonDocument("command", 1);
-            var commandResult = new BsonDocument
-            {
-                { "ok", 0 },
-                { "code", () => (int)code.Value, code.HasValue },
-                { "errmsg", message, message != null }
-            };
-            var exception = new MongoCommandException(connectionId, "message", command, commandResult);
-
-            var result = _subject.ShouldInvalidateServer(new Mock<IConnectionHandle>().Object, exception, new ServerDescription(_subject.ServerId, _subject.EndPoint), out _);
-
-            result.Should().Be(expectedResult);
-        }
-
-        [Theory]
-        [InlineData(null, null, false)]
-        [InlineData((ServerErrorCode)(-1), null, false)]
-        [InlineData(ServerErrorCode.NotMaster, null, true)]
-        [InlineData(ServerErrorCode.InterruptedAtShutdown, null, true)]
-        [InlineData(null, "abc", false)]
-        [InlineData(null, "not master", true)]
-        [InlineData(null, "not master or secondary", true)]
-        [InlineData(null, "node is recovering", true)]
-        internal void ShouldInvalidateServer_should_return_expected_result_for_MongoWriteConcernException(ServerErrorCode? code, string message, bool expectedResult)
-        {
-            _subject.Initialize();
-            var clusterId = new ClusterId(1);
-            var serverId = new ServerId(clusterId, new DnsEndPoint("localhost", 27017));
-            var connectionId = new ConnectionId(serverId);
-            var command = new BsonDocument("command", 1);
-            var commandResult = new BsonDocument
-            {
-                { "ok", 1 },
-                { "writeConcernError", new BsonDocument
-                    {
-                        { "code", () => (int)code.Value, code.HasValue },
-                        { "errmsg", message, message != null }
-                    }
-                }
-            };
-            var writeConcernResult = new WriteConcernResult(commandResult);
-            var exception = new MongoWriteConcernException(connectionId, "message", writeConcernResult);
-
-            var result = _subject.ShouldInvalidateServer(new Mock<IConnectionHandle>().Object, exception, new ServerDescription(_subject.ServerId, _subject.EndPoint), out _);
-
-            result.Should().Be(expectedResult);
         }
     }
 
@@ -710,46 +344,6 @@ namespace MongoDB.Driver.Core.Servers
                 session.ClusterTime.Should().Be(actualClusterTime);
                 server.ClusterClock.ClusterTime.Should().Be(actualClusterTime);
             }
-        }
-    }
-
-    internal static class ServerReflector
-    {
-        public static void HandleChannelException(this Server server, IConnection connection, Exception ex)
-        {
-            Reflector.Invoke(server, nameof(HandleChannelException), connection, ex);
-        }
-
-        public static bool IsNotMaster(this Server server, ServerErrorCode code, string message)
-        {
-            var methodInfo = typeof(Server).GetMethod(nameof(IsNotMaster), BindingFlags.NonPublic | BindingFlags.Instance);
-            return (bool)methodInfo.Invoke(server, new object[] { code, message });
-        }
-
-        public static bool IsStateChangeError(this Server server, ServerErrorCode code, string message)
-        {
-            var methodInfo = typeof(Server).GetMethod(nameof(IsStateChangeError), BindingFlags.NonPublic | BindingFlags.Instance);
-            return (bool)methodInfo.Invoke(server, new object[] { code, message });
-        }
-
-        public static bool IsRecovering(this Server server, ServerErrorCode code, string message)
-        {
-            var methodInfo = typeof(Server).GetMethod(nameof(IsRecovering), BindingFlags.NonPublic | BindingFlags.Instance);
-            return (bool)methodInfo.Invoke(server, new object[] { code, message });
-        }
-
-        public static bool ShouldInvalidateServer(this Server server,
-            IConnectionHandle connection,
-            Exception exception,
-            ServerDescription description,
-            out TopologyVersion responseTopologyVersion)
-        {
-            var methodInfo = typeof(Server).GetMethod(nameof(ShouldInvalidateServer), BindingFlags.NonPublic | BindingFlags.Instance);
-            var parameters = new object[] {connection, exception, description, null};
-            int outParameterIndex = Array.IndexOf(parameters, null);
-            var shouldInvalidate = (bool)methodInfo.Invoke(server, parameters);
-            responseTopologyVersion = (TopologyVersion)parameters[outParameterIndex];
-            return shouldInvalidate;
         }
     }
 }

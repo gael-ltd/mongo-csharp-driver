@@ -38,7 +38,7 @@ namespace MongoDB.Driver.GridFS.Tests.Specifications.gridfs
             string reason;
             if (!test.CanRun(out reason))
             {
-                throw new SkipException(reason);
+                throw new SkipTestException(reason);
             }
 
             var client = DriverTestConfiguration.Client;
@@ -53,7 +53,11 @@ namespace MongoDB.Driver.GridFS.Tests.Specifications.gridfs
         {
             public IEnumerator<object[]> GetEnumerator()
             {
+#if NET45
                 const string prefix = "MongoDB.Driver.GridFS.Tests.Specifications.gridfs.tests.";
+#else
+                const string prefix = "MongoDB.Driver.GridFS.Tests.Dotnet.Specifications.gridfs.tests.";
+#endif
                 var testCases = typeof(TestCaseSource).GetTypeInfo().Assembly
                     .GetManifestResourceNames()
                     .Where(path => path.StartsWith(prefix) && path.EndsWith(".json"))

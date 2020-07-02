@@ -44,7 +44,7 @@ namespace MongoDB.Driver.Core.Misc
                     case 13475:
                     case 16986:
                     case 16712:
-                        return new MongoExecutionTimeoutException(connectionId, message: "Operation exceeded time limit.", response);
+                        return new MongoExecutionTimeoutException(connectionId, message: "Operation exceeded time limit.");
                 }
             }
 
@@ -113,11 +113,10 @@ namespace MongoDB.Driver.Core.Misc
         /// Maps the server response to a MongoNotPrimaryException or MongoNodeIsRecoveringException (if appropriate).
         /// </summary>
         /// <param name="connectionId">The connection identifier.</param>
-        /// <param name="command">The command.</param>
         /// <param name="response">The server response.</param>
         /// <param name="errorMessageFieldName">Name of the error message field.</param>
         /// <returns>The exception, or null if no exception necessary.</returns>
-        public static Exception MapNotPrimaryOrNodeIsRecovering(ConnectionId connectionId, BsonDocument command, BsonDocument response, string errorMessageFieldName)
+        public static Exception MapNotPrimaryOrNodeIsRecovering(ConnectionId connectionId, BsonDocument response, string errorMessageFieldName)
         {
             BsonValue codeBsonValue;
             if (response.TryGetValue("code", out codeBsonValue) && codeBsonValue.IsNumeric)
@@ -127,14 +126,14 @@ namespace MongoDB.Driver.Core.Misc
                 {
                     case ServerErrorCode.NotMaster:
                     case ServerErrorCode.NotMasterNoSlaveOk:
-                        return new MongoNotPrimaryException(connectionId, command, response);
+                        return new MongoNotPrimaryException(connectionId, response);
 
                     case ServerErrorCode.InterruptedAtShutdown:
                     case ServerErrorCode.InterruptedDueToReplStateChange:
                     case ServerErrorCode.NotMasterOrSecondary:
                     case ServerErrorCode.PrimarySteppedDown:
                     case ServerErrorCode.ShutdownInProgress:
-                        return new MongoNodeIsRecoveringException(connectionId, command, response);
+                        return new MongoNodeIsRecoveringException(connectionId, response);
                 }
             }
 
@@ -145,11 +144,11 @@ namespace MongoDB.Driver.Core.Misc
                 if (errorMessage.IndexOf("node is recovering", StringComparison.OrdinalIgnoreCase) != -1 ||
                     errorMessage.IndexOf("not master or secondary", StringComparison.OrdinalIgnoreCase) != -1)
                 {
-                    return new MongoNodeIsRecoveringException(connectionId, command, response);
+                    return new MongoNodeIsRecoveringException(connectionId, response);
                 }
                 else if (errorMessage.IndexOf("not master", StringComparison.OrdinalIgnoreCase) != -1)
                 {
-                    return new MongoNotPrimaryException(connectionId, command, response);
+                    return new MongoNotPrimaryException(connectionId, response);
                 }
             }
 

@@ -60,7 +60,7 @@ namespace MongoDB.Driver
     /// <summary>
     /// Represents the results of the collection stats command.
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     [BsonSerializer(typeof(CommandResultSerializer<CollectionStatsResult>))]

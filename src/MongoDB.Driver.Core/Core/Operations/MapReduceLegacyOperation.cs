@@ -118,10 +118,7 @@ namespace MongoDB.Driver.Core.Operations
         private ReadCommandOperation<BsonDocument> CreateOperation(ICoreSessionHandle session, ConnectionDescription connectionDescription)
         {
             var command = CreateCommand(session, connectionDescription);
-            var operation = new ReadCommandOperation<BsonDocument>(CollectionNamespace.DatabaseNamespace, command, BsonDocumentSerializer.Instance, MessageEncoderSettings)
-            {
-                RetryRequested = false
-            };
+            var operation = new ReadCommandOperation<BsonDocument>(CollectionNamespace.DatabaseNamespace, command, BsonDocumentSerializer.Instance, MessageEncoderSettings);
             return operation;
         }
     }

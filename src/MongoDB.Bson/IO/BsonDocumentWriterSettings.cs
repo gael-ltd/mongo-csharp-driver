@@ -20,7 +20,7 @@ namespace MongoDB.Bson.IO
     /// <summary>
     /// Represents settings for a BsonDocumentWriter.
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     public class BsonDocumentWriterSettings : BsonWriterSettings
@@ -40,7 +40,7 @@ namespace MongoDB.Bson.IO
         /// Initializes a new instance of the BsonDocumentWriterSettings class.
         /// </summary>
         /// <param name="guidRepresentation">The representation for Guids.</param>
-        [Obsolete("Configure serializers instead.")]
+        [Obsolete("Use the no-argument constructor instead and set the properties.")]
         public BsonDocumentWriterSettings(GuidRepresentation guidRepresentation)
             : base(guidRepresentation)
         {
@@ -82,14 +82,9 @@ namespace MongoDB.Bson.IO
         {
             var clone = new BsonDocumentWriterSettings
             {
+                GuidRepresentation = GuidRepresentation,
                 MaxSerializationDepth = MaxSerializationDepth
             };
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                clone.GuidRepresentation = GuidRepresentation;
-            }
-#pragma warning restore 618
             return clone;
         }
     }

@@ -75,7 +75,7 @@ namespace MongoDB.Driver.Builders
     /// <summary>
     /// A builder for specifying a sort order.
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     [BsonSerializer(typeof(SortByBuilder.Serializer))]
@@ -199,7 +199,7 @@ namespace MongoDB.Driver.Builders
     /// A builder for specifying a sort order.
     /// </summary>
     /// <typeparam name="TDocument">The type of the document.</typeparam>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     [BsonSerializer(typeof(SortByBuilder<>.Serializer))]

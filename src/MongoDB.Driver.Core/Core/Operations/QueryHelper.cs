@@ -52,28 +52,21 @@ namespace MongoDB.Driver.Core.Operations
             return firstBatchSize;
         }
 
-        public static BsonDocument CreateReadPreferenceDocument(ServerType serverType, ReadPreference readPreference, out bool slaveOk)
+        public static BsonDocument CreateReadPreferenceDocument(ServerType serverType, ReadPreference readPreference)
         {
-            slaveOk = readPreference != null && readPreference.ReadPreferenceMode != ReadPreferenceMode.Primary;
-
             if (serverType != ServerType.ShardRouter || readPreference == null)
             {
                 return null;
             }
 
             // simple ReadPreferences of Primary and SecondaryPreferred are encoded in the slaveOk bit
-            switch (readPreference.ReadPreferenceMode)
+            if (readPreference.ReadPreferenceMode == ReadPreferenceMode.Primary || readPreference.ReadPreferenceMode == ReadPreferenceMode.SecondaryPreferred)
             {
-                case ReadPreferenceMode.Primary:
+                var hasTagSets = readPreference.TagSets != null && readPreference.TagSets.Count > 0;
+                if (!hasTagSets && !readPreference.MaxStaleness.HasValue)
+                {
                     return null;
-
-                case ReadPreferenceMode.SecondaryPreferred:
-                    var hasTagSets = readPreference.TagSets != null && readPreference.TagSets.Count > 0;
-                    if (!hasTagSets && !readPreference.MaxStaleness.HasValue && readPreference.Hedge == null)
-                    {
-                        return null;
-                    }
-                    break;
+                }
             }
 
             return CreateReadPreferenceDocument(readPreference);
@@ -99,8 +92,7 @@ namespace MongoDB.Driver.Core.Operations
             {
                 { "mode", modeString },
                 { "tags", tagSets, tagSets != null },
-                { "maxStalenessSeconds", () => (int)readPreference.MaxStaleness.Value.TotalSeconds, readPreference.MaxStaleness.HasValue },
-                { "hedge", () => readPreference.Hedge.ToBsonDocument(), readPreference.Hedge != null }
+                { "maxStalenessSeconds", () => (int)readPreference.MaxStaleness.Value.TotalSeconds, readPreference.MaxStaleness.HasValue }
             };
         }
     }

@@ -24,9 +24,7 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestCreateMongoCRCredential()
         {
-#pragma warning disable 618
             var credential = MongoCredential.CreateMongoCRCredential("db", "username", "password");
-#pragma warning restore 618
             Assert.Equal("MONGODB-CR", credential.Mechanism);
             Assert.Equal("username", credential.Username);
             Assert.Equal(new PasswordEvidence("password"), credential.Evidence);
@@ -44,7 +42,7 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestCreateMongoX509Credential_without_username()
         {
-            var credential = MongoCredential.CreateMongoX509Credential();
+            var credential = MongoCredential.CreateMongoX509Credential(null);
             Assert.Equal("MONGODB-X509", credential.Mechanism);
             Assert.Equal(null, credential.Username);
             Assert.IsType<ExternalEvidence>(credential.Evidence);
@@ -53,7 +51,6 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestEquals()
         {
-#pragma warning disable 618
             var a = MongoCredential.CreateMongoCRCredential("db", "user1", "password");
             var b = MongoCredential.CreateMongoCRCredential("db", "user1", "password");
             var c = MongoCredential.CreateMongoCRCredential("db", "user2", "password");
@@ -61,7 +58,6 @@ namespace MongoDB.Driver.Tests
             var e = MongoCredential.CreateMongoCRCredential("db", "user2", "password1").WithMechanismProperty("TEST", true);
             var f = MongoCredential.CreateMongoCRCredential("db", "user2", "password1").WithMechanismProperty("TEST", true);
             var n = (MongoCredential)null;
-#pragma warning restore 618
 
             Assert.True(object.Equals(a, b));
             Assert.False(object.Equals(a, c));
@@ -95,10 +91,10 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestPassword()
         {
-#pragma warning disable 618
             var credentials = MongoCredential.CreateMongoCRCredential("database", "username", "password");
+#pragma warning disable 618
             Assert.Equal("password", credentials.Password);
-#pragma warning restore 618
+#pragma warning restore
         }
 
         [Fact]
@@ -127,9 +123,7 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestMechanismProperty()
         {
-#pragma warning disable 618
             var credential = MongoCredential.CreateMongoCRCredential("database", "username", "password");
-#pragma warning restore 618
             var withProperties = credential
                 .WithMechanismProperty("SPN", "awesome")
                 .WithMechanismProperty("OTHER", 10);

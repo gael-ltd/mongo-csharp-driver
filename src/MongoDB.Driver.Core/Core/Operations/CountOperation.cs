@@ -40,7 +40,6 @@ namespace MongoDB.Driver.Core.Operations
         private TimeSpan? _maxTime;
         private readonly MessageEncoderSettings _messageEncoderSettings;
         private ReadConcern _readConcern = ReadConcern.Default;
-        private bool _retryRequested;
         private long? _skip;
 
         // constructors
@@ -150,16 +149,6 @@ namespace MongoDB.Driver.Core.Operations
         }
 
         /// <summary>
-        /// Gets or sets a value indicating whether to retry.
-        /// </summary>
-        /// <value>Whether to retry.</value>
-        public bool RetryRequested
-        {
-            get => _retryRequested;
-            set => _retryRequested = value;
-        }
-
-        /// <summary>
         /// Gets or sets the number of documents to skip before counting the remaining matching documents.
         /// </summary>
         /// <value>
@@ -195,11 +184,12 @@ namespace MongoDB.Driver.Core.Operations
         public long Execute(IReadBinding binding, CancellationToken cancellationToken)
         {
             Ensure.IsNotNull(binding, nameof(binding));
-
-            using (var context = RetryableReadContext.Create(binding, _retryRequested, cancellationToken))
+            using (var channelSource = binding.GetReadChannelSource(cancellationToken))
+            using (var channel = channelSource.GetChannel(cancellationToken))
+            using (var channelBinding = new ChannelReadBinding(channelSource.Server, channel, binding.ReadPreference, binding.Session.Fork()))
             {
-                var operation = CreateOperation(context);
-                var document = operation.Execute(context, cancellationToken);
+                var operation = CreateOperation(channel, channelBinding);
+                var document = operation.Execute(channelBinding, cancellationToken);
                 return document["n"].ToInt64();
             }
         }
@@ -208,22 +198,20 @@ namespace MongoDB.Driver.Core.Operations
         public async Task<long> ExecuteAsync(IReadBinding binding, CancellationToken cancellationToken)
         {
             Ensure.IsNotNull(binding, nameof(binding));
-
-            using (var context = await RetryableReadContext.CreateAsync(binding, _retryRequested, cancellationToken).ConfigureAwait(false))
+            using (var channelSource = await binding.GetReadChannelSourceAsync(cancellationToken).ConfigureAwait(false))
+            using (var channel = await channelSource.GetChannelAsync(cancellationToken).ConfigureAwait(false))
+            using (var channelBinding = new ChannelReadBinding(channelSource.Server, channel, binding.ReadPreference, binding.Session.Fork()))
             {
-                var operation = CreateOperation(context);
-                var document = await operation.ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
+                var operation = CreateOperation(channel, channelBinding);
+                var document = await operation.ExecuteAsync(channelBinding, cancellationToken).ConfigureAwait(false);
                 return document["n"].ToInt64();
             }
         }
 
-        private ReadCommandOperation<BsonDocument> CreateOperation(RetryableReadContext context)
+        private ReadCommandOperation<BsonDocument> CreateOperation(IChannel channel, IBinding binding)
         {
-            var command = CreateCommand(context.Channel.ConnectionDescription, context.Binding.Session);
-            return new ReadCommandOperation<BsonDocument>(_collectionNamespace.DatabaseNamespace, command, BsonDocumentSerializer.Instance, _messageEncoderSettings)
-            {
-                RetryRequested = _retryRequested // might be overridden by retryable read context
-            };
+            var command = CreateCommand(channel.ConnectionDescription, binding.Session);
+            return new ReadCommandOperation<BsonDocument>(_collectionNamespace.DatabaseNamespace, command, BsonDocumentSerializer.Instance, _messageEncoderSettings);
         }
     }
 }

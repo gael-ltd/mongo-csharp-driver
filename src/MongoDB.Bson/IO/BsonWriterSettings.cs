@@ -20,15 +20,13 @@ namespace MongoDB.Bson.IO
     /// <summary>
     /// Represents settings for a BsonWriter.
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     public abstract class BsonWriterSettings
     {
         // private fields
-#pragma warning disable 618
-        private GuidRepresentation _guidRepresentation = BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 ? BsonDefaults.GuidRepresentation : GuidRepresentation.Unspecified;
-#pragma warning restore 618
+        private GuidRepresentation _guidRepresentation = BsonDefaults.GuidRepresentation;
         private bool _isFrozen;
         private int _maxSerializationDepth = BsonDefaults.MaxSerializationDepth;
 
@@ -44,13 +42,8 @@ namespace MongoDB.Bson.IO
         /// Initializes a new instance of the BsonWriterSettings class.
         /// </summary>
         /// <param name="guidRepresentation">The representation for Guids.</param>
-        [Obsolete("Configure serializers instead.")]
         protected BsonWriterSettings(GuidRepresentation guidRepresentation)
         {
-            if (BsonDefaults.GuidRepresentationMode != GuidRepresentationMode.V2)
-            {
-                throw new InvalidOperationException("BsonWriterSettings constructor with GuidRepresentation can only be used when GuidRepresentationMode is V2.");
-            }
             _guidRepresentation = guidRepresentation;
         }
 
@@ -58,24 +51,12 @@ namespace MongoDB.Bson.IO
         /// <summary>
         /// Gets or sets the representation for Guids.
         /// </summary>
-        [Obsolete("Configure serializers instead.")]
         public GuidRepresentation GuidRepresentation
         {
-            get
-            {
-                if (BsonDefaults.GuidRepresentationMode != GuidRepresentationMode.V2)
-                {
-                    throw new InvalidOperationException("BsonWriterSettings.GuidRepresentation can only be used when GuidRepresentationMode is V2.");
-                }
-                return _guidRepresentation;
-            }
+            get { return _guidRepresentation; }
             set
             {
                 if (_isFrozen) { ThrowFrozenException(); }
-                if (BsonDefaults.GuidRepresentationMode != GuidRepresentationMode.V2)
-                {
-                    throw new InvalidOperationException("BsonWriterSettings.GuidRepresentation can only be used when GuidRepresentationMode is V2.");
-                }
                 _guidRepresentation = value;
             }
         }

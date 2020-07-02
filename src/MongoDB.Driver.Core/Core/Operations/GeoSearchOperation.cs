@@ -30,7 +30,6 @@ namespace MongoDB.Driver.Core.Operations
     /// Represents the geoSearch command.
     /// </summary>
     /// <typeparam name="TResult">The type of the result.</typeparam>
-    [Obsolete("The geoSearch command was deprecated in server version 4.4.")]
     public sealed class GeoSearchOperation<TResult> : IReadOperation<TResult>
     {
         private readonly CollectionNamespace _collectionNamespace;
@@ -185,10 +184,7 @@ namespace MongoDB.Driver.Core.Operations
                 _collectionNamespace.DatabaseNamespace,
                 command,
                 _resultSerializer,
-                _messageEncoderSettings)
-            {
-                RetryRequested = false
-            };
+                _messageEncoderSettings);
         }
     }
 }

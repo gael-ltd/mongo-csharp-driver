@@ -47,7 +47,7 @@ namespace MongoDB.Driver.Core.Authentication.Sspi
             long timestamp;
 
             var credential = new SecurityCredential();
-#if NET452
+#if NET45
             RuntimeHelpers.PrepareConstrainedRegions();
 #endif
             try { }
@@ -69,7 +69,7 @@ namespace MongoDB.Driver.Core.Authentication.Sspi
                 }
                 else
                 {
-                    using (var authIdentity = new AuthIdentity(username, password))
+                    using(var authIdentity = new AuthIdentity(username, password))
                     {
                         // TODO: make this secure by using SecurePassword
                         result = NativeMethods.AcquireCredentialsHandle(

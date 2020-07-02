@@ -22,7 +22,7 @@ namespace MongoDB.Driver.GridFS
     /// <summary>
     /// Represents setting for GridFS.
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     public class MongoGridFSSettings : IEquatable<MongoGridFSSettings>
@@ -154,24 +154,12 @@ namespace MongoDB.Driver.GridFS
         /// <summary>
         /// Gets or sets the GuidRepresentation.
         /// </summary>
-        [Obsolete("Configure serializers instead.")]
         public GuidRepresentation GuidRepresentation
         {
-            get
-            {
-                if (BsonDefaults.GuidRepresentationMode != GuidRepresentationMode.V2)
-                {
-                    throw new InvalidOperationException("MongoGridFSSettings.GuidRepresentation can only be used when GuidRepresentationMode is V2.");
-                }
-                return _guidRepresentation.Value;
-            }
+            get { return _guidRepresentation.Value; }
             set
             {
                 if (_isFrozen) { ThrowFrozen(); }
-                if (BsonDefaults.GuidRepresentationMode != GuidRepresentationMode.V2)
-                {
-                    throw new InvalidOperationException("MongoGridFSSettings.GuidRepresentation can only be used when GuidRepresentationMode is V2.");
-                }
                 _guidRepresentation.Value = value;
             }
         }
@@ -237,8 +225,7 @@ namespace MongoDB.Driver.GridFS
         public bool UpdateMD5
         {
             get { return _updateMD5.Value; }
-            set
-            {
+            set {
                 if (_isFrozen) { ThrowFrozen(); }
                 _updateMD5.Value = value;
             }
@@ -250,8 +237,7 @@ namespace MongoDB.Driver.GridFS
         public bool VerifyMD5
         {
             get { return _verifyMD5.Value; }
-            set
-            {
+            set {
                 if (_isFrozen) { ThrowFrozen(); }
                 _verifyMD5.Value = value;
             }
@@ -422,12 +408,10 @@ namespace MongoDB.Driver.GridFS
             {
                 ChunkSize = __defaults.ChunkSize;
             }
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 && !_guidRepresentation.HasBeenSet)
+            if (!_guidRepresentation.HasBeenSet)
             {
                 GuidRepresentation = databaseSettings.GuidRepresentation;
             }
-#pragma warning restore 618
             if (!_readEncoding.HasBeenSet)
             {
                 ReadEncoding = databaseSettings.ReadEncoding;
@@ -464,12 +448,10 @@ namespace MongoDB.Driver.GridFS
             {
                 ChunkSize = __defaults.ChunkSize;
             }
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 && !_guidRepresentation.HasBeenSet)
+            if (!_guidRepresentation.HasBeenSet)
             {
                 GuidRepresentation = serverSettings.GuidRepresentation;
             }
-#pragma warning restore 618
             if (!_readEncoding.HasBeenSet)
             {
                 ReadEncoding = serverSettings.ReadEncoding;
@@ -502,20 +484,14 @@ namespace MongoDB.Driver.GridFS
 
         internal MongoDatabaseSettings GetDatabaseSettings()
         {
-            var databaseSettings = new MongoDatabaseSettings
+            return new MongoDatabaseSettings
             {
+                GuidRepresentation = _guidRepresentation.Value,
                 ReadEncoding = _readEncoding.Value,
                 ReadPreference = _readPreference.Value,
                 WriteConcern = _writeConcern.Value,
                 WriteEncoding = _writeEncoding.Value
             };
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                databaseSettings.GuidRepresentation = _guidRepresentation.Value;
-            }
-#pragma warning restore 618
-            return databaseSettings;
         }
 
         // private methods

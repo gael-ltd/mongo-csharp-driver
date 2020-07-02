@@ -44,17 +44,13 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages
         [InlineData(false, false, false, false, false, true)]
         public void Constructor_should_initialize_instance(bool awaitData, bool noCursorTimeout, bool oplogReplay, bool partialOk, bool slaveOk, bool tailableCursor)
         {
-#pragma warning disable 618
             var subject = new QueryMessage(_requestId, _collectionNamespace, _query, _fields, _queryValidator, _skip, _batchSize, slaveOk, partialOk, noCursorTimeout, oplogReplay, tailableCursor, awaitData);
-#pragma warning restore 618
             subject.AwaitData.Should().Be(awaitData);
             subject.BatchSize.Should().Be(_batchSize);
             subject.CollectionNamespace.Should().Be(_collectionNamespace);
             subject.Fields.Should().Be(_fields);
             subject.NoCursorTimeout.Should().Be(noCursorTimeout);
-#pragma warning disable 618
             subject.OplogReplay.Should().Be(oplogReplay);
-#pragma warning restore 618
             subject.PartialOk.Should().Be(partialOk);
             subject.PostWriteAction.Should().BeNull();
             subject.Query.Should().Be(_query);
@@ -67,36 +63,28 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages
         [Fact]
         public void Constructor_with_negative_skip_should_throw()
         {
-#pragma warning disable 618
             Action action = () => new QueryMessage(_requestId, _collectionNamespace, _query, _fields, _queryValidator, -1, _batchSize, false, false, false, false, false, false);
-#pragma warning restore 618
             action.ShouldThrow<ArgumentOutOfRangeException>();
         }
 
         [Fact]
         public void Constructor_with_null_collectionNamespace_should_throw()
         {
-#pragma warning disable 618
             Action action = () => new QueryMessage(_requestId, null, _query, _fields, _queryValidator, _skip, _batchSize, false, false, false, false, false, false);
             action.ShouldThrow<ArgumentNullException>();
-#pragma warning restore 618
         }
 
         [Fact]
         public void Constructor_with_null_query_should_throw()
         {
-#pragma warning disable 618
             Action action = () => new QueryMessage(_requestId, _collectionNamespace, null, _fields, _queryValidator, _skip, _batchSize, false, false, false, false, false, false);
             action.ShouldThrow<ArgumentNullException>();
-#pragma warning restore 618
         }
 
         [Fact]
         public void GetEncoder_should_return_encoder()
         {
-#pragma warning disable 618
             var subject = new QueryMessage(_requestId, _collectionNamespace, _query, _fields, _queryValidator, _skip, _batchSize, false, false, false, false, false, false);
-#pragma warning restore 618
             var mockEncoderFactory = new Mock<IMessageEncoderFactory>();
             var encoder = new Mock<IMessageEncoder>().Object;
             mockEncoderFactory.Setup(f => f.GetQueryMessageEncoder()).Returns(encoder);
@@ -112,12 +100,10 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages
             [Values(false, true)] bool isNull)
         {
             var value = isNull ? null : (Action<IMessageEncoderPostProcessor>)(encoder => { });
-#pragma warning disable 618
             var subject = new QueryMessage(_requestId, _collectionNamespace, _query, _fields, _queryValidator, _skip, _batchSize, false, false, false, false, false, false)
             {
                 PostWriteAction = value
             };
-#pragma warning restore 618
 
             var result = subject.PostWriteAction;
 
@@ -129,9 +115,7 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages
         public void PostWriteAction_set_should_have_expected_result(
             [Values(false, true)] bool isNull)
         {
-#pragma warning disable 618
             var subject = new QueryMessage(_requestId, _collectionNamespace, _query, _fields, _queryValidator, _skip, _batchSize, false, false, false, false, false, false);
-#pragma warning restore 618
             var value = isNull ? null : (Action<IMessageEncoderPostProcessor>)(encoder => { });
 
             subject.PostWriteAction = value;
@@ -144,12 +128,10 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages
         public void ResponseHandling_get_should_return_expected_result(
             [Values(CommandResponseHandling.Return, CommandResponseHandling.Ignore)] CommandResponseHandling value)
         {
-#pragma warning disable 618
             var subject = new QueryMessage(_requestId, _collectionNamespace, _query, _fields, _queryValidator, _skip, _batchSize, false, false, false, false, false, false)
             {
                 ResponseHandling = value
             };
-#pragma warning restore 618
 
             var result = subject.ResponseHandling;
 
@@ -161,9 +143,7 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages
         public void ResponseHandling_set_should_have_expected_result(
             [Values(CommandResponseHandling.Return, CommandResponseHandling.Ignore)] CommandResponseHandling value)
         {
-#pragma warning disable 618
             var subject = new QueryMessage(_requestId, _collectionNamespace, _query, _fields, _queryValidator, _skip, _batchSize, false, false, false, false, false, false);
-#pragma warning restore 618
 
             subject.ResponseHandling = value;
 
@@ -175,9 +155,7 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages
         public void ResponseHandling_set_should_throw_when_value_is_invalid(
             [Values(-1, CommandResponseHandling.NoResponseExpected)] CommandResponseHandling value)
         {
-#pragma warning disable 618
             var subject = new QueryMessage(_requestId, _collectionNamespace, _query, _fields, _queryValidator, _skip, _batchSize, false, false, false, false, false, false);
-#pragma warning restore 618
 
             var exception = Record.Exception(() => subject.ResponseHandling = value);
 

@@ -14,16 +14,15 @@
 */
 
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using FluentAssertions;
+using MongoDB.Bson;
 using MongoDB.Bson.IO;
 using MongoDB.Bson.Serialization;
-using MongoDB.Bson.TestHelpers;
-using MongoDB.Bson.TestHelpers.XunitExtensions;
+using FluentAssertions;
 using Xunit;
+using MongoDB.Bson.TestHelpers.XunitExtensions;
 
 namespace MongoDB.Bson.Tests.IO
 {
@@ -167,9 +166,7 @@ namespace MongoDB.Bson.Tests.IO
             };
             foreach (var test in tests)
             {
-#pragma warning disable 618
                 var json = new BsonDecimal128(test.Value).ToJson(new JsonWriterSettings { OutputMode = JsonOutputMode.Strict });
-#pragma warning restore 618
                 Assert.Equal(test.Expected, json);
                 Assert.Equal(test.Value, BsonSerializer.Deserialize<Decimal128>(json));
             }
@@ -259,9 +256,7 @@ namespace MongoDB.Bson.Tests.IO
                 new TestData<long>(int.MaxValue + 1L, "2147483648"),
                 new TestData<long>(long.MaxValue, "9223372036854775807")
             };
-#pragma warning disable 618
             var jsonSettings = new JsonWriterSettings { OutputMode = JsonOutputMode.Strict };
-#pragma warning restore 618
             foreach (var test in tests)
             {
                 var json = test.Value.ToJson(jsonSettings);
@@ -307,94 +302,43 @@ namespace MongoDB.Bson.Tests.IO
             Assert.Equal(expected, json);
         }
 
-        [Theory]
-        [ParameterAttributeData]
-        [ResetGuidModeAfterTest]
-        public void TestBinaryShell(
-            [ClassValues(typeof(GuidModeValues))] GuidMode mode)
+        [Fact]
+        public void TestBinaryShell()
         {
-            mode.Set();
-
-#pragma warning disable 618
-            var guid = Guid.Parse("00112233-4455-6677-8899-aabbccddeeff");
-            var tests = new List<TestData<BsonBinaryData>>
+            var tests = new TestData<BsonBinaryData>[]
             {
                 new TestData<BsonBinaryData>(new byte[] { }, "new BinData(0, \"\")"),
                 new TestData<BsonBinaryData>(new byte[] { 1 }, "new BinData(0, \"AQ==\")"),
                 new TestData<BsonBinaryData>(new byte[] { 1, 2 }, "new BinData(0, \"AQI=\")"),
-                new TestData<BsonBinaryData>(new byte[] { 1, 2, 3 }, "new BinData(0, \"AQID\")")
+                new TestData<BsonBinaryData>(new byte[] { 1, 2, 3 }, "new BinData(0, \"AQID\")"),
+                new TestData<BsonBinaryData>(Guid.Empty, "CSUUID(\"00000000-0000-0000-0000-000000000000\")")
             };
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 && BsonDefaults.GuidRepresentation != GuidRepresentation.Unspecified)
-            {
-                string expectedGuidJson;
-                switch (BsonDefaults.GuidRepresentation)
-                {
-                    case GuidRepresentation.CSharpLegacy: expectedGuidJson = "CSUUID(\"00112233-4455-6677-8899-aabbccddeeff\")"; break;
-                    case GuidRepresentation.JavaLegacy: expectedGuidJson = "JUUID(\"00112233-4455-6677-8899-aabbccddeeff\")"; break;
-                    case GuidRepresentation.PythonLegacy: expectedGuidJson = "PYUUID(\"00112233-4455-6677-8899-aabbccddeeff\")"; break;
-                    case GuidRepresentation.Standard: expectedGuidJson = "UUID(\"00112233-4455-6677-8899-aabbccddeeff\")"; break;
-                    default: throw new Exception("Invalid GuidRepresentation.");
-                }
-                tests.Add(new TestData<BsonBinaryData>(guid, expectedGuidJson));
-            }
             foreach (var test in tests)
             {
-                var json = test.Value.ToJson(new JsonWriterSettings());
+                var json = test.Value.ToJson();
                 Assert.Equal(test.Expected, json);
                 Assert.Equal(test.Value, BsonSerializer.Deserialize<BsonBinaryData>(json));
             }
-#pragma warning restore 618
         }
 
-        [Theory]
-        [ParameterAttributeData]
-        [ResetGuidModeAfterTest]
-        public void TestBinaryStrict(
-            [ClassValues(typeof(GuidModeValues))] GuidMode mode)
+        [Fact]
+        public void TestBinaryStrict()
         {
-            mode.Set();
-
-#pragma warning disable 618
-            var guid = Guid.Parse("00112233-4455-6677-8899-aabbccddeeff");
-            var tests = new List<TestData<BsonBinaryData>>
+            var tests = new TestData<BsonBinaryData>[]
             {
                 new TestData<BsonBinaryData>(new byte[] { }, "{ \"$binary\" : \"\", \"$type\" : \"00\" }"),
                 new TestData<BsonBinaryData>(new byte[] { 1 }, "{ \"$binary\" : \"AQ==\", \"$type\" : \"00\" }"),
                 new TestData<BsonBinaryData>(new byte[] { 1, 2 }, "{ \"$binary\" : \"AQI=\", \"$type\" : \"00\" }"),
-                new TestData<BsonBinaryData>(new byte[] { 1, 2, 3 }, "{ \"$binary\" : \"AQID\", \"$type\" : \"00\" }")
+                new TestData<BsonBinaryData>(new byte[] { 1, 2, 3 }, "{ \"$binary\" : \"AQID\", \"$type\" : \"00\" }"),
+                new TestData<BsonBinaryData>(Guid.Empty, "{ \"$binary\" : \"AAAAAAAAAAAAAAAAAAAAAA==\", \"$type\" : \"03\" }")
             };
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 && BsonDefaults.GuidRepresentation != GuidRepresentation.Unspecified)
-            {
-                byte[] expectedBytes;
-                string expectedSubType;
-                switch (BsonDefaults.GuidRepresentation)
-                {
-                    case GuidRepresentation.CSharpLegacy:
-                    case GuidRepresentation.JavaLegacy:
-                    case GuidRepresentation.PythonLegacy:
-                        expectedBytes = GuidConverter.ToBytes(guid, BsonDefaults.GuidRepresentation);
-                        expectedSubType = "03";
-                        break;
-
-                    case GuidRepresentation.Standard:
-                        expectedBytes = GuidConverter.ToBytes(guid, GuidRepresentation.Standard);
-                        expectedSubType = "04";
-                        break;
-
-                    default: throw new Exception("Invalid GuidRepresentation.");
-                }
-                var expectedBase64 = Convert.ToBase64String(expectedBytes);
-                var expectedGuidJson = $"{{ \"$binary\" : \"{expectedBase64}\", \"$type\" : \"{expectedSubType}\" }}";
-                tests.Add(new TestData<BsonBinaryData>(guid, expectedGuidJson));
-            }
             var jsonSettings = new JsonWriterSettings { OutputMode = JsonOutputMode.Strict };
             foreach (var test in tests)
             {
                 var json = test.Value.ToJson(jsonSettings);
                 Assert.Equal(test.Expected, json);
-                Assert.Equal(test.Value, BsonSerializer.Deserialize<BsonBinaryData>(new JsonReader(json, new JsonReaderSettings())));
+                Assert.Equal(test.Value, BsonSerializer.Deserialize<BsonBinaryData>(json));
             }
-#pragma warning restore 618
         }
 
         [Fact]
@@ -438,9 +382,7 @@ namespace MongoDB.Bson.Tests.IO
                 new TestData<BsonDateTime>(new BsonDateTime(utcNowTruncated), strictDate),
                 new TestData<BsonDateTime>(new BsonDateTime(DateTime.MaxValue), "{ \"$date\" : 253402300799999 }"),
             };
-#pragma warning disable 618
             var jsonSettings = new JsonWriterSettings { OutputMode = JsonOutputMode.Strict };
-#pragma warning restore 618
             foreach (var test in tests)
             {
                 var json = test.Value.ToJson(jsonSettings);
@@ -473,42 +415,16 @@ namespace MongoDB.Bson.Tests.IO
             Assert.Equal(expected, actual);
         }
 
-        [Theory]
-        [ParameterAttributeData]
-        [ResetGuidModeAfterTest]
-        public void TestGuid(
-            [ClassValues(typeof(GuidModeValues))] GuidMode mode)
+        [Fact]
+        public void TestGuid()
         {
-            mode.Set();
-
-#pragma warning disable 618, 1062
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 && BsonDefaults.GuidRepresentation == GuidRepresentation.Unspecified ||
-                BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V3)
+            var document = new BsonDocument
             {
-                var exception = Record.Exception(() => new BsonDocument("guid", new Guid("00112233445566778899aabbccddeeff")));
-                exception.Should().BeOfType<InvalidOperationException>();
-            }
-            else
-            {
-                var document = new BsonDocument
-                {
-                    { "guid", new Guid("00112233445566778899aabbccddeeff") }
-                };
-                string expected;
-                var guidRepresentation = BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 ? BsonDefaults.GuidRepresentation : GuidRepresentation.Unspecified;
-                switch (guidRepresentation)
-                {
-                    case GuidRepresentation.CSharpLegacy: expected = "{ \"guid\" : CSUUID(\"00112233-4455-6677-8899-aabbccddeeff\") }"; break;
-                    case GuidRepresentation.JavaLegacy: expected = "{ \"guid\" : JUUID(\"00112233-4455-6677-8899-aabbccddeeff\") }"; break;
-                    case GuidRepresentation.PythonLegacy: expected = "{ \"guid\" : PYUUID(\"00112233-4455-6677-8899-aabbccddeeff\") }"; break;
-                    case GuidRepresentation.Standard: expected = "{ \"guid\" : UUID(\"00112233-4455-6677-8899-aabbccddeeff\") }"; break;
-                    default: throw new Exception("Unexpected GuidRepresentation.");
-                }
-
-                string actual = document.ToJson(new JsonWriterSettings());
-                Assert.Equal(expected, actual);
-            }
-#pragma warning restore 618, 1062
+                { "guid", new Guid("B5F21E0C2A0D42d6AD03D827008D8AB6") }
+            };
+            string expected = "{ \"guid\" : CSUUID(\"b5f21e0c-2a0d-42d6-ad03-d827008d8ab6\") }";
+            string actual = document.ToJson();
+            Assert.Equal(expected, actual);
         }
 
         [Fact]
@@ -561,9 +477,7 @@ namespace MongoDB.Bson.Tests.IO
         public void TestObjectIdStrict()
         {
             var objectId = new ObjectId("4d0ce088e447ad08b4721a37");
-#pragma warning disable 618
             var jsonSettings = new JsonWriterSettings { OutputMode = JsonOutputMode.Strict };
-#pragma warning restore 618
             var json = objectId.ToJson(jsonSettings);
             var expected = "{ \"$oid\" : \"4d0ce088e447ad08b4721a37\" }";
             Assert.Equal(expected, json);
@@ -583,7 +497,7 @@ namespace MongoDB.Bson.Tests.IO
                 new TestData<BsonRegularExpression>(new BsonRegularExpression("a", "m"), "/a/m"),
                 new TestData<BsonRegularExpression>(new BsonRegularExpression("a", "x"), "/a/x"),
                 new TestData<BsonRegularExpression>(new BsonRegularExpression("a", "s"), "/a/s"),
-                new TestData<BsonRegularExpression>(new BsonRegularExpression("a", "imxs"), "/a/imsx"),
+                new TestData<BsonRegularExpression>(new BsonRegularExpression("a", "imxs"), "/a/imxs"),
             };
             foreach (var test in tests)
             {
@@ -606,11 +520,9 @@ namespace MongoDB.Bson.Tests.IO
                 new TestData<BsonRegularExpression>(new BsonRegularExpression("a", "m"), "{ \"$regex\" : \"a\", \"$options\" : \"m\" }"),
                 new TestData<BsonRegularExpression>(new BsonRegularExpression("a", "x"), "{ \"$regex\" : \"a\", \"$options\" : \"x\" }"),
                 new TestData<BsonRegularExpression>(new BsonRegularExpression("a", "s"), "{ \"$regex\" : \"a\", \"$options\" : \"s\" }"),
-                new TestData<BsonRegularExpression>(new BsonRegularExpression("a", "imxs"), "{ \"$regex\" : \"a\", \"$options\" : \"imsx\" }"),
+                new TestData<BsonRegularExpression>(new BsonRegularExpression("a", "imxs"), "{ \"$regex\" : \"a\", \"$options\" : \"imxs\" }"),
             };
-#pragma warning disable 618
             var jsonSettings = new JsonWriterSettings { OutputMode = JsonOutputMode.Strict };
-#pragma warning restore 618
             foreach (var test in tests)
             {
                 var json = test.Value.ToJson(jsonSettings);

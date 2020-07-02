@@ -24,57 +24,6 @@ namespace MongoDB.Driver.Core.Misc
     internal static class StreamExtensionMethods
     {
         // static methods
-        public static void EfficientCopyTo(this Stream input, Stream output)
-        {
-            if (input is IStreamEfficientCopyTo efficientCopyToStream)
-            {
-                efficientCopyToStream.EfficientCopyTo(output);
-            }
-            else
-            {
-                input.CopyTo(output); // fallback to standard CopyTo if EfficientCopyTo is not available
-            }
-        }
-
-        public static async Task<int> ReadAsync(this Stream stream, byte[] buffer, int offset, int count, TimeSpan timeout, CancellationToken cancellationToken)
-        {
-            var state = 1; // 1 == reading, 2 == done reading, 3 == timedout, 4 == cancelled
-
-            var bytesRead = 0;
-            using (new Timer(_ => ChangeState(3), null, timeout, Timeout.InfiniteTimeSpan))
-            using (cancellationToken.Register(() => ChangeState(4)))
-            {
-                try
-                {
-                    bytesRead = await stream.ReadAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
-                    ChangeState(2); // note: might not actually go to state 2 if already in state 3 or 4
-                }
-                catch when (state == 1)
-                {
-                    try { stream.Dispose(); } catch { }
-                    throw;
-                }
-                catch when (state >= 3)
-                {
-                    // a timeout or operation cancelled exception will be thrown instead
-                }
-
-                if (state == 3) { throw new TimeoutException(); }
-                if (state == 4) { throw new OperationCanceledException(); }
-            }
-
-            return bytesRead;
-
-            void ChangeState(int to)
-            {
-                var from = Interlocked.CompareExchange(ref state, to, 1);
-                if (from == 1 && to >= 3)
-                {
-                    try { stream.Dispose(); } catch { } // disposing the stream aborts the read attempt
-                }
-            }
-        }
-
         public static void ReadBytes(this Stream stream, byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             Ensure.IsNotNull(stream, nameof(stream));
@@ -115,7 +64,7 @@ namespace MongoDB.Driver.Core.Misc
             }
         }
 
-        public static async Task ReadBytesAsync(this Stream stream, byte[] buffer, int offset, int count, TimeSpan timeout, CancellationToken cancellationToken)
+        public static async Task ReadBytesAsync(this Stream stream, byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             Ensure.IsNotNull(stream, nameof(stream));
             Ensure.IsNotNull(buffer, nameof(buffer));
@@ -124,7 +73,7 @@ namespace MongoDB.Driver.Core.Misc
 
             while (count > 0)
             {
-                var bytesRead = await stream.ReadAsync(buffer, offset, count, timeout, cancellationToken).ConfigureAwait(false);
+                var bytesRead = await stream.ReadAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
                 if (bytesRead == 0)
                 {
                     throw new EndOfStreamException();
@@ -134,7 +83,7 @@ namespace MongoDB.Driver.Core.Misc
             }
         }
 
-        public static async Task ReadBytesAsync(this Stream stream, IByteBuffer buffer, int offset, int count, TimeSpan timeout, CancellationToken cancellationToken)
+        public static async Task ReadBytesAsync(this Stream stream, IByteBuffer buffer, int offset, int count, CancellationToken cancellationToken)
         {
             Ensure.IsNotNull(stream, nameof(stream));
             Ensure.IsNotNull(buffer, nameof(buffer));
@@ -145,50 +94,13 @@ namespace MongoDB.Driver.Core.Misc
             {
                 var backingBytes = buffer.AccessBackingBytes(offset);
                 var bytesToRead = Math.Min(count, backingBytes.Count);
-                var bytesRead = await stream.ReadAsync(backingBytes.Array, backingBytes.Offset, bytesToRead, timeout, cancellationToken).ConfigureAwait(false);
+                var bytesRead = await stream.ReadAsync(backingBytes.Array, backingBytes.Offset, bytesToRead, cancellationToken).ConfigureAwait(false);
                 if (bytesRead == 0)
                 {
                     throw new EndOfStreamException();
                 }
                 offset += bytesRead;
                 count -= bytesRead;
-            }
-        }
-
-
-        public static async Task WriteAsync(this Stream stream, byte[] buffer, int offset, int count, TimeSpan timeout, CancellationToken cancellationToken)
-        {
-            var state = 1; // 1 == writing, 2 == done writing, 3 == timedout, 4 == cancelled
-
-            using (new Timer(_ => ChangeState(3), null, timeout, Timeout.InfiniteTimeSpan))
-            using (cancellationToken.Register(() => ChangeState(4)))
-            {
-                try
-                {
-                    await stream.WriteAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
-                    ChangeState(2); // note: might not actually go to state 2 if already in state 3 or 4
-                }
-                catch when (state == 1)
-                {
-                    try { stream.Dispose(); } catch { }
-                    throw;
-                }
-                catch when (state >= 3)
-                {
-                    // a timeout or operation cancelled exception will be thrown instead
-                }
-
-                if (state == 3) { throw new TimeoutException(); }
-                if (state == 4) { throw new OperationCanceledException(); }
-            }
-
-            void ChangeState(int to)
-            {
-                var from = Interlocked.CompareExchange(ref state, to, 1);
-                if (from == 1 && to >= 3)
-                {
-                    try { stream.Dispose(); } catch { } // disposing the stream aborts the write attempt
-                }
             }
         }
 
@@ -210,7 +122,7 @@ namespace MongoDB.Driver.Core.Misc
             }
         }
 
-        public static async Task WriteBytesAsync(this Stream stream, IByteBuffer buffer, int offset, int count, TimeSpan timeout, CancellationToken cancellationToken)
+        public static async Task WriteBytesAsync(this Stream stream, IByteBuffer buffer, int offset, int count, CancellationToken cancellationToken)
         {
             Ensure.IsNotNull(stream, nameof(stream));
             Ensure.IsNotNull(buffer, nameof(buffer));
@@ -221,7 +133,7 @@ namespace MongoDB.Driver.Core.Misc
             {
                 var backingBytes = buffer.AccessBackingBytes(offset);
                 var bytesToWrite = Math.Min(count, backingBytes.Count);
-                await stream.WriteAsync(backingBytes.Array, backingBytes.Offset, bytesToWrite, timeout, cancellationToken).ConfigureAwait(false);
+                await stream.WriteAsync(backingBytes.Array, backingBytes.Offset, bytesToWrite, cancellationToken).ConfigureAwait(false);
                 offset += bytesToWrite;
                 count -= bytesToWrite;
             }

@@ -14,12 +14,20 @@
 */
 
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Reflection;
 using FluentAssertions;
 using MongoDB.Bson;
 using MongoDB.Driver.Core.Configuration;
+using MongoDB.Driver.Core.Misc;
 using Xunit;
+using Xunit.Sdk;
 using MongoDB.Bson.TestHelpers.XunitExtensions;
-using MongoDB.Bson.TestHelpers.JsonDrivenTests;
+using System.Collections;
 
 namespace MongoDB.Driver.Specifications.read_write_concern.tests
 {
@@ -27,12 +35,8 @@ namespace MongoDB.Driver.Specifications.read_write_concern.tests
     {
         [Theory]
         [ClassData(typeof(TestCaseFactory))]
-        public void RunTestDefinition(JsonDrivenTestCase testCase)
+        public void RunTestDefinition(BsonDocument definition)
         {
-            var definition = testCase.Test;
-
-            JsonDrivenHelper.EnsureAllFieldsAreValid(definition, "description", "uri", "valid", "warning", "readConcern", "writeConcern");
-
             ConnectionString connectionString = null;
             Exception parseException = null;
             try
@@ -72,8 +76,8 @@ namespace MongoDB.Driver.Specifications.read_write_concern.tests
             BsonValue writeConcernValue;
             if (definition.TryGetValue("writeConcern", out writeConcernValue))
             {
-                var writeConcern =
-                    WriteConcern.FromBsonDocument(MassageWriteConcernDocument((BsonDocument)writeConcernValue));
+                var writeConcern = WriteConcern.FromBsonDocument(MassageWriteConcernDocument((BsonDocument)writeConcernValue));
+
                 connectionString.W.Should().Be(writeConcern.W);
                 connectionString.WTimeout.Should().Be(writeConcern.WTimeout);
                 connectionString.Journal.Should().Be(writeConcern.Journal);
@@ -107,9 +111,63 @@ namespace MongoDB.Driver.Specifications.read_write_concern.tests
             return writeConcern;
         }
 
-        private class TestCaseFactory : JsonDrivenTestCaseFactory
+        private class TestCaseFactory : IEnumerable<object[]>
         {
-            protected override string PathPrefix => "MongoDB.Driver.Core.Tests.Specifications.read_write_concern.tests.connection_string.";
+            public IEnumerator<object[]> GetEnumerator()
+            {
+#if NET45
+                const string prefix = "MongoDB.Driver.Specifications.read_write_concern.tests.connection_string.";
+#else
+                const string prefix = "MongoDB.Driver.Core.Tests.Dotnet.Specifications.read_write_concern.tests.connection_string.";
+#endif
+                var executingAssembly = typeof(TestCaseFactory).GetTypeInfo().Assembly;
+                var enumerable = executingAssembly
+                    .GetManifestResourceNames()
+                    .Where(path => path.StartsWith(prefix) && path.EndsWith(".json"))
+                    .SelectMany(path =>
+                    {
+                        var definition = ReadDefinition(path);
+                        var tests = (BsonArray)definition["tests"];
+                        var fullName = path.Remove(0, prefix.Length);
+                        var list = new List<object[]>();
+                        foreach (BsonDocument test in tests)
+                        {
+                            //var data = new TestCaseData(test);
+                            //data.SetCategory("Specifications");
+                            //if (test.Contains("readConcern"))
+                            //{
+                            //    data.SetCategory("ReadConcern");
+                            //}
+                            //else
+                            //{
+                            //    data.SetCategory("WriteConcern");
+                            //}
+                            //data.SetCategory("ConnectionString");
+                            //var testName = fullName.Remove(fullName.Length - 5) + ": " + test["description"];
+                            //data = data.SetName(testName);
+                            var data = new object[] { test };
+                            list.Add(data);
+                        }
+                        return list;
+                    });
+                return enumerable.GetEnumerator();
+            }
+
+            IEnumerator IEnumerable.GetEnumerator()
+            {
+                return GetEnumerator();
+            }
+
+            private static BsonDocument ReadDefinition(string path)
+            {
+                var executingAssembly = typeof(TestCaseFactory).GetTypeInfo().Assembly;
+                using (var definitionStream = executingAssembly.GetManifestResourceStream(path))
+                using (var definitionStringReader = new StreamReader(definitionStream))
+                {
+                    var definitionString = definitionStringReader.ReadToEnd();
+                    return BsonDocument.Parse(definitionString);
+                }
+            }
         }
     }
 }

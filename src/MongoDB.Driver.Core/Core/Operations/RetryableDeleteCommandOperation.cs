@@ -81,19 +81,11 @@ namespace MongoDB.Driver.Core.Operations
         /// <inheritdoc />
         protected override BsonDocument CreateCommand(ICoreSessionHandle session, ConnectionDescription connectionDescription, int attempt, long? transactionNumber)
         {
-            var serverVersion = connectionDescription.ServerVersion;
-            if (!Feature.Collation.IsSupported(serverVersion))
+            if (!Feature.Collation.IsSupported(connectionDescription.ServerVersion))
             {
                 if (_deletes.Items.Skip(_deletes.Offset).Take(_deletes.Count).Any(d => d.Collation != null))
                 {
-                    throw new NotSupportedException($"Server version {serverVersion} does not support collations.");
-                }
-            }
-            if (Feature.HintForDeleteOperations.DriverMustThrowIfNotSupported(serverVersion) || (WriteConcern != null && !WriteConcern.IsAcknowledged))
-            {
-                if (_deletes.Items.Skip(_deletes.Offset).Take(_deletes.Count).Any(u => u.Hint != null))
-                {
-                    throw new NotSupportedException($"Server version {serverVersion} does not support hints.");
+                    throw new NotSupportedException($"Server version {connectionDescription.ServerVersion} does not support collations.");
                 }
             }
 
@@ -142,11 +134,6 @@ namespace MongoDB.Driver.Core.Operations
                 {
                     writer.WriteName("collation");
                     BsonDocumentSerializer.Instance.Serialize(context, value.Collation.ToBsonDocument());
-                }
-                if (value.Hint != null)
-                {
-                    writer.WriteName("hint");
-                    BsonValueSerializer.Instance.Serialize(context, value.Hint);
                 }
                 writer.WriteEndDocument();
             }

@@ -134,9 +134,7 @@ namespace MongoDB.Bson.Specifications.bson
 
         private string EncodeExtjson(BsonDocument document)
         {
-#pragma warning disable 618
             var json = document.ToJson(new JsonWriterSettings { OutputMode = JsonOutputMode.Strict });
-#pragma warning restore 618
             return json.Replace(" ", "");
         }
 
@@ -158,9 +156,13 @@ namespace MongoDB.Bson.Specifications.bson
 
         private class TestCaseFactory : IEnumerable<object[]>
         {
-            public IEnumerator<object[]> GetEnumerator()
+            public  IEnumerator<object[]> GetEnumerator()
             {
+#if NETSTANDARD1_5 || NETSTANDARD1_6
+                const string prefix = "MongoDB.Bson.Tests.Dotnet.Specifications.bson.tests.";
+#else
                 const string prefix = "MongoDB.Bson.Tests.Specifications.bson.tests.";
+#endif
                 var executingAssembly = typeof(TestCaseFactory).GetTypeInfo().Assembly;
                 var enumerable = executingAssembly
                     .GetManifestResourceNames()

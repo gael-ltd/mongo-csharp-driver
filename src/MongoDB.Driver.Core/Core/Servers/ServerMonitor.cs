@@ -47,7 +47,6 @@ namespace MongoDB.Driver.Core.Servers
         private readonly Action<ServerHeartbeatStartedEvent> _heartbeatStartedEventHandler;
         private readonly Action<ServerHeartbeatSucceededEvent> _heartbeatSucceededEventHandler;
         private readonly Action<ServerHeartbeatFailedEvent> _heartbeatFailedEventHandler;
-        private readonly Action<SdamInformationEvent> _sdamInformationEventHandler;
 
         public event EventHandler<ServerDescriptionChangedEventArgs> DescriptionChanged;
 
@@ -58,17 +57,15 @@ namespace MongoDB.Driver.Core.Servers
             _connectionFactory = Ensure.IsNotNull(connectionFactory, nameof(connectionFactory));
             Ensure.IsNotNull(eventSubscriber, nameof(eventSubscriber));
 
-            _baseDescription = _currentDescription = new ServerDescription(_serverId, endPoint, reasonChanged: "InitialDescription", heartbeatInterval: heartbeatInterval);
+            _baseDescription = _currentDescription = new ServerDescription(_serverId, endPoint, heartbeatInterval: heartbeatInterval);
             _heartbeatInterval = heartbeatInterval;
             _timeout = timeout;
             _state = new InterlockedInt32(State.Initial);
             eventSubscriber.TryGetEventHandler(out _heartbeatStartedEventHandler);
             eventSubscriber.TryGetEventHandler(out _heartbeatSucceededEventHandler);
             eventSubscriber.TryGetEventHandler(out _heartbeatFailedEventHandler);
-            eventSubscriber.TryGetEventHandler(out _sdamInformationEventHandler);
         }
 
-        /// <inheritdoc />
         public ServerDescription Description => Interlocked.CompareExchange(ref _currentDescription, null, null);
 
         public void Dispose()
@@ -92,6 +89,12 @@ namespace MongoDB.Driver.Core.Servers
             }
         }
 
+        public void Invalidate()
+        {
+            OnDescriptionChanged(_baseDescription);
+            RequestHeartbeat();
+        }
+
         public void RequestHeartbeat()
         {
             ThrowIfNotOpen();
@@ -110,47 +113,7 @@ namespace MongoDB.Driver.Core.Servers
             {
                 try
                 {
-                    try
-                    {
-                        await HeartbeatAsync(heartbeatCancellationToken).ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException) when (heartbeatCancellationToken.IsCancellationRequested)
-                    {
-                        // ignore OperationCanceledException when heartbeat cancellation is requested
-                    }
-                    catch (Exception unexpectedException)
-                    {
-                        // if we catch an exception here it's because of a bug in the driver (but we need to defend ourselves against that)
-
-                        var handler = _sdamInformationEventHandler;
-                        if (handler != null)
-                        {
-                            try
-                            {
-                                handler.Invoke(new SdamInformationEvent(() =>
-                                    string.Format(
-                                        "Unexpected exception in ServerMonitor.MonitorServerAsync: {0}",
-                                        unexpectedException.ToString())));
-                            }
-                            catch
-                            {
-                                // ignore any exceptions thrown by the handler (note: event handlers aren't supposed to throw exceptions)
-                            }
-                        }
-
-                        // since an unexpected exception was thrown set the server description to Unknown (with the unexpected exception)
-                        try
-                        {
-                            // keep this code as simple as possible to keep the surface area with any remaining possible bugs as small as possible
-                            var newDescription = _baseDescription.WithHeartbeatException(unexpectedException); // not With in case the bug is in With
-                            SetDescription(newDescription); // not SetDescriptionIfChanged in case the bug is in SetDescriptionIfChanged
-                        }
-                        catch
-                        {
-                            // if even the simple code in the try throws just give up (at least we've raised the unexpected exception via an SdamInformationEvent)
-                        }
-                    }
-
+                    await HeartbeatAsync(heartbeatCancellationToken).ConfigureAwait(false);
                     var newHeartbeatDelay = new HeartbeatDelay(metronome.GetNextTickDelay(), __minHeartbeatInterval);
                     var oldHeartbeatDelay = Interlocked.Exchange(ref _heartbeatDelay, newHeartbeatDelay);
                     if (oldHeartbeatDelay != null)
@@ -221,29 +184,21 @@ namespace MongoDB.Driver.Core.Servers
                     replicaSetConfig: isMasterResult.GetReplicaSetConfig(),
                     state: ServerState.Connected,
                     tags: isMasterResult.Tags,
-                    topologyVersion: isMasterResult.TopologyVersion,
                     type: isMasterResult.ServerType,
                     version: buildInfoResult.ServerVersion,
                     wireVersionRange: new Range<int>(isMasterResult.MinWireVersion, isMasterResult.MaxWireVersion));
             }
             else
             {
-                newDescription = _baseDescription.With(lastUpdateTimestamp: DateTime.UtcNow);
+                newDescription = _baseDescription;
             }
 
             if (heartbeatException != null)
             {
-                var topologyVersion = default(Optional<TopologyVersion>);
-                if (heartbeatException is MongoCommandException heartbeatCommandException)
-                {
-                    topologyVersion = TopologyVersion.FromMongoCommandException(heartbeatCommandException);
-                }
-                newDescription = newDescription.With(heartbeatException: heartbeatException, topologyVersion: topologyVersion);
+                newDescription = newDescription.With(heartbeatException: heartbeatException);
             }
 
-            newDescription = newDescription.With(reasonChanged: "Heartbeat", lastHeartbeatTimestamp: DateTime.UtcNow);
-
-            SetDescription(newDescription);
+            OnDescriptionChanged(newDescription);
 
             return true;
         }
@@ -302,8 +257,15 @@ namespace MongoDB.Driver.Core.Servers
             }
         }
 
-        private void OnDescriptionChanged(ServerDescription oldDescription, ServerDescription newDescription)
+        private void OnDescriptionChanged(ServerDescription newDescription)
         {
+            var oldDescription = Interlocked.CompareExchange(ref _currentDescription, null, null);
+            if (oldDescription.Equals(newDescription))
+            {
+                return;
+            }
+            Interlocked.Exchange(ref _currentDescription, newDescription);
+
             var handler = DescriptionChanged;
             if (handler != null)
             {
@@ -311,18 +273,6 @@ namespace MongoDB.Driver.Core.Servers
                 try { handler(this, args); }
                 catch { } // ignore exceptions
             }
-        }
-
-        private void SetDescription(ServerDescription newDescription)
-        {
-            var oldDescription = Interlocked.CompareExchange(ref _currentDescription, null, null);
-            SetDescription(oldDescription, newDescription);
-        }
-
-        private void SetDescription(ServerDescription oldDescription, ServerDescription newDescription)
-        {
-            Interlocked.Exchange(ref _currentDescription, newDescription);
-            OnDescriptionChanged(oldDescription, newDescription);
         }
 
         private void ThrowIfDisposed()

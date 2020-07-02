@@ -67,7 +67,7 @@ namespace MongoDB.Driver.Examples
         {
             __dataset = new List<BsonDocument>();
 
-            var assembly = typeof(PrimerTestFixture).GetTypeInfo().Assembly;
+            var assembly = Assembly.GetExecutingAssembly();
             using (var stream = assembly.GetManifestResourceStream("MongoDB.Driver.Examples.dataset.json"))
             using (var reader = new StreamReader(stream))
             {

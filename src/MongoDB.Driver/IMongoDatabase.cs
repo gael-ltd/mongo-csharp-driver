@@ -18,7 +18,6 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MongoDB.Bson;
-using MongoDB.Driver.Core.Operations;
 
 namespace MongoDB.Driver
 {
@@ -45,92 +44,6 @@ namespace MongoDB.Driver
         /// Gets the settings.
         /// </summary>
         MongoDatabaseSettings Settings { get; }
-
-        /// <summary>
-        /// Runs an aggregation pipeline.
-        /// </summary>
-        /// <typeparam name="TResult">The type of the result.</typeparam>
-        /// <param name="pipeline">The pipeline.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>A cursor.</returns>
-        IAsyncCursor<TResult> Aggregate<TResult>(PipelineDefinition<NoPipelineInput, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
-
-        /// <summary>
-        /// Runs an aggregation pipeline.
-        /// </summary>
-        /// <typeparam name="TResult">The type of the result.</typeparam>
-        /// <param name="session">The session.</param>
-        /// <param name="pipeline">The pipeline.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>
-        /// A cursor.
-        /// </returns>
-        IAsyncCursor<TResult> Aggregate<TResult>(IClientSessionHandle session, PipelineDefinition<NoPipelineInput, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
-
-        /// <summary>
-        /// Runs an aggregation pipeline.
-        /// </summary>
-        /// <typeparam name="TResult">The type of the result.</typeparam>
-        /// <param name="pipeline">The pipeline.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>A Task whose result is a cursor.</returns>
-        Task<IAsyncCursor<TResult>> AggregateAsync<TResult>(PipelineDefinition<NoPipelineInput, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
-
-        /// <summary>
-        /// Runs an aggregation pipeline.
-        /// </summary>
-        /// <typeparam name="TResult">The type of the result.</typeparam>
-        /// <param name="session">The session.</param>
-        /// <param name="pipeline">The pipeline.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>
-        /// A Task whose result is a cursor.
-        /// </returns>
-        Task<IAsyncCursor<TResult>> AggregateAsync<TResult>(IClientSessionHandle session, PipelineDefinition<NoPipelineInput, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
-
-        /// <summary>
-        /// Runs an aggregation pipeline.
-        /// </summary>
-        /// <typeparam name="TResult">The type of the result.</typeparam>
-        /// <param name="pipeline">The pipeline.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        void AggregateToCollection<TResult>(PipelineDefinition<NoPipelineInput, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
-
-        /// <summary>
-        /// Runs an aggregation pipeline.
-        /// </summary>
-        /// <typeparam name="TResult">The type of the result.</typeparam>
-        /// <param name="session">The session.</param>
-        /// <param name="pipeline">The pipeline.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        void AggregateToCollection<TResult>(IClientSessionHandle session, PipelineDefinition<NoPipelineInput, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
-
-        /// <summary>
-        /// Runs an aggregation pipeline.
-        /// </summary>
-        /// <typeparam name="TResult">The type of the result.</typeparam>
-        /// <param name="pipeline">The pipeline.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>A Task.</returns>
-        Task AggregateToCollectionAsync<TResult>(PipelineDefinition<NoPipelineInput, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
-
-        /// <summary>
-        /// Runs an aggregation pipeline.
-        /// </summary>
-        /// <typeparam name="TResult">The type of the result.</typeparam>
-        /// <param name="session">The session.</param>
-        /// <param name="pipeline">The pipeline.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>A Task.</returns>
-        Task AggregateToCollectionAsync<TResult>(IClientSessionHandle session, PipelineDefinition<NoPipelineInput, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
         /// Creates the collection with the specified name.
@@ -268,41 +181,7 @@ namespace MongoDB.Driver
         IMongoCollection<TDocument> GetCollection<TDocument>(string name, MongoCollectionSettings settings = null);
 
         /// <summary>
-        /// Lists the names of all the collections in the database.
-        /// </summary>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>A cursor.</returns>
-        IAsyncCursor<string> ListCollectionNames(ListCollectionNamesOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
-
-        /// <summary>
-        /// Lists the names of all the collections in the database.
-        /// </summary>
-        /// <param name="session">The session.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>A cursor.</returns>
-        IAsyncCursor<string> ListCollectionNames(IClientSessionHandle session, ListCollectionNamesOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
-
-        /// <summary>
-        /// Lists the names of all the collections in the database.
-        /// </summary>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>A Task whose result is a cursor.</returns>
-        Task<IAsyncCursor<string>> ListCollectionNamesAsync(ListCollectionNamesOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
-
-        /// <summary>
-        /// Lists the names of all the collections in the database.
-        /// </summary>
-        /// <param name="session">The session.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>A Task whose result is a cursor.</returns>
-        Task<IAsyncCursor<string>> ListCollectionNamesAsync(IClientSessionHandle session, ListCollectionNamesOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
-
-        /// <summary>
-        /// Lists all the collections in the database.
+        /// Lists all the collections on the server.
         /// </summary>
         /// <param name="options">The options.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
@@ -310,7 +189,7 @@ namespace MongoDB.Driver
         IAsyncCursor<BsonDocument> ListCollections(ListCollectionsOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
-        /// Lists all the collections in the database.
+        /// Lists all the collections on the server.
         /// </summary>
         /// <param name="session">The session.</param>
         /// <param name="options">The options.</param>
@@ -321,7 +200,7 @@ namespace MongoDB.Driver
         IAsyncCursor<BsonDocument> ListCollections(IClientSessionHandle session, ListCollectionsOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
-        /// Lists all the collections in the database.
+        /// Lists all the collections on the server.
         /// </summary>
         /// <param name="options">The options.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
@@ -329,7 +208,7 @@ namespace MongoDB.Driver
         Task<IAsyncCursor<BsonDocument>> ListCollectionsAsync(ListCollectionsOptions options = null, CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
-        /// Lists all the collections in the database.
+        /// Lists all the collections on the server.
         /// </summary>
         /// <param name="session">The session.</param>
         /// <param name="options">The options.</param>
@@ -430,70 +309,6 @@ namespace MongoDB.Driver
         /// The result of the command.
         /// </returns>
         Task<TResult> RunCommandAsync<TResult>(IClientSessionHandle session, Command<TResult> command, ReadPreference readPreference = null, CancellationToken cancellationToken = default(CancellationToken));
-
-        /// <summary>
-        /// Watches changes on all collections in a database.
-        /// </summary>
-        /// <typeparam name="TResult">The type of the result.</typeparam>
-        /// <param name="pipeline">The pipeline.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>
-        /// A change stream.
-        /// </returns>
-        IChangeStreamCursor<TResult> Watch<TResult>(
-            PipelineDefinition<ChangeStreamDocument<BsonDocument>, TResult> pipeline,
-            ChangeStreamOptions options = null,
-            CancellationToken cancellationToken = default(CancellationToken));
-
-        /// <summary>
-        /// Watches changes on all collections in a database.
-        /// </summary>
-        /// <typeparam name="TResult">The type of the result.</typeparam>
-        /// <param name="session">The session.</param>
-        /// <param name="pipeline">The pipeline.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>
-        /// A change stream.
-        /// </returns>
-        IChangeStreamCursor<TResult> Watch<TResult>(
-            IClientSessionHandle session,
-            PipelineDefinition<ChangeStreamDocument<BsonDocument>, TResult> pipeline,
-            ChangeStreamOptions options = null,
-            CancellationToken cancellationToken = default(CancellationToken));
-
-        /// <summary>
-        /// Watches changes on all collections in a database.
-        /// </summary>
-        /// <typeparam name="TResult">The type of the result.</typeparam>
-        /// <param name="pipeline">The pipeline.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>
-        /// A change stream.
-        /// </returns>
-        Task<IChangeStreamCursor<TResult>> WatchAsync<TResult>(
-            PipelineDefinition<ChangeStreamDocument<BsonDocument>, TResult> pipeline,
-            ChangeStreamOptions options = null,
-            CancellationToken cancellationToken = default(CancellationToken));
-
-        /// <summary>
-        /// Watches changes on all collections in a database.
-        /// </summary>
-        /// <typeparam name="TResult">The type of the result.</typeparam>
-        /// <param name="session">The session.</param>
-        /// <param name="pipeline">The pipeline.</param>
-        /// <param name="options">The options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>
-        /// A change stream.
-        /// </returns>
-        Task<IChangeStreamCursor<TResult>> WatchAsync<TResult>(
-            IClientSessionHandle session,
-            PipelineDefinition<ChangeStreamDocument<BsonDocument>, TResult> pipeline,
-            ChangeStreamOptions options = null,
-            CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
         /// Returns a new IMongoDatabase instance with a different read concern setting.

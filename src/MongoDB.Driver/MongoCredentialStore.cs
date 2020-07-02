@@ -97,7 +97,10 @@ namespace MongoDB.Driver
             return _credentials.SequenceEqual(rhs._credentials);
         }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Gets the enumerator.
+        /// </summary>
+        /// <returns></returns>
         public IEnumerator<MongoCredential> GetEnumerator()
         {
             return _credentials.GetEnumerator();

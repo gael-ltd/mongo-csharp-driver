@@ -121,22 +121,16 @@ namespace MongoDB.Driver.Core.Operations
             subject.Hint.Should().BeNull();
             subject.Limit.Should().NotHaveValue();
             subject.Max.Should().BeNull();
-#pragma warning disable 618
             subject.MaxScan.Should().NotHaveValue();
-#pragma warning restore
             subject.MaxTime.Should().NotHaveValue();
             subject.Modifiers.Should().BeNull();
             subject.Min.Should().BeNull();
             subject.NoCursorTimeout.Should().NotHaveValue();
-#pragma warning disable 618
             subject.OplogReplay.Should().NotHaveValue();
-#pragma warning restore 618
             subject.Projection.Should().BeNull();
             subject.ShowRecordId.Should().NotHaveValue();
             subject.Skip.Should().NotHaveValue();
-#pragma warning disable 618
             subject.Snapshot.Should().NotHaveValue();
-#pragma warning restore
             subject.Sort.Should().BeNull();
         }
 
@@ -193,11 +187,10 @@ namespace MongoDB.Driver.Core.Operations
             };
 
 
-            var result = subject.CreateWrappedQuery(ServerType.ReplicaSetArbiter, ReadPreference.Secondary, out var slaveOk);
+            var result = subject.CreateWrappedQuery(ServerType.ReplicaSetArbiter, ReadPreference.Secondary);
 
             result.Should().Be(expectedResult);
             result["$maxTimeMS"].BsonType.Should().Be(BsonType.Int32);
-            slaveOk.Should().BeTrue();
         }
 
         [Theory]
@@ -229,11 +222,10 @@ namespace MongoDB.Driver.Core.Operations
                 { "$snapshot", true }
             };
 
-            var result = subject.CreateWrappedQuery(ServerType.ShardRouter, ReadPreference.Secondary, out var slaveOk);
+            var result = subject.CreateWrappedQuery(ServerType.ShardRouter, ReadPreference.Secondary);
 
             result.Should().Be(expectedResult);
             result["$maxTimeMS"].BsonType.Should().Be(BsonType.Int32);
-            slaveOk.Should().BeTrue();
         }
 
         [Theory]
@@ -255,7 +247,7 @@ namespace MongoDB.Driver.Core.Operations
         public void Execute_should_throw_when_maxTime_is_exceeded(
             [Values(false, true)] bool async)
         {
-            RequireServer.Check().ClusterTypes(ClusterType.Standalone, ClusterType.ReplicaSet);
+            RequireServer.Check().Supports(Feature.FailPoints).ClusterTypes(ClusterType.Standalone, ClusterType.ReplicaSet);
             var subject = new FindOpcodeOperation<BsonDocument>(_collectionNamespace, BsonDocumentSerializer.Instance, _messageEncoderSettings);
             subject.MaxTime = TimeSpan.FromSeconds(9001);
 
@@ -286,9 +278,7 @@ namespace MongoDB.Driver.Core.Operations
             [Values(1, 5, 6, 12)] int limit)
         {
             RequireServer.Check().VersionLessThan("3.2.0");
-            var collectionNamespace = CoreTestConfiguration.GetCollectionNamespaceForTestMethod(
-                className: GetType().Name,
-                methodName: nameof(ExecuteAsync_should_find_all_the_documents_matching_the_query_when_limit_is_used));
+            var collectionNamespace = CoreTestConfiguration.GetCollectionNamespaceForTestMethod();
             for (var id = 1; id <= limit + 1; id++)
             {
                 var document = new BsonDocument { { "id", id }, { "filler", new string('x', 1000000) } }; // about 1MB big
@@ -354,7 +344,7 @@ namespace MongoDB.Driver.Core.Operations
         {
             var subject = new FindOpcodeOperation<BsonDocument>(_collectionNamespace, BsonDocumentSerializer.Instance, _messageEncoderSettings);
 
-            Func<Task> action = () => subject.ExecuteAsync(binding: null, CancellationToken.None);
+            Func<Task> action = () => subject.ExecuteAsync(null, CancellationToken.None);
 
             action.ShouldThrow<ArgumentNullException>().And.ParamName.Should().Be("binding");
         }
@@ -453,10 +443,8 @@ namespace MongoDB.Driver.Core.Operations
         {
             var subject = new FindOpcodeOperation<BsonDocument>(_collectionNamespace, BsonDocumentSerializer.Instance, _messageEncoderSettings);
 
-#pragma warning disable 618
             subject.MaxScan = value;
             var result = subject.MaxScan;
-#pragma warning restore
 
             result.Should().Be(value);
         }
@@ -555,10 +543,8 @@ namespace MongoDB.Driver.Core.Operations
         {
             var subject = new FindOpcodeOperation<BsonDocument>(_collectionNamespace, BsonDocumentSerializer.Instance, _messageEncoderSettings);
 
-#pragma warning disable 618
             subject.OplogReplay = value;
             var result = subject.OplogReplay;
-#pragma warning restore 618
 
             result.Should().Be(value);
         }
@@ -638,10 +624,8 @@ namespace MongoDB.Driver.Core.Operations
         {
             var subject = new FindOpcodeOperation<BsonDocument>(_collectionNamespace, BsonDocumentSerializer.Instance, _messageEncoderSettings);
 
-#pragma warning disable 618
             subject.Snapshot = value;
             var result = subject.Snapshot;
-#pragma warning restore
 
             result.Should().Be(value);
         }

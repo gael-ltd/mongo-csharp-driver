@@ -37,7 +37,6 @@ namespace MongoDB.Driver.Core.Operations
     {
         // fields
         private readonly CollectionNamespace _collectionNamespace;
-        private CreateIndexCommitQuorum _commitQuorum;
         private TimeSpan? _maxTime;
         private readonly MessageEncoderSettings _messageEncoderSettings;
         private readonly IEnumerable<CreateIndexRequest> _requests;
@@ -73,15 +72,6 @@ namespace MongoDB.Driver.Core.Operations
         }
 
         /// <summary>
-        /// Gets or sets the commit quorum.
-        /// </summary>
-        public CreateIndexCommitQuorum CommitQuorum
-        {
-            get => _commitQuorum;
-            set => _commitQuorum = value;
-        }
-
-        /// <summary>
         /// Gets the message encoder settings.
         /// </summary>
         /// <value>
@@ -114,7 +104,6 @@ namespace MongoDB.Driver.Core.Operations
             get { return _writeConcern; }
             set { _writeConcern = Ensure.IsNotNull(value, nameof(value)); }
         }
-
         /// <summary>
         /// Gets or sets the MaxTime
         /// </summary>
@@ -137,7 +126,9 @@ namespace MongoDB.Driver.Core.Operations
             using (var channelBinding = new ChannelReadWriteBinding(channelSource.Server, channel, binding.Session.Fork()))
             {
                 var operation = CreateOperation(channelBinding.Session, channel.ConnectionDescription);
-                return operation.Execute(channelBinding, cancellationToken);
+                var result = operation.Execute(channelBinding, cancellationToken);
+                WriteConcernErrorHelper.ThrowIfHasWriteConcernError(channel.ConnectionDescription.ConnectionId, result);
+                return result;
             }
         }
 
@@ -150,7 +141,9 @@ namespace MongoDB.Driver.Core.Operations
             using (var channelBinding = new ChannelReadWriteBinding(channelSource.Server, channel, binding.Session.Fork()))
             {
                 var operation = CreateOperation(channelBinding.Session, channel.ConnectionDescription);
-                return await operation.ExecuteAsync(channelBinding, cancellationToken).ConfigureAwait(false);
+                var result = await operation.ExecuteAsync(channelBinding, cancellationToken).ConfigureAwait(false);
+                WriteConcernErrorHelper.ThrowIfHasWriteConcernError(channel.ConnectionDescription.ConnectionId, result);
+                return result;
             }
         }
 
@@ -159,18 +152,12 @@ namespace MongoDB.Driver.Core.Operations
         {
             var serverVersion = connectionDescription.ServerVersion;
             var writeConcern = WriteConcernHelper.GetWriteConcernForCommandThatWrites(session, _writeConcern, serverVersion);
-            if (_commitQuorum != null)
-            {
-                Feature.CreateIndexCommitQuorum.ThrowIfNotSupported(serverVersion);
-            }
-
             return new BsonDocument
             {
                 { "createIndexes", _collectionNamespace.CollectionName },
                 { "indexes", new BsonArray(_requests.Select(request => request.CreateIndexDocument(serverVersion))) },
                 { "maxTimeMS", () => MaxTimeHelper.ToMaxTimeMS(_maxTime.Value), _maxTime.HasValue },
-                { "writeConcern", writeConcern, writeConcern != null },
-                { "commitQuorum", () => _commitQuorum.ToBsonValue(), _commitQuorum != null }
+                { "writeConcern", writeConcern, writeConcern != null }
             };
         }
 

@@ -14,7 +14,6 @@
 */
 
 using System;
-using MongoDB.Bson;
 using MongoDB.Driver.Core.Misc;
 
 namespace MongoDB.Driver
@@ -28,7 +27,6 @@ namespace MongoDB.Driver
     {
         // fields
         private Collation _collation;
-        private BsonValue _hint;
         private TimeSpan? _maxTime;
         private ProjectionDefinition<TDocument, TProjection> _projection;
         private SortDefinition<TDocument> _sort;
@@ -41,15 +39,6 @@ namespace MongoDB.Driver
         {
             get { return _collation; }
             set { _collation = value; }
-        }
-
-        /// <summary>
-        /// Gets or sets the hint.
-        /// </summary>
-        public BsonValue Hint
-        {
-            get { return _hint; }
-            set { _hint = value; }
         }
 
         /// <summary>

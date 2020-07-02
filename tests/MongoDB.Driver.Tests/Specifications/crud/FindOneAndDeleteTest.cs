@@ -40,9 +40,6 @@ namespace MongoDB.Driver.Tests.Specifications.crud
                 case "collation":
                     _options.Collation = Collation.FromBsonDocument(value.AsBsonDocument);
                     return true;
-                case "hint":
-                    _options.Hint = value;
-                    return true;
             }
 
             return false;
@@ -58,7 +55,7 @@ namespace MongoDB.Driver.Tests.Specifications.crud
             return (BsonDocument)expectedResult;
         }
 
-        protected override BsonDocument ExecuteAndGetResult(IMongoDatabase database, IMongoCollection<BsonDocument> collection, bool async)
+        protected override BsonDocument ExecuteAndGetResult(IMongoCollection<BsonDocument> collection, bool async)
         {
             if (async)
             {

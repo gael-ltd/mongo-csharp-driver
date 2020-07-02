@@ -30,8 +30,6 @@ namespace MongoDB.Driver.Core.Bindings
 
         public BsonDocument Id => null;
 
-        public bool IsDirty => false;
-
         public DateTime? LastUsedAt => null;
 
         public long AdvanceTransactionNumber()
@@ -40,10 +38,6 @@ namespace MongoDB.Driver.Core.Bindings
         }
 
         public void Dispose()
-        {
-        }
-
-        public void MarkDirty()
         {
         }
 

@@ -498,7 +498,7 @@ namespace MongoDB.Bson.Tests.Serialization
             Assert.True(bson.SequenceEqual(rehydrated.ToBson()));
         }
 
-#if NET452
+#if NET45
         [Fact]
         public void TestEnUsUseUserOverrideFalse()
         {
@@ -516,7 +516,7 @@ namespace MongoDB.Bson.Tests.Serialization
         }
 #endif
 
-#if NET452
+#if NET45
         [Fact]
         public void TestEnUsUseUserOverrideTrue()
         {
@@ -1593,7 +1593,7 @@ namespace MongoDB.Bson.Tests.Serialization
         {
             var obj = new TestClass
             {
-                D128 = 1,
+                D128 =1 ,
                 D = 1,
                 I = 1,
                 L = 1,

@@ -75,10 +75,8 @@ namespace MongoDB.Driver.Core.Operations
         {
             var subject = new CreateIndexRequest(new BsonDocument("x", 1));
 
-#pragma warning disable 618
             subject.BucketSize = value;
             var result = subject.BucketSize;
-#pragma warning restore 618
 
             result.Should().Be(value);
         }
@@ -110,9 +108,7 @@ namespace MongoDB.Driver.Core.Operations
             subject.AdditionalOptions.Should().BeNull();
             subject.Background.Should().NotHaveValue();
             subject.Bits.Should().NotHaveValue();
-#pragma warning disable 618
             subject.BucketSize.Should().NotHaveValue();
-#pragma warning restore 618
             subject.Collation.Should().BeNull();
             subject.DefaultLanguage.Should().BeNull();
             subject.ExpireAfter.Should().NotHaveValue();
@@ -127,7 +123,6 @@ namespace MongoDB.Driver.Core.Operations
             subject.Unique.Should().NotHaveValue();
             subject.Version.Should().NotHaveValue();
             subject.Weights.Should().BeNull();
-            subject.WildcardProjection.Should().BeNull();
         }
 
         [Fact]
@@ -236,9 +231,7 @@ namespace MongoDB.Driver.Core.Operations
             var keys = new BsonDocument("x", 1);
             var subject = new CreateIndexRequest(keys)
             {
-#pragma warning disable 618
                 BucketSize = bucketSize
-#pragma warning restore 618
             };
 
             var result = subject.CreateIndexDocument(null);
@@ -605,47 +598,6 @@ namespace MongoDB.Driver.Core.Operations
             result.Should().Be(expectedResult);
         }
 
-        [Theory]
-        [ParameterAttributeData]
-        public void CreateIndexDocument_should_return_expected_result_when_wildcard_index_is_set(
-            [Values("{ '$**' : 1 }", "{ 'tags.$**' : 1 }")] string wildcardIndexString)
-        {
-            var wildcardIndexKey = BsonDocument.Parse(wildcardIndexString);
-            var subject = new CreateIndexRequest(wildcardIndexKey);
-
-            var result = subject.CreateIndexDocument(null);
-
-            var expectedResult = new BsonDocument
-            {
-                { "key", wildcardIndexKey },
-                { "name", wildcardIndexKey.GetElement(0).Name + "_1" }
-            };
-            result.Should().Be(expectedResult);
-        }
-
-        [Theory]
-        [ParameterAttributeData]
-        public void CreateIndexDocument_should_return_expected_result_when_wildcardProjection_is_set(
-            [Values(null, "{ x : 123 }", "{ x : 123, y : 234 }")] string wildcardProjectionString)
-        {
-            var keys = new BsonDocument("$**", 1);
-            var wildcardProjection = wildcardProjectionString == null ? null : BsonDocument.Parse(wildcardProjectionString);
-            var subject = new CreateIndexRequest(keys)
-            {
-                WildcardProjection = wildcardProjection
-            };
-
-            var result = subject.CreateIndexDocument(null);
-
-            var expectedResult = new BsonDocument
-            {
-                { "key", keys },
-                { "name", "$**_1" },
-                { "wildcardProjection", wildcardProjection, wildcardProjection != null }
-            };
-            result.Should().Be(expectedResult);
-        }
-
         [Fact]
         public void CreateIndexDocument_should_throw_when_Collation__is_set_and_is_not_supported()
         {
@@ -856,20 +808,6 @@ namespace MongoDB.Driver.Core.Operations
 
             subject.Weights = value;
             var result = subject.Weights;
-
-            result.Should().BeSameAs(value);
-        }
-
-        [Theory]
-        [ParameterAttributeData]
-        public void WildcardProjection_get_and_set_should_work(
-            [Values(null, "{ x : 1 }", "{ x : 2 }")] string valueString)
-        {
-            var subject = new CreateIndexRequest(new BsonDocument("x", 1));
-            var value = valueString == null ? null : BsonDocument.Parse(valueString);
-
-            subject.WildcardProjection = value;
-            var result = subject.WildcardProjection;
 
             result.Should().BeSameAs(value);
         }

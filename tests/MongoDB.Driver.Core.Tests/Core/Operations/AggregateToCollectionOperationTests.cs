@@ -14,15 +14,16 @@
 */
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using FluentAssertions;
 using MongoDB.Bson;
 using MongoDB.Bson.TestHelpers.XunitExtensions;
+using MongoDB.Driver.Core.Bindings;
 using MongoDB.Driver.Core.Clusters;
 using MongoDB.Driver.Core.Misc;
 using MongoDB.Driver.Core.TestHelpers;
 using MongoDB.Driver.Core.TestHelpers.XunitExtensions;
+using Moq;
 using Xunit;
 
 namespace MongoDB.Driver.Core.Operations
@@ -36,29 +37,11 @@ namespace MongoDB.Driver.Core.Operations
         };
 
         [Fact]
-        public void Constructor_with_databaseNamespace_should_create_a_valid_instance()
-        {
-            var subject = new AggregateToCollectionOperation(_databaseNamespace, __pipeline, _messageEncoderSettings);
-
-            subject.CollectionNamespace.Should().BeNull();
-            subject.DatabaseNamespace.Should().BeSameAs(_databaseNamespace);
-            subject.Pipeline.Should().Equal(__pipeline);
-            subject.MessageEncoderSettings.Should().BeSameAs(_messageEncoderSettings);
-
-            subject.AllowDiskUse.Should().NotHaveValue();
-            subject.BypassDocumentValidation.Should().NotHaveValue();
-            subject.Collation.Should().BeNull();
-            subject.MaxTime.Should().NotHaveValue();
-            subject.WriteConcern.Should().BeNull();
-        }
-
-        [Fact]
-        public void Constructor_with_collectionNamespace_should_create_a_valid_instance()
+        public void Constructor_should_create_a_valid_instance()
         {
             var subject = new AggregateToCollectionOperation(_collectionNamespace, __pipeline, _messageEncoderSettings);
 
             subject.CollectionNamespace.Should().BeSameAs(_collectionNamespace);
-            subject.DatabaseNamespace.Should().BeSameAs(_collectionNamespace.DatabaseNamespace);
             subject.Pipeline.Should().Equal(__pipeline);
             subject.MessageEncoderSettings.Should().BeSameAs(_messageEncoderSettings);
 
@@ -66,23 +49,13 @@ namespace MongoDB.Driver.Core.Operations
             subject.BypassDocumentValidation.Should().NotHaveValue();
             subject.Collation.Should().BeNull();
             subject.MaxTime.Should().NotHaveValue();
-            subject.ReadConcern.Should().BeNull();
             subject.WriteConcern.Should().BeNull();
-        }
-
-        [Fact]
-        public void Constructor_should_throw_when_databaseNamespace_is_null()
-        {
-            var exception = Record.Exception(() => new AggregateToCollectionOperation((DatabaseNamespace)null, __pipeline, _messageEncoderSettings));
-
-            var argumentNullException = exception.Should().BeOfType<ArgumentNullException>().Subject;
-            argumentNullException.ParamName.Should().Be("databaseNamespace");
         }
 
         [Fact]
         public void Constructor_should_throw_when_collectionNamespace_is_null()
         {
-            var exception = Record.Exception(() => new AggregateToCollectionOperation((CollectionNamespace)null, __pipeline, _messageEncoderSettings));
+            var exception = Record.Exception(() => new AggregateToCollectionOperation(null, __pipeline, _messageEncoderSettings));
 
             var argumentNullException = exception.Should().BeOfType<ArgumentNullException>().Subject;
             argumentNullException.ParamName.Should().Be("collectionNamespace");
@@ -212,19 +185,6 @@ namespace MongoDB.Driver.Core.Operations
 
         [Theory]
         [ParameterAttributeData]
-        public void ReadConcern_get_and_set_should_work([Values(ReadConcernLevel.Local, ReadConcernLevel.Majority)] ReadConcernLevel level)
-        {
-            var subject = new AggregateToCollectionOperation(_collectionNamespace, __pipeline, _messageEncoderSettings);
-            var value = new ReadConcern(new Optional<ReadConcernLevel?>(level));
-
-            subject.ReadConcern = value;
-            var result = subject.ReadConcern;
-
-            result.Should().BeSameAs(value);
-        }
-
-        [Theory]
-        [ParameterAttributeData]
         public void WriteConcern_get_and_set_should_work(
             [Values(1, 2)]
             int w)
@@ -304,7 +264,7 @@ namespace MongoDB.Driver.Core.Operations
                 { "aggregate", _collectionNamespace.CollectionName },
                 { "pipeline", new BsonArray(__pipeline) },
                 { "bypassDocumentValidation", () => bypassDocumentValidation.Value, bypassDocumentValidation != null && Feature.BypassDocumentValidation.IsSupported(serverVersion) },
-                { "cursor", new BsonDocument(), serverVersion >= new SemanticVersion(3, 6, 0) }
+                { "cursor", new BsonDocument(), serverVersion >= new SemanticVersion(3, 5, 0) }
             };
             result.Should().Be(expectedResult);
         }
@@ -432,32 +392,6 @@ namespace MongoDB.Driver.Core.Operations
 
         [Theory]
         [ParameterAttributeData]
-        public void CreateCommand_should_return_expected_result_when_ReadConcern_is_set(
-            [Values(ReadConcernLevel.Majority)] ReadConcernLevel readConcernLevel,
-            [Values(false, true)] bool withReadConcern)
-        {
-            var subject = new AggregateToCollectionOperation(_collectionNamespace, __pipeline, _messageEncoderSettings);
-            if (withReadConcern)
-            {
-                subject.ReadConcern = new ReadConcern(readConcernLevel);
-            };
-            var session = OperationTestHelper.CreateSession();
-            var connectionDescription = OperationTestHelper.CreateConnectionDescription();
-
-            var result = subject.CreateCommand(session, connectionDescription);
-
-            var expectedResult = new BsonDocument
-            {
-                { "aggregate", _collectionNamespace.CollectionName },
-                { "pipeline", new BsonArray(__pipeline) },
-                { "readConcern", () => subject.ReadConcern.ToBsonDocument(), withReadConcern },
-                { "cursor", new BsonDocument() }
-            };
-            result.Should().Be(expectedResult);
-        }
-
-        [Theory]
-        [ParameterAttributeData]
         public void CreateCommand_should_return_expected_result_when_WriteConcern_is_set(
             [Values(null, 1, 2)]
             int? w,
@@ -486,55 +420,15 @@ namespace MongoDB.Driver.Core.Operations
         [SkippableTheory]
         [ParameterAttributeData]
         public void Execute_should_return_expected_result(
-            [Values("$out", "$merge")] string lastStageName,
-            [Values(false, true)] bool usingDifferentOutputDatabase,
-            [Values(false, true)] bool async)
+            [Values(false, true)]
+            bool async)
         {
-            RequireServer.Check();
-            var pipeline = new List<BsonDocument> { BsonDocument.Parse("{ $match : { _id : 1 } }") };
-            var inputDatabaseName = _databaseNamespace.DatabaseName;
-            var inputCollectionName = _collectionNamespace.CollectionName;
-            var outputDatabaseName = usingDifferentOutputDatabase ? $"{inputDatabaseName}-outputdatabase" : inputDatabaseName;
-            var outputCollectionName = $"{inputCollectionName}-outputcollection";
-            switch (lastStageName)
-            {
-                case "$out":
-                    RequireServer.Check().Supports(Feature.AggregateOut);
-                    if (usingDifferentOutputDatabase)
-                    {
-                        RequireServer.Check().Supports(Feature.AggregateOutToDifferentDatabase);
-                        pipeline.Add(BsonDocument.Parse($"{{ $out : {{ db : '{outputDatabaseName}', coll : '{outputCollectionName}' }} }}"));
-                    }
-                    else
-                    {
-                        pipeline.Add(BsonDocument.Parse($"{{ $out : '{outputCollectionName}' }}"));
-                    }
-                    break;
-
-                case "$merge":
-                    RequireServer.Check().Supports(Feature.AggregateMerge);
-                    if (usingDifferentOutputDatabase)
-                    {
-                        pipeline.Add(BsonDocument.Parse($"{{ $merge : {{ into : {{ db : '{outputDatabaseName}', coll : '{outputCollectionName}' }} }} }}"));
-                    }
-                    else
-                    {
-                        pipeline.Add(BsonDocument.Parse($"{{ $merge : {{ into : '{outputDatabaseName}' }} }}"));
-                    }
-                    break;
-
-                default:
-                    throw new Exception($"Unexpected lastStageName: \"{lastStageName}\".");
-            }
+            RequireServer.Check().Supports(Feature.AggregateOut);
             EnsureTestData();
-            if (usingDifferentOutputDatabase)
-            {
-                EnsureDatabaseExists(outputDatabaseName);
-            }
-            var subject = new AggregateToCollectionOperation(_collectionNamespace, pipeline, _messageEncoderSettings);
+            var subject = new AggregateToCollectionOperation(_collectionNamespace, __pipeline, _messageEncoderSettings);
 
             ExecuteOperation(subject, async);
-            var result = ReadAllFromCollection(new CollectionNamespace(new DatabaseNamespace(outputDatabaseName), outputCollectionName), async);
+            var result = ReadAllFromCollection(new CollectionNamespace(_databaseNamespace, "awesome"), async);
 
             result.Should().NotBeNull();
             result.Should().HaveCount(1);
@@ -548,7 +442,7 @@ namespace MongoDB.Driver.Core.Operations
             [Values(false, true)]
             bool async)
         {
-            RequireServer.Check();
+            RequireServer.Check().Supports(Feature.AggregateOut);
             EnsureTestData();
             var subject = new AggregateToCollectionOperation(_collectionNamespace, __pipeline, _messageEncoderSettings)
             {
@@ -570,7 +464,7 @@ namespace MongoDB.Driver.Core.Operations
             [Values(false, true)]
             bool async)
         {
-            RequireServer.Check();
+            RequireServer.Check().Supports(Feature.AggregateOut);
             EnsureTestData();
             var subject = new AggregateToCollectionOperation(_collectionNamespace, __pipeline, _messageEncoderSettings)
             {
@@ -592,7 +486,7 @@ namespace MongoDB.Driver.Core.Operations
             [Values(false, true)]
             bool async)
         {
-            RequireServer.Check().Supports(Feature.Collation);
+            RequireServer.Check().Supports(Feature.AggregateOut, Feature.Collation);
             EnsureTestData();
             var pipeline = new[]
             {
@@ -618,7 +512,7 @@ namespace MongoDB.Driver.Core.Operations
             [Values(false, true)]
             bool async)
         {
-            RequireServer.Check().DoesNotSupport(Feature.Collation);
+            RequireServer.Check().Supports(Feature.AggregateOut).DoesNotSupport(Feature.Collation);
             var subject = new AggregateToCollectionOperation(_collectionNamespace, __pipeline, _messageEncoderSettings)
             {
                 Collation = new Collation("en_US")
@@ -634,7 +528,7 @@ namespace MongoDB.Driver.Core.Operations
         public void Execute_should_throw_when_maxTime_is_exceeded(
             [Values(false, true)] bool async)
         {
-            RequireServer.Check().ClusterTypes(ClusterType.Standalone, ClusterType.ReplicaSet);
+            RequireServer.Check().Supports(Feature.FailPoints, Feature.AggregateOut).ClusterTypes(ClusterType.Standalone, ClusterType.ReplicaSet);
             var pipeline = new[]
             {
                 BsonDocument.Parse("{ $match : { x : \"x\" } }"),
@@ -661,7 +555,7 @@ namespace MongoDB.Driver.Core.Operations
         {
             RequireServer.Check()
                 .ClusterTypes(ClusterType.Standalone, ClusterType.ReplicaSet)
-                .Supports(Feature.AggregateComment);
+                .Supports(Feature.AggregateOut, Feature.AggregateComment);
             EnsureTestData();
             var subject = new AggregateToCollectionOperation(_collectionNamespace, __pipeline, _messageEncoderSettings)
             {
@@ -687,7 +581,7 @@ namespace MongoDB.Driver.Core.Operations
             [Values(false, true)]
             bool async)
         {
-            RequireServer.Check().Supports(Feature.AggregateHint);
+            RequireServer.Check().Supports(Feature.AggregateOut, Feature.AggregateHint);
             EnsureTestData();
             var subject = new AggregateToCollectionOperation(_collectionNamespace, __pipeline, _messageEncoderSettings)
             {
@@ -708,7 +602,7 @@ namespace MongoDB.Driver.Core.Operations
             [Values(false, true)]
             bool async)
         {
-            RequireServer.Check();
+            RequireServer.Check().Supports(Feature.AggregateOut);
             EnsureTestData();
             var maxTime = milliseconds == null ? (TimeSpan?)null : TimeSpan.FromMilliseconds(milliseconds.Value);
             var subject = new AggregateToCollectionOperation(_collectionNamespace, __pipeline, _messageEncoderSettings)
@@ -729,7 +623,7 @@ namespace MongoDB.Driver.Core.Operations
             [Values(false, true)]
             bool async)
         {
-            RequireServer.Check().Supports(Feature.CommandsThatWriteAcceptWriteConcern).ClusterType(ClusterType.ReplicaSet);
+            RequireServer.Check().Supports(Feature.AggregateOut, Feature.CommandsThatWriteAcceptWriteConcern).ClusterType(ClusterType.ReplicaSet);
             EnsureTestData();
             var subject = new AggregateToCollectionOperation(_collectionNamespace, __pipeline, _messageEncoderSettings)
             {
@@ -746,7 +640,7 @@ namespace MongoDB.Driver.Core.Operations
         public void Execute_should_send_session_id_when_supported(
             [Values(false, true)] bool async)
         {
-            RequireServer.Check();
+            RequireServer.Check().Supports(Feature.AggregateOut);
             EnsureTestData();
             var subject = new AggregateToCollectionOperation(_collectionNamespace, __pipeline, _messageEncoderSettings);
 

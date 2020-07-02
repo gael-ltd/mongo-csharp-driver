@@ -574,7 +574,6 @@ namespace MongoDB.Driver
         /// </summary>
         /// <param name="maxScan">The maximum number of documents to scan.</param>
         /// <returns>The cursor (so you can chain method calls to it).</returns>
-        [Obsolete("MaxScan was deprecated in server version 4.0.")]
         public virtual MongoCursor SetMaxScan(int maxScan)
         {
             if (_isFrozen) { ThrowFrozen(); }
@@ -689,7 +688,6 @@ namespace MongoDB.Driver
         /// Sets the $snapshot option.
         /// </summary>
         /// <returns>The cursor (so you can chain method calls to it).</returns>
-        [Obsolete("Snapshot was deprecated in server version 3.7.4.")]
         public virtual MongoCursor SetSnapshot()
         {
             if (_isFrozen) { ThrowFrozen(); }
@@ -869,13 +867,10 @@ namespace MongoDB.Driver
                 Filter = queryDocument,
                 Limit = Limit,
                 MaxAwaitTime = MaxAwaitTime,
-#pragma warning disable 618
                 Modifiers = Options,
-#pragma warning restore 618
                 NoCursorTimeout = noCursorTimeout,
                 Projection = Fields.ToBsonDocument(),
                 ReadConcern = ReadConcern,
-                RetryRequested = Server.Settings.RetryReads,
                 Skip = Skip
             };
 
@@ -989,7 +984,6 @@ namespace MongoDB.Driver
         /// </summary>
         /// <param name="maxScan">The maximum number of documents to scan.</param>
         /// <returns>The cursor (so you can chain method calls to it).</returns>
-        [Obsolete("MaxScan was deprecated in server version 4.0.")]
         public new virtual MongoCursor<TDocument> SetMaxScan(int maxScan)
         {
             return (MongoCursor<TDocument>)base.SetMaxScan(maxScan);
@@ -1080,7 +1074,6 @@ namespace MongoDB.Driver
         /// Sets the $snapshot option.
         /// </summary>
         /// <returns>The cursor (so you can chain method calls to it).</returns>
-        [Obsolete("Snapshot was deprecated in server version 3.7.4.")]
         public new virtual MongoCursor<TDocument> SetSnapshot()
         {
             return (MongoCursor<TDocument>)base.SetSnapshot();

@@ -26,7 +26,6 @@ namespace MongoDB.Driver.GridFS
         // private fields
         private readonly IReadBinding _binding;
         private readonly IGridFSBucket<TFileId> _bucket;
-        private bool _closed;
         private bool _disposed;
         private readonly GridFSFileInfo<TFileId> _fileInfo;
 
@@ -74,28 +73,20 @@ namespace MongoDB.Driver.GridFS
         }
 
         // public methods
-        public override void Close(CancellationToken cancellationToken)
+        public override void Close()
         {
-            try
-            {
-                CloseIfNotAlreadyClosed(cancellationToken);
-            }
-            finally
-            {
-                Dispose();
-            }
+            Close(CancellationToken.None);
         }
 
-        public override async Task CloseAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public override void Close(CancellationToken cancellationToken)
         {
-            try
-            {
-                await CloseIfNotAlreadyClosedAsync(cancellationToken).ConfigureAwait(false);
-            }
-            finally
-            {
-                Dispose();
-            }
+            base.Close();
+        }
+
+        public override Task CloseAsync(CancellationToken cancellationToken = default(CancellationToken))
+        {
+            base.Close();
+            return Task.FromResult(true);
         }
 
         public override void Flush()
@@ -124,37 +115,8 @@ namespace MongoDB.Driver.GridFS
         }
 
         // protected methods
-        protected void CloseIfNotAlreadyClosedFromDispose(bool disposing)
-        {
-            if (disposing)
-            {
-                try
-                {
-                    CloseIfNotAlreadyClosed(CancellationToken.None);
-                }
-                catch
-                {
-                    // ignore exceptions when calling CloseIfNotAlreadyClosed from Dispose
-                }
-            }
-        }
-
-        protected virtual void CloseImplementation(CancellationToken cancellationToken)
-        {
-            // override in subclass if there is anything to do
-        }
-
-        protected virtual Task CloseImplementationAsync(CancellationToken cancellationToken)
-        {
-            // override in subclass if there is anything to do
-            CloseImplementation(cancellationToken);
-            return Task.FromResult(true);
-        }
-
         protected override void Dispose(bool disposing)
         {
-            CloseIfNotAlreadyClosedFromDispose(disposing);
-
             if (!_disposed)
             {
                 if (disposing)
@@ -173,37 +135,6 @@ namespace MongoDB.Driver.GridFS
             if (_disposed)
             {
                 throw new ObjectDisposedException(GetType().Name);
-            }
-        }
-
-        // private methods
-        private void CloseIfNotAlreadyClosed(CancellationToken cancellationToken)
-        {
-            if (!_closed)
-            {
-                try
-                {
-                    CloseImplementation(cancellationToken);
-                }
-                finally
-                {
-                    _closed = true;
-                }
-            }
-        }
-
-        private async Task CloseIfNotAlreadyClosedAsync(CancellationToken cancellationToken)
-        {
-            if (!_closed)
-            {
-                try
-                {
-                    await CloseImplementationAsync(cancellationToken).ConfigureAwait(false);
-                }
-                finally
-                {
-                    _closed = true;
-                }
             }
         }
     }

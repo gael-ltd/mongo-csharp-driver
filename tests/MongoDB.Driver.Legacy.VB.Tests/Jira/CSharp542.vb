@@ -23,7 +23,6 @@ Imports MongoDB.Bson
 Imports MongoDB.Bson.Serialization.Attributes
 Imports MongoDB.Driver
 Imports MongoDB.Driver.Linq
-Imports MongoDB.Driver.Tests
 
 Namespace MongoDB.Driver.VB.Tests.Jira
 

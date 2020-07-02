@@ -207,52 +207,11 @@ namespace MongoDB.Driver
         IAggregateFluent<TNewResult> Lookup<TForeignDocument, TNewResult>(string foreignCollectionName, FieldDefinition<TResult> localField, FieldDefinition<TForeignDocument> foreignField, FieldDefinition<TNewResult> @as, AggregateLookupOptions<TForeignDocument, TNewResult> options = null);
 
         /// <summary>
-        /// Appends a lookup stage to the pipeline.
-        /// </summary>
-        /// <typeparam name="TForeignDocument">The type of the foreign collection documents.</typeparam>
-        /// <typeparam name="TAsElement">The type of the as field elements.</typeparam>
-        /// <typeparam name="TAs">The type of the as field.</typeparam>
-        /// <typeparam name="TNewResult">The type of the new result.</typeparam>
-        /// <param name="foreignCollection">The foreign collection.</param>
-        /// <param name="let">The "let" definition.</param>
-        /// <param name="lookupPipeline">The lookup pipeline.</param>
-        /// <param name="as">The as field in <typeparamref name="TNewResult" /> in which to place the results of the lookup pipeline.</param>
-        /// <param name="options">The options.</param>
-        /// <returns>The fluent aggregate interface.</returns>
-        IAggregateFluent<TNewResult> Lookup<TForeignDocument, TAsElement, TAs, TNewResult>(
-            IMongoCollection<TForeignDocument> foreignCollection,
-            BsonDocument let,
-            PipelineDefinition<TForeignDocument, TAsElement> lookupPipeline,
-            FieldDefinition<TNewResult, TAs> @as,
-            AggregateLookupOptions<TForeignDocument, TNewResult> options = null)
-            where TAs : IEnumerable<TAsElement>;
-
-        /// <summary>
         /// Appends a match stage to the pipeline.
         /// </summary>
         /// <param name="filter">The filter.</param>
         /// <returns>The fluent aggregate interface.</returns>
         IAggregateFluent<TResult> Match(FilterDefinition<TResult> filter);
-
-        /// <summary>
-        /// Appends a merge stage to the pipeline and executes it, and then returns a cursor to read the contents of the output collection.
-        /// </summary>
-        /// <typeparam name="TOutput">The type of output documents.</typeparam>
-        /// <param name="outputCollection">The output collection.</param>
-        /// <param name="mergeOptions">The merge options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>A cursor.</returns>
-        IAsyncCursor<TOutput> Merge<TOutput>(IMongoCollection<TOutput> outputCollection, MergeStageOptions<TOutput> mergeOptions = null, CancellationToken cancellationToken = default);
-
-        /// <summary>
-        /// Appends a merge stage to the pipeline and executes it, and then returns a cursor to read the contents of the output collection.
-        /// </summary>
-        /// <typeparam name="TOutput">The type of output documents.</typeparam>
-        /// <param name="outputCollection">The output collection.</param>
-        /// <param name="mergeOptions">The merge options.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>A cursor.</returns>
-        Task<IAsyncCursor<TOutput>> MergeAsync<TOutput>(IMongoCollection<TOutput> outputCollection, MergeStageOptions<TOutput> mergeOptions = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Appends a match stage to the pipeline that matches derived documents and changes the result type to the derived type.
@@ -265,26 +224,10 @@ namespace MongoDB.Driver
         /// <summary>
         /// Appends an out stage to the pipeline and executes it, and then returns a cursor to read the contents of the output collection.
         /// </summary>
-        /// <param name="outputCollection">The output collection.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>A cursor.</returns>
-        IAsyncCursor<TResult> Out(IMongoCollection<TResult> outputCollection, CancellationToken cancellationToken = default(CancellationToken));
-
-        /// <summary>
-        /// Appends an out stage to the pipeline and executes it, and then returns a cursor to read the contents of the output collection.
-        /// </summary>
         /// <param name="collectionName">Name of the collection.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns>A cursor.</returns>
         IAsyncCursor<TResult> Out(string collectionName, CancellationToken cancellationToken = default(CancellationToken));
-
-        /// <summary>
-        /// Appends an out stage to the pipeline and executes it, and then returns a cursor to read the contents of the output collection.
-        /// </summary>
-        /// <param name="outputCollection">The output collection.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>A Task whose result is a cursor.</returns>
-        Task<IAsyncCursor<TResult>> OutAsync(IMongoCollection<TResult> outputCollection, CancellationToken cancellationToken = default(CancellationToken));
 
         /// <summary>
         /// Appends an out stage to the pipeline and executes it, and then returns a cursor to read the contents of the output collection.
@@ -313,14 +256,6 @@ namespace MongoDB.Driver
         IAggregateFluent<TNewResult> ReplaceRoot<TNewResult>(AggregateExpressionDefinition<TResult, TNewResult> newRoot);
 
         /// <summary>
-        /// Appends a $replaceWith stage to the pipeline.
-        /// </summary>
-        /// <typeparam name="TNewResult">The type of the new result.</typeparam>
-        /// <param name="newRoot">The new root.</param>
-        /// <returns>The fluent aggregate interface.</returns>
-        IAggregateFluent<TNewResult> ReplaceWith<TNewResult>(AggregateExpressionDefinition<TResult, TNewResult> newRoot);
-
-        /// <summary>
         /// Appends a skip stage to the pipeline.
         /// </summary>
         /// <param name="skip">The number of documents to skip.</param>
@@ -341,30 +276,6 @@ namespace MongoDB.Driver
         /// <param name="id">The identifier.</param>
         /// <returns>The fluent aggregate interface.</returns>
         IAggregateFluent<AggregateSortByCountResult<TId>> SortByCount<TId>(AggregateExpressionDefinition<TResult, TId> id);
-
-        /// <summary>
-        /// Executes an aggregation pipeline that writes the results to a collection.
-        /// </summary>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        void ToCollection(CancellationToken cancellationToken = default(CancellationToken));
-
-        /// <summary>
-        /// Executes an aggregation pipeline that writes the results to a collection.
-        /// </summary>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>A Task.</returns>
-        Task ToCollectionAsync(CancellationToken cancellationToken = default(CancellationToken));
-
-        /// <summary>
-        /// Appends an $unionWith stage to the pipeline.
-        /// </summary>
-        /// <typeparam name="TWith">The type of the with collection documents.</typeparam>
-        /// <param name="withCollection">The with collection.</param>
-        /// <param name="withPipeline">The with pipeline.</param>
-        /// <returns>The fluent aggregate interface.</returns>
-        IAggregateFluent<TResult> UnionWith<TWith>(
-            IMongoCollection<TWith> withCollection,
-            PipelineDefinition<TWith, TResult> withPipeline = null);
 
         /// <summary>
         /// Appends an unwind stage to the pipeline.

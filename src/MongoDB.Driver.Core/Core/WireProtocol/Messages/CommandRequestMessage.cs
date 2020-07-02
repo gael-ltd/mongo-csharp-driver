@@ -46,9 +46,6 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages
 
         // public properties
         /// <inheritdoc />
-        public override bool MayBeCompressed => _wrappedMessage.MayBeCompressed;
-
-        /// <inheritdoc />
         public override MongoDBMessageType MessageType => _wrappedMessage.MessageType;
 
         /// <summary>

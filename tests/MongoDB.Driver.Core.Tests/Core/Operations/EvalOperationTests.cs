@@ -166,7 +166,7 @@ namespace MongoDB.Driver.Core.Operations
             [Values(false, true)]
             bool async)
         {
-            RequireServer.Check().Supports(Feature.Eval).Authentication(false);
+            RequireServer.Check().Authentication(false);
             var function = "return 1";
             var subject = new EvalOperation(_adminDatabaseNamespace, function, _messageEncoderSettings);
 
@@ -181,7 +181,7 @@ namespace MongoDB.Driver.Core.Operations
             [Values(false, true)]
             bool async)
         {
-            RequireServer.Check().Supports(Feature.Eval).Authentication(false);
+            RequireServer.Check().Authentication(false);
             var function = "function(x) { return x; }";
             var subject = new EvalOperation(_adminDatabaseNamespace, function, _messageEncoderSettings);
             subject.Args = new BsonValue[] { 1 };
@@ -197,7 +197,10 @@ namespace MongoDB.Driver.Core.Operations
             [Values(false, true)]
             bool async)
         {
-            // TODO: implement EvalOperation MaxTime test
+            if (Feature.MaxTime.IsSupported(CoreTestConfiguration.ServerVersion))
+            {
+                // TODO: implement EvalOperation MaxTime test
+            }
         }
 
         [SkippableTheory]
@@ -206,7 +209,7 @@ namespace MongoDB.Driver.Core.Operations
             [Values(false, true)]
             bool async)
         {
-            RequireServer.Check().Supports(Feature.Eval).Authentication(false);
+            RequireServer.Check().Authentication(false);
             var function = "return 1";
             var subject = new EvalOperation(_adminDatabaseNamespace, function, _messageEncoderSettings);
             subject.NoLock = true;
@@ -235,7 +238,7 @@ namespace MongoDB.Driver.Core.Operations
         public void Execute_should_throw_when_maxTime_is_exceeded(
             [Values(false, true)] bool async)
         {
-            RequireServer.Check().Supports(Feature.Eval).Authentication(false).ClusterTypes(ClusterType.Standalone, ClusterType.ReplicaSet);
+            RequireServer.Check().Supports(Feature.FailPoints).Authentication(false).ClusterTypes(ClusterType.Standalone, ClusterType.ReplicaSet);
             var function = "return 1";
             var subject = new EvalOperation(_adminDatabaseNamespace, function, _messageEncoderSettings) { MaxTime = TimeSpan.FromSeconds(9001) };
 

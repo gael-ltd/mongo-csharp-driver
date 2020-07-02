@@ -66,7 +66,6 @@ namespace MongoDB.Driver.Builders
         /// </summary>
         /// <param name="name">The key name.</param>
         /// <returns>The builder (so method calls can be chained).</returns>
-        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public static IndexKeysBuilder GeoSpatialHaystack(string name)
         {
             return new IndexKeysBuilder().GeoSpatialHaystack(name);
@@ -78,7 +77,6 @@ namespace MongoDB.Driver.Builders
         /// <param name="name">The key name.</param>
         /// <param name="additionalName">The name of an additional field to index.</param>
         /// <returns>The builder (so method calls can be chained).</returns>
-        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public static IndexKeysBuilder GeoSpatialHaystack(string name, string additionalName)
         {
             return new IndexKeysBuilder().GeoSpatialHaystack(name, additionalName);
@@ -122,22 +120,12 @@ namespace MongoDB.Driver.Builders
         {
             return new IndexKeysBuilder().TextAll();
         }
-
-        /// <summary>
-        /// Sets a wildcard key to the index. The method doesn't expect to specify a wildcard key explicitly.
-        /// </summary>
-        /// <param name="name">The wildcard key name. If the wildcard name is empty, the generated key will be `All field paths`, otherwise `A single field path`.</param>
-        /// <returns>The builder (so method calls can be chained).</returns>
-        public static IndexKeysBuilder Wildcard(string name = null)
-        {
-            return new IndexKeysBuilder().Wildcard(name);
-        }
     }
 
     /// <summary>
     /// A builder for specifying the keys for an index.
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     [BsonSerializer(typeof(IndexKeysBuilder.Serializer))]
@@ -200,7 +188,6 @@ namespace MongoDB.Driver.Builders
         /// </summary>
         /// <param name="name">The key name.</param>
         /// <returns>The builder (so method calls can be chained).</returns>
-        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public IndexKeysBuilder GeoSpatialHaystack(string name)
         {
             return GeoSpatialHaystack(name, null);
@@ -212,7 +199,6 @@ namespace MongoDB.Driver.Builders
         /// <param name="name">The key name.</param>
         /// <param name="additionalName">The name of an additional field to index.</param>
         /// <returns>The builder (so method calls can be chained).</returns>
-        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public IndexKeysBuilder GeoSpatialHaystack(string name, string additionalName)
         {
             _document.Add(name, "geoHaystack");
@@ -273,28 +259,6 @@ namespace MongoDB.Driver.Builders
         public override BsonDocument ToBsonDocument()
         {
             return _document;
-        }
-
-        /// <summary>
-        /// Sets a wildcard key to the index. The method doesn't expect to specify a wildcard key explicitly.
-        /// </summary>
-        /// <param name="name">The wildcard key name. If the wildcard name is empty, the generated key will be `All field paths`, otherwise `A single field path`.</param>
-        /// <returns>The builder (so method calls can be chained).</returns>
-        public IndexKeysBuilder Wildcard(string name = null)
-        {
-            var wildcard = name;
-            if (wildcard == null)
-            {
-                wildcard = "$**";
-            }
-            else
-            {
-                wildcard += ".$**";
-            }
-
-            _document.Add(wildcard, 1);
-
-            return this;
         }
 
         // nested class
@@ -359,7 +323,6 @@ namespace MongoDB.Driver.Builders
         /// <returns>
         /// The builder (so method calls can be chained).
         /// </returns>
-        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public static IndexKeysBuilder<TDocument> GeoSpatialHaystack<TMember>(Expression<Func<TDocument, TMember>> memberExpression)
         {
             return new IndexKeysBuilder<TDocument>().GeoSpatialHaystack(memberExpression);
@@ -375,7 +338,6 @@ namespace MongoDB.Driver.Builders
         /// <returns>
         /// The builder (so method calls can be chained).
         /// </returns>
-        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public static IndexKeysBuilder<TDocument> GeoSpatialHaystack<TMember, TAdditionalMember>(Expression<Func<TDocument, TMember>> memberExpression, Expression<Func<TDocument, TAdditionalMember>> additionalMemberExpression)
         {
             return new IndexKeysBuilder<TDocument>().GeoSpatialHaystack(memberExpression, additionalMemberExpression);
@@ -436,24 +398,13 @@ namespace MongoDB.Driver.Builders
             return new IndexKeysBuilder<TDocument>().TextAll();
         }
 
-        /// <summary>
-        /// Sets a wildcard key to the index.
-        /// </summary>
-        /// <param name="memberExpression">The member expression representing the wildcard key name. If the wildcard name is empty, the generated key will be `All field paths`, otherwise `A single field path`.</param>
-        /// <returns>
-        /// The builder (so method calls can be chained).
-        /// </returns>
-        public static IndexKeysBuilder<TDocument> Wildcard(Expression<Func<TDocument, object>> memberExpression = null)
-        {
-            return new IndexKeysBuilder<TDocument>().Wildcard(memberExpression);
-        }
     }
 
     /// <summary>
     /// A builder for specifying the keys for an index.
     /// </summary>
     /// <typeparam name="TDocument">The type of the document.</typeparam>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     [BsonSerializer(typeof(IndexKeysBuilder<>.Serializer))]
@@ -522,7 +473,6 @@ namespace MongoDB.Driver.Builders
         /// <returns>
         /// The builder (so method calls can be chained).
         /// </returns>
-        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public IndexKeysBuilder<TDocument> GeoSpatialHaystack<TMember>(Expression<Func<TDocument, TMember>> memberExpression)
         {
             _indexKeysBuilder = _indexKeysBuilder.GeoSpatialHaystack(GetElementName(memberExpression));
@@ -539,7 +489,6 @@ namespace MongoDB.Driver.Builders
         /// <returns>
         /// The builder (so method calls can be chained).
         /// </returns>
-        [Obsolete("GeoHaystack indexes were deprecated in server version 4.4.")]
         public IndexKeysBuilder<TDocument> GeoSpatialHaystack<TMember, TAdditionalMember>(Expression<Func<TDocument, TMember>> memberExpression, Expression<Func<TDocument, TAdditionalMember>> additionalMemberExpression)
         {
             _indexKeysBuilder = _indexKeysBuilder.GeoSpatialHaystack(GetElementName(memberExpression), GetElementName(additionalMemberExpression));
@@ -615,20 +564,6 @@ namespace MongoDB.Driver.Builders
         public override BsonDocument ToBsonDocument()
         {
             return _indexKeysBuilder.ToBsonDocument();
-        }
-
-        /// <summary>
-        /// Sets a wildcard key to the index.
-        /// </summary>
-        /// <param name="memberExpression">The member expression representing the wildcard key name. If the wildcard name is empty, the generated key will be `All field paths`, otherwise `A single field path`.</param>
-        /// <returns>
-        /// The builder (so method calls can be chained).
-        /// </returns>
-        public IndexKeysBuilder<TDocument> Wildcard(Expression<Func<TDocument, object>> memberExpression = null)
-        {
-            var name = memberExpression != null ? GetElementName(memberExpression) : null;
-            _indexKeysBuilder = _indexKeysBuilder.Wildcard(name);
-            return this;
         }
 
         // private methods

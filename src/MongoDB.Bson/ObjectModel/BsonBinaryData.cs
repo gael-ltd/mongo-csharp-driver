@@ -21,7 +21,7 @@ namespace MongoDB.Bson
     /// <summary>
     /// Represents BSON binary data.
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     public class BsonBinaryData : BsonValue, IComparable<BsonBinaryData>, IEquatable<BsonBinaryData>
@@ -47,6 +47,17 @@ namespace MongoDB.Bson
         /// <param name="bytes">The binary data.</param>
         /// <param name="subType">The binary data subtype.</param>
         public BsonBinaryData(byte[] bytes, BsonBinarySubType subType)
+            : this(bytes, subType, subType == BsonBinarySubType.UuidStandard ? GuidRepresentation.Standard : GuidRepresentation.Unspecified)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the BsonBinaryData class.
+        /// </summary>
+        /// <param name="bytes">The binary data.</param>
+        /// <param name="subType">The binary data subtype.</param>
+        /// <param name="guidRepresentation">The representation for Guids.</param>
+        public BsonBinaryData(byte[] bytes, BsonBinarySubType subType, GuidRepresentation guidRepresentation)
         {
             if (bytes == null)
             {
@@ -61,29 +72,6 @@ namespace MongoDB.Bson
                         bytes.Length, subType);
                     throw new ArgumentException(message, nameof(bytes));
                 }
-            }
-
-            _bytes = bytes;
-            _subType = subType;
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the BsonBinaryData class.
-        /// </summary>
-        /// <param name="bytes">The binary data.</param>
-        /// <param name="subType">The binary data subtype.</param>
-        /// <param name="guidRepresentation">The representation for Guids.</param>
-        [Obsolete("This constructor will be removed in a later release.")]
-        public BsonBinaryData(byte[] bytes, BsonBinarySubType subType, GuidRepresentation guidRepresentation)
-            : this(bytes, subType)
-        {
-            if (BsonDefaults.GuidRepresentationMode != GuidRepresentationMode.V2)
-            {
-                throw new InvalidOperationException("BsonBinaryData constructor that takes a GuidRepresentation can only be used when GuidRepresentationMode is V2.");
-            }
-
-            if (subType == BsonBinarySubType.UuidStandard || subType == BsonBinarySubType.UuidLegacy)
-            {
                 BsonBinarySubType expectedSubType;
                 switch (guidRepresentation)
                 {
@@ -117,7 +105,8 @@ namespace MongoDB.Bson
                     throw new ArgumentException(message, nameof(guidRepresentation));
                 }
             }
-
+            _bytes = bytes;
+            _subType = subType;
             _guidRepresentation = guidRepresentation;
         }
 
@@ -125,17 +114,10 @@ namespace MongoDB.Bson
         /// Initializes a new instance of the BsonBinaryData class.
         /// </summary>
         /// <param name="guid">A Guid.</param>
-#pragma warning disable 618
-        [Obsolete("Use the constructor that also takes a GuidRepresentation instead.")]
         public BsonBinaryData(Guid guid)
-            : this(
-                guid,
-                BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2
-                    ? BsonDefaults.GuidRepresentation
-                    : throw new InvalidOperationException("This constructor can only be used when BsonDefaults.GuidRepresentationMode is V2."))
+            : this(guid, BsonDefaults.GuidRepresentation)
         {
         }
-#pragma warning restore 618
 
         /// <summary>
         /// Initializes a new instance of the BsonBinaryData class.
@@ -143,15 +125,8 @@ namespace MongoDB.Bson
         /// <param name="guid">A Guid.</param>
         /// <param name="guidRepresentation">The representation for Guids.</param>
         public BsonBinaryData(Guid guid, GuidRepresentation guidRepresentation)
+            : this(GuidConverter.ToBytes(guid, guidRepresentation), (guidRepresentation == GuidRepresentation.Standard) ? BsonBinarySubType.UuidStandard : BsonBinarySubType.UuidLegacy, guidRepresentation)
         {
-            _bytes = GuidConverter.ToBytes(guid, guidRepresentation);
-            _subType = GuidConverter.GetSubType(guidRepresentation);
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                _guidRepresentation = guidRepresentation;
-            }
-#pragma warning restore 618
         }
 
         // public properties
@@ -174,17 +149,9 @@ namespace MongoDB.Bson
         /// <summary>
         /// Gets the representation to use when representing the Guid as BSON binary data.
         /// </summary>
-        [Obsolete("This property will be removed in a later release.")]
         public GuidRepresentation GuidRepresentation
         {
-            get
-            {
-                if (BsonDefaults.GuidRepresentationMode != GuidRepresentationMode.V2)
-                {
-                    throw new InvalidOperationException("GuidRepresentation property can only be used when GuidRepresentationMode is V2.");
-                }
-                return _guidRepresentation;
-            }
+            get { return _guidRepresentation; }
         }
 
         /// <summary>
@@ -236,13 +203,8 @@ namespace MongoDB.Bson
         /// </summary>
         /// <param name="value">A Guid.</param>
         /// <returns>A BsonBinaryData.</returns>
-        [Obsolete("Use the BsonBinaryData constructor instead and specify a Guid representation.")]
         public static implicit operator BsonBinaryData(Guid value)
         {
-            if (BsonDefaults.GuidRepresentationMode != GuidRepresentationMode.V2)
-            {
-                throw new InvalidOperationException("Implicit conversion from Guid to BsonBinaryData is only valid when BsonDefaults.GuidRepresentationMode is V2.");
-            }
             return new BsonBinaryData(value);
         }
 
@@ -366,20 +328,7 @@ namespace MongoDB.Bson
         /// <returns>A Guid.</returns>
         public Guid ToGuid()
         {
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                return ToGuid(_guidRepresentation);
-            }
-            else
-            {
-                if (_subType != BsonBinarySubType.UuidStandard)
-                {
-                    throw new InvalidOperationException("ToGuid without a Guid representation can only be called when sub type is UuidStandard.");
-                }
-                return GuidConverter.FromBytes(_bytes, GuidRepresentation.Standard);
-            }
-#pragma warning restore 618
+            return ToGuid(_guidRepresentation);
         }
 
         /// <summary>
@@ -398,17 +347,6 @@ namespace MongoDB.Bson
             {
                 throw new ArgumentException("GuidRepresentation cannot be Unspecified.");
             }
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V3)
-            {
-                var expectedSubType = GuidConverter.GetSubType(guidRepresentation);
-                if (_subType != expectedSubType)
-                {
-                    throw new InvalidOperationException($"ToGuid with Guid representation {guidRepresentation} can only be called when sub type is {expectedSubType}.");
-                }
-            }
-#pragma warning restore 618
-
             return GuidConverter.FromBytes(_bytes, guidRepresentation);
         }
 

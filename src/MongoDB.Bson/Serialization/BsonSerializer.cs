@@ -644,7 +644,6 @@ namespace MongoDB.Bson.Serialization
             Action<BsonSerializationContext.Builder> configurator = null,
             BsonSerializationArgs args = default(BsonSerializationArgs))
         {
-            args.SetOrValidateNominalType(typeof(TNominalType), "<TNominalType>");
             var serializer = LookupSerializer<TNominalType>();
             var context = BsonSerializationContext.CreateRoot(bsonWriter, configurator);
             serializer.Serialize(context, args, value);
@@ -665,7 +664,6 @@ namespace MongoDB.Bson.Serialization
             Action<BsonSerializationContext.Builder> configurator = null,
             BsonSerializationArgs args = default(BsonSerializationArgs))
         {
-            args.SetOrValidateNominalType(nominalType, "nominalType");
             var serializer = LookupSerializer(nominalType);
             var context = BsonSerializationContext.CreateRoot(bsonWriter, configurator);
             serializer.Serialize(context, args, value);
@@ -693,7 +691,7 @@ namespace MongoDB.Bson.Serialization
                 if (!__typesWithRegisteredKnownTypes.Contains(nominalType))
                 {
                     // only call LookupClassMap for classes with a BsonKnownTypesAttribute
-#if NET452
+#if NET45
                     var knownTypesAttribute = nominalType.GetTypeInfo().GetCustomAttributes(typeof(BsonKnownTypesAttribute), false);
 #else
                     var knownTypesAttribute = nominalType.GetTypeInfo().GetCustomAttributes(typeof(BsonKnownTypesAttribute), false).ToArray();

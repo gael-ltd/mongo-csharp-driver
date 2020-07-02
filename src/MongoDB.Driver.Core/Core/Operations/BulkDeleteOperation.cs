@@ -43,14 +43,20 @@ namespace MongoDB.Driver.Core.Operations
             };
         }
 
+        protected override IExecutableInRetryableWriteContext<BulkWriteOperationResult> CreateEmulator()
+        {
+            return new BulkDeleteOperationEmulator(CollectionNamespace, Requests, MessageEncoderSettings)
+            {
+                IsOrdered = IsOrdered,
+                MaxBatchCount = MaxBatchCount,
+                MaxBatchLength = MaxBatchLength,
+                WriteConcern = WriteConcern
+            };
+        }
+
         protected override bool RequestHasCollation(DeleteRequest request)
         {
             return request.Collation != null;
-        }
-
-        protected override bool RequestHasHint(DeleteRequest request)
-        {
-            return request.Hint != null;
         }
     }
 }

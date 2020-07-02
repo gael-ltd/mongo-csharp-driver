@@ -20,7 +20,7 @@ namespace MongoDB.Bson
     /// <summary>
     /// Represents a BSON ObjectId value (see also ObjectId).
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     public class BsonObjectId : BsonValue, IComparable<BsonObjectId>, IEquatable<BsonObjectId>
@@ -45,7 +45,7 @@ namespace MongoDB.Bson
         /// Initializes a new instance of the BsonObjectId class.
         /// </summary>
         /// <param name="bytes">The bytes.</param>
-        [Obsolete("Use new BsonObjectId(ObjectId value) instead.")]
+        [Obsolete("Use new BsonObjectId(byte[] bytes) instead.")]
         public BsonObjectId(byte[] bytes)
         {
             _value = new ObjectId(bytes);
@@ -117,7 +117,7 @@ namespace MongoDB.Bson
         /// <summary>
         /// Gets the machine.
         /// </summary>
-        [Obsolete("This property will be removed in a later release.")]
+        [Obsolete("Use Value.Machine instead.")]
         public int Machine
         {
             get { return _value.Machine; }
@@ -126,7 +126,7 @@ namespace MongoDB.Bson
         /// <summary>
         /// Gets the PID.
         /// </summary>
-        [Obsolete("This property will be removed in a later release.")]
+        [Obsolete("Use Value.Pid instead.")]
         public short Pid
         {
             get { return _value.Pid; }

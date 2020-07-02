@@ -16,7 +16,6 @@
 Imports System.Linq
 Imports MongoDB.Driver
 Imports MongoDB.Driver.Linq
-Imports MongoDB.Driver.Tests
 Imports Xunit
 
 Namespace MongoDB.Driver.VB.Tests.Jira

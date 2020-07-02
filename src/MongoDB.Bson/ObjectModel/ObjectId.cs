@@ -24,14 +24,15 @@ namespace MongoDB.Bson
     /// <summary>
     /// Represents an ObjectId (see also BsonObjectId).
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     public struct ObjectId : IComparable<ObjectId>, IEquatable<ObjectId>, IConvertible
     {
         // private static fields
         private static readonly ObjectId __emptyInstance = default(ObjectId);
-        private static readonly long __random = CalculateRandomValue();
+        private static readonly int __staticMachine = (GetMachineHash() + GetAppDomainId()) & 0x00ffffff;
+        private static readonly short __staticPid = GetPid();
         private static int __staticIncrement = (new Random()).Next();
 
         // private fields
@@ -75,7 +76,6 @@ namespace MongoDB.Bson
         /// <param name="machine">The machine hash.</param>
         /// <param name="pid">The PID.</param>
         /// <param name="increment">The increment.</param>
-        [Obsolete("This constructor will be removed in a later release.")]
         public ObjectId(DateTime timestamp, int machine, short pid, int increment)
             : this(GetTimestampFromDateTime(timestamp), machine, pid, increment)
         {
@@ -88,7 +88,6 @@ namespace MongoDB.Bson
         /// <param name="machine">The machine hash.</param>
         /// <param name="pid">The PID.</param>
         /// <param name="increment">The increment.</param>
-        [Obsolete("This constructor will be removed in a later release.")]
         public ObjectId(int timestamp, int machine, short pid, int increment)
         {
             if ((machine & 0xff000000) != 0)
@@ -120,13 +119,6 @@ namespace MongoDB.Bson
             FromByteArray(bytes, 0, out _a, out _b, out _c);
         }
 
-        private ObjectId(int a, int b, int c)
-        {
-            _a = a;
-            _b = b;
-            _c = c;
-        }
-
         // public static properties
         /// <summary>
         /// Gets an instance of ObjectId where the value is empty.
@@ -148,7 +140,6 @@ namespace MongoDB.Bson
         /// <summary>
         /// Gets the machine.
         /// </summary>
-        [Obsolete("This property will be removed in a later release.")]
         public int Machine
         {
             get { return (_b >> 8) & 0xffffff; }
@@ -157,7 +148,6 @@ namespace MongoDB.Bson
         /// <summary>
         /// Gets the PID.
         /// </summary>
-        [Obsolete("This property will be removed in a later release.")]
         public short Pid
         {
             get { return (short)(((_b << 8) & 0xff00) | ((_c >> 24) & 0x00ff)); }
@@ -166,7 +156,6 @@ namespace MongoDB.Bson
         /// <summary>
         /// Gets the increment.
         /// </summary>
-        [Obsolete("This property will be removed in a later release.")]
         public int Increment
         {
             get { return _c & 0xffffff; }
@@ -177,7 +166,7 @@ namespace MongoDB.Bson
         /// </summary>
         public DateTime CreationTime
         {
-            get { return BsonConstants.UnixEpoch.AddSeconds((uint)Timestamp); }
+            get { return BsonConstants.UnixEpoch.AddSeconds(Timestamp); }
         }
 
         // public operators
@@ -275,7 +264,7 @@ namespace MongoDB.Bson
         public static ObjectId GenerateNewId(int timestamp)
         {
             int increment = Interlocked.Increment(ref __staticIncrement) & 0x00ffffff; // only use low order 3 bytes
-            return Create(timestamp, __random, increment);
+            return new ObjectId(timestamp, __staticMachine, __staticPid, increment);
         }
 
         /// <summary>
@@ -286,7 +275,6 @@ namespace MongoDB.Bson
         /// <param name="pid">The PID.</param>
         /// <param name="increment">The increment.</param>
         /// <returns>A byte array.</returns>
-        [Obsolete("This method will be removed in a later release.")]
         public static byte[] Pack(int timestamp, int machine, short pid, int increment)
         {
             if ((machine & 0xff000000) != 0)
@@ -369,7 +357,6 @@ namespace MongoDB.Bson
         /// <param name="machine">The machine hash.</param>
         /// <param name="pid">The PID.</param>
         /// <param name="increment">The increment.</param>
-        [Obsolete("This method will be removed in a later release.")]
         public static void Unpack(byte[] bytes, out int timestamp, out int machine, out short pid, out int increment)
         {
             if (bytes == null)
@@ -388,31 +375,13 @@ namespace MongoDB.Bson
         }
 
         // private static methods
-        private static long CalculateRandomValue()
+        private static int GetAppDomainId()
         {
-            var seed = (int)DateTime.UtcNow.Ticks ^ GetMachineHash() ^ GetPid();
-            var random = new Random(seed);
-            var high = random.Next();
-            var low = random.Next();
-            var combined = (long)((ulong)(uint)high << 32 | (ulong)(uint)low);
-            return combined & 0xffffffffff; // low order 5 bytes
-        }
-
-        private static ObjectId Create(int timestamp, long random, int increment)
-        {
-            if (random < 0 || random > 0xffffffffff)
-            {
-                throw new ArgumentOutOfRangeException(nameof(random), "The random value must be between 0 and 1099511627775 (it must fit in 5 bytes).");
-            }
-            if (increment < 0 || increment > 0xffffff)
-            {
-                throw new ArgumentOutOfRangeException(nameof(increment), "The increment value must be between 0 and 16777215 (it must fit in 3 bytes).");
-            }
-
-            var a = timestamp;
-            var b = (int)(random >> 8); // first 4 bytes of random
-            var c = (int)(random << 24) | increment; // 5th byte of random and 3 byte increment
-            return new ObjectId(a, b, c);
+#if NETSTANDARD1_5 || NETSTANDARD1_6
+            return 1;
+#else
+            return AppDomain.CurrentDomain.Id;
+#endif
         }
 
         /// <summary>
@@ -453,11 +422,11 @@ namespace MongoDB.Bson
         private static int GetTimestampFromDateTime(DateTime timestamp)
         {
             var secondsSinceEpoch = (long)Math.Floor((BsonUtils.ToUniversalTime(timestamp) - BsonConstants.UnixEpoch).TotalSeconds);
-            if (secondsSinceEpoch < uint.MinValue || secondsSinceEpoch > uint.MaxValue)
+            if (secondsSinceEpoch < int.MinValue || secondsSinceEpoch > int.MaxValue)
             {
                 throw new ArgumentOutOfRangeException("timestamp");
             }
-            return (int)(uint)secondsSinceEpoch;
+            return (int)secondsSinceEpoch;
         }
 
         private static void FromByteArray(byte[] bytes, int offset, out int a, out int b, out int c)

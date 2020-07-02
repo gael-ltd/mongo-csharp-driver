@@ -97,7 +97,7 @@ namespace MongoDB.Bson.IO
         /// </summary>
         public new BsonBinaryWriterSettings Settings
         {
-            get { return (BsonBinaryWriterSettings)base.Settings; }
+            get {  return (BsonBinaryWriterSettings)base.Settings; }
         }
 
         // public methods
@@ -169,6 +169,7 @@ namespace MongoDB.Bson.IO
 
             var bytes = binaryData.Bytes;
             var subType = binaryData.SubType;
+            var guidRepresentation = binaryData.GuidRepresentation;
             switch (subType)
             {
                 case BsonBinarySubType.OldBinary:
@@ -179,26 +180,22 @@ namespace MongoDB.Bson.IO
                     break;
                 case BsonBinarySubType.UuidLegacy:
                 case BsonBinarySubType.UuidStandard:
-                    if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
+                    if (Settings.GuidRepresentation != GuidRepresentation.Unspecified)
                     {
-                        if (Settings.GuidRepresentation != GuidRepresentation.Unspecified)
+                        var expectedSubType = (Settings.GuidRepresentation == GuidRepresentation.Standard) ? BsonBinarySubType.UuidStandard : BsonBinarySubType.UuidLegacy;
+                        if (subType != expectedSubType)
                         {
-                            var expectedSubType = GuidConverter.GetSubType(Settings.GuidRepresentation);
-                            if (subType != expectedSubType)
-                            {
-                                var message = string.Format(
-                                    "The GuidRepresentation for the writer is {0}, which requires the subType argument to be {1}, not {2}.",
-                                    Settings.GuidRepresentation, expectedSubType, subType);
-                                throw new BsonSerializationException(message);
-                            }
-                            var guidRepresentation = binaryData.GuidRepresentation;
-                            if (guidRepresentation != Settings.GuidRepresentation)
-                            {
-                                var message = string.Format(
-                                    "The GuidRepresentation for the writer is {0}, which requires the the guidRepresentation argument to also be {0}, not {1}.",
-                                    Settings.GuidRepresentation, guidRepresentation);
-                                throw new BsonSerializationException(message);
-                            }
+                            var message = string.Format(
+                                "The GuidRepresentation for the writer is {0}, which requires the subType argument to be {1}, not {2}.",
+                                Settings.GuidRepresentation, expectedSubType, subType);
+                            throw new BsonSerializationException(message);
+                        }
+                        if (guidRepresentation != Settings.GuidRepresentation)
+                        {
+                            var message = string.Format(
+                                "The GuidRepresentation for the writer is {0}, which requires the the guidRepresentation argument to also be {0}, not {1}.",
+                                Settings.GuidRepresentation, guidRepresentation);
+                            throw new BsonSerializationException(message);
                         }
                     }
                     break;

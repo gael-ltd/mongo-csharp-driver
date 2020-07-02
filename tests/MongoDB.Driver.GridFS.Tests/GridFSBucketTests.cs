@@ -347,7 +347,8 @@ namespace MongoDB.Driver.GridFS.Tests
                 subject.Drop();
             }
 
-            var collectionNames = database.ListCollectionNames().ToList();
+            var collections = database.ListCollections().ToList();
+            var collectionNames = collections.Select(c => c["name"].AsString);
             collectionNames.Should().NotContain("fs.files");
             collectionNames.Should().NotContain("fs.chunks");
         }

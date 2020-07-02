@@ -26,7 +26,6 @@ using MongoDB.Driver.Core.Clusters;
 using MongoDB.Driver.Core.Events;
 using MongoDB.Driver.Core.TestHelpers;
 using MongoDB.Driver.Core.WireProtocol.Messages.Encoders;
-using Xunit;
 
 namespace MongoDB.Driver.Core.Operations
 {
@@ -114,13 +113,8 @@ namespace MongoDB.Driver.Core.Operations
 
         protected void EnsureDatabaseExists()
         {
-            EnsureDatabaseExists(_databaseNamespace.DatabaseName);
-        }
-
-        protected void EnsureDatabaseExists(string databaseName)
-        {
-            var collectionName = $"EnsureDatabaseExists-{databaseName}";
-            var collectionNamespace = new CollectionNamespace(new DatabaseNamespace(databaseName), collectionName);
+            var collectionName = $"EnsureDatabaseExists-{_databaseNamespace.DatabaseName}";
+            var collectionNamespace = new CollectionNamespace(_databaseNamespace, collectionName);
             var filter = new BsonDocument("_id", 1);
             var update = new BsonDocument("$set", new BsonDocument("x", 1));
             var operation = new FindOneAndUpdateOperation<BsonDocument>(collectionNamespace, filter, update, BsonDocumentSerializer.Instance, new MessageEncoderSettings())
@@ -172,24 +166,24 @@ namespace MongoDB.Driver.Core.Operations
             }
         }
 
-        protected TResult ExecuteOperation<TResult>(IWriteOperation<TResult> operation, bool useImplicitSession = false)
+        protected TResult ExecuteOperation<TResult>(IWriteOperation<TResult> operation)
         {
-            using (var binding = CreateReadWriteBinding(useImplicitSession))
+            using (var binding = CreateReadWriteBinding())
             using (var bindingHandle = new ReadWriteBindingHandle(binding))
             {
                 return operation.Execute(bindingHandle, CancellationToken.None);
             }
         }
 
-        protected TResult ExecuteOperation<TResult>(IWriteOperation<TResult> operation, bool async, bool useImplicitSession = false)
+        protected TResult ExecuteOperation<TResult>(IWriteOperation<TResult> operation, bool async)
         {
             if (async)
             {
-                return ExecuteOperationAsync(operation, useImplicitSession).GetAwaiter().GetResult();
+                return ExecuteOperationAsync(operation).GetAwaiter().GetResult();
             }
             else
             {
-                return ExecuteOperation(operation, useImplicitSession);
+                return ExecuteOperation(operation);
             }
         }
 
@@ -219,9 +213,9 @@ namespace MongoDB.Driver.Core.Operations
             return await operation.ExecuteAsync(binding, CancellationToken.None);
         }
 
-        protected async Task<TResult> ExecuteOperationAsync<TResult>(IWriteOperation<TResult> operation, bool useImplicitSession = false)
+        protected async Task<TResult> ExecuteOperationAsync<TResult>(IWriteOperation<TResult> operation)
         {
-            using (var binding = CreateReadWriteBinding(useImplicitSession))
+            using (var binding = CreateReadWriteBinding())
             using (var bindingHandle = new ReadWriteBindingHandle(binding))
             {
                 return await operation.ExecuteAsync(bindingHandle, CancellationToken.None);
@@ -253,11 +247,9 @@ namespace MongoDB.Driver.Core.Operations
             return new ReadPreferenceBinding(_cluster, readPreference, _session.Fork());
         }
 
-        protected IReadWriteBinding CreateReadWriteBinding(bool useImplicitSession = false)
+        protected IReadWriteBinding CreateReadWriteBinding()
         {
-            var options = new CoreSessionOptions(isImplicit: useImplicitSession);
-            var session = CoreTestConfiguration.StartSession(_cluster, options);
-            return new WritableServerBinding(_cluster, session);
+            return new WritableServerBinding(_cluster, _session.Fork());
         }
 
         protected void Insert(params BsonDocument[] documents)
@@ -406,109 +398,59 @@ namespace MongoDB.Driver.Core.Operations
             Update(BsonDocument.Parse(filter), BsonDocument.Parse(update));
         }
 
-        protected void VerifySessionIdWasNotSentIfUnacknowledgedWrite<TResult>(
-            IWriteOperation<TResult> operation,
-            string commandName,
-            bool async,
-            bool useImplicitSession)
-        {
-            VerifySessionIdSending(
-                (binding, cancellationToken) => operation.ExecuteAsync(binding, cancellationToken),
-                (binding, cancellationToken) => operation.Execute(binding, cancellationToken),
-                AssertSessionIdWasNotSentIfUnacknowledgedWrite,
-                commandName,
-                async,
-                useImplicitSession);
-        }
-
         protected void VerifySessionIdWasSentWhenSupported<TResult>(IReadOperation<TResult> operation, string commandName, bool async)
         {
-            VerifySessionIdSending(
+            VerifySessionIdWasSentWhenSupported(
                 (binding, cancellationToken) => operation.ExecuteAsync(binding, cancellationToken),
                 (binding, cancellationToken) => operation.Execute(binding, cancellationToken),
-                AssertSessionIdWasSentWhenSupported,
                 commandName,
                 async);
         }
 
         protected void VerifySessionIdWasSentWhenSupported<TResult>(IWriteOperation<TResult> operation, string commandName, bool async)
         {
-            VerifySessionIdSending(
+            VerifySessionIdWasSentWhenSupported(
                 (binding, cancellationToken) => operation.ExecuteAsync(binding, cancellationToken),
                 (binding, cancellationToken) => operation.Execute(binding, cancellationToken),
-                AssertSessionIdWasSentWhenSupported,
                 commandName,
                 async);
         }
 
-        protected void VerifySessionIdSending<TResult>(
+        protected void VerifySessionIdWasSentWhenSupported<TResult>(
             Func<WritableServerBinding, CancellationToken, Task<TResult>> executeAsync,
             Func<WritableServerBinding, CancellationToken, TResult> execute,
-            Action<EventCapturer, ICoreSessionHandle, Exception> assertResults,
             string commandName,
-            bool async,
-            bool useImplicitSession = false)
+            bool async)
         {
             var eventCapturer = new EventCapturer().Capture<CommandStartedEvent>(e => e.CommandName == commandName);
             using (var cluster = CoreTestConfiguration.CreateCluster(b => b.Subscribe(eventCapturer)))
             {
-                using (var session = CreateSession(cluster, useImplicitSession))
+                using (var session = CoreTestConfiguration.StartSession(cluster))
                 using (var binding = new WritableServerBinding(cluster, session.Fork()))
                 {
                     var cancellationToken = new CancellationTokenSource().Token;
-                    Exception exception;
                     if (async)
                     {
-                        exception = Record.Exception(() => executeAsync(binding, cancellationToken).GetAwaiter().GetResult());
+                        executeAsync(binding, cancellationToken).GetAwaiter().GetResult();
                     }
                     else
                     {
-                        exception = Record.Exception(() => execute(binding, cancellationToken));
+                        execute(binding, cancellationToken);
                     }
 
-                    assertResults(eventCapturer, session, exception);
+                    var commandStartedEvent = (CommandStartedEvent)eventCapturer.Next();
+                    var command = commandStartedEvent.Command;
+                    if (session.Id == null)
+                    {
+                        command.Contains("lsid").Should().BeFalse();
+                    }
+                    else
+                    {
+                        command["lsid"].Should().Be(session.Id);
+                    }
+                    session.ReferenceCount().Should().Be(2);
                 }
             }
-        }
-
-        // private methods
-        private void AssertSessionIdWasNotSentIfUnacknowledgedWrite(EventCapturer eventCapturer, ICoreSessionHandle session, Exception ex)
-        {
-            if (session.IsImplicit)
-            {
-                var commandStartedEvent = (CommandStartedEvent)eventCapturer.Next();
-                var command = commandStartedEvent.Command;
-                command.Contains("lsid").Should().BeFalse();
-                session.ReferenceCount().Should().Be(2);
-            }
-            else
-            {
-                var e = ex.Should().BeOfType<InvalidOperationException>().Subject;
-                e.Message.Should().Be("Explicit session must not be used with unacknowledged writes.");
-            }
-        }
-
-        private void AssertSessionIdWasSentWhenSupported(EventCapturer eventCapturer, ICoreSessionHandle session, Exception exception)
-        {
-            exception.Should().BeNull();
-            var commandStartedEvent = (CommandStartedEvent)eventCapturer.Next();
-            var command = commandStartedEvent.Command;
-            if (session.Id == null)
-            {
-                command.Contains("lsid").Should().BeFalse();
-            }
-            else
-            {
-                command["lsid"].Should().Be(session.Id);
-            }
-
-            session.ReferenceCount().Should().Be(2);
-        }
-
-        private ICoreSessionHandle CreateSession(ICluster cluster, bool useImplicitSession)
-        {
-            var options = new CoreSessionOptions(isImplicit: useImplicitSession);
-            return CoreTestConfiguration.StartSession(cluster, options);
         }
 
         protected class Profiler : IDisposable

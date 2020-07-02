@@ -18,12 +18,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using MongoDB.Bson;
 using MongoDB.Bson.IO;
 using MongoDB.Driver.Core.Clusters;
-using MongoDB.Driver.Core.Compression;
 using MongoDB.Driver.Core.Configuration;
+using MongoDB.Driver.Core.Misc;
 using MongoDB.Shared;
 
 namespace MongoDB.Driver
@@ -31,18 +32,16 @@ namespace MongoDB.Driver
     /// <summary>
     /// Represents URL-style connection strings.
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     public class MongoUrlBuilder
     {
         // private fields
-        private bool _allowInsecureTls;
         private string _applicationName;
         private string _authenticationMechanism;
         private Dictionary<string, string> _authenticationMechanismProperties;
         private string _authenticationSource;
-        private IReadOnlyList<CompressorConfiguration> _compressors;
         private ConnectionMode _connectionMode;
         private TimeSpan _connectTimeout;
         private string _databaseName;
@@ -61,15 +60,14 @@ namespace MongoDB.Driver
         private ReadConcernLevel? _readConcernLevel;
         private ReadPreference _readPreference;
         private string _replicaSetName;
-        private bool? _retryReads;
         private bool? _retryWrites;
         private ConnectionStringScheme _scheme;
         private IEnumerable<MongoServerAddress> _servers;
         private TimeSpan _serverSelectionTimeout;
         private TimeSpan _socketTimeout;
-        private bool _tlsDisableCertificateRevocationCheck;
         private string _username;
-        private bool _useTls;
+        private bool _useSsl;
+        private bool _verifySslCertificate;
         private WriteConcern.WValue _w;
         private double _waitQueueMultiple;
         private int _waitQueueSize;
@@ -82,22 +80,15 @@ namespace MongoDB.Driver
         /// </summary>
         public MongoUrlBuilder()
         {
-            _allowInsecureTls = false;
             _applicationName = null;
             _authenticationMechanism = MongoDefaults.AuthenticationMechanism;
             _authenticationMechanismProperties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             _authenticationSource = null;
-            _compressors = new CompressorConfiguration[0];
             _connectionMode = ConnectionMode.Automatic;
             _connectTimeout = MongoDefaults.ConnectTimeout;
             _databaseName = null;
             _fsync = null;
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                _guidRepresentation = MongoDefaults.GuidRepresentation;
-            }
-#pragma warning restore 618
+            _guidRepresentation = MongoDefaults.GuidRepresentation;
             _heartbeatInterval = ServerSettings.DefaultHeartbeatInterval;
             _heartbeatTimeout = ServerSettings.DefaultHeartbeatTimeout;
             _ipv6 = false;
@@ -110,20 +101,17 @@ namespace MongoDB.Driver
             _readConcernLevel = null;
             _readPreference = null;
             _replicaSetName = null;
-            _retryReads = null;
             _retryWrites = null;
             _localThreshold = MongoDefaults.LocalThreshold;
-            _scheme = ConnectionStringScheme.MongoDB;
             _servers = new[] { new MongoServerAddress("localhost", 27017) };
             _serverSelectionTimeout = MongoDefaults.ServerSelectionTimeout;
             _socketTimeout = MongoDefaults.SocketTimeout;
             _username = null;
-            _useTls = false;
+            _useSsl = false;
+            _verifySslCertificate = true;
             _w = null;
-#pragma warning disable 618
             _waitQueueMultiple = MongoDefaults.WaitQueueMultiple;
             _waitQueueSize = MongoDefaults.WaitQueueSize;
-#pragma warning restore 618
             _waitQueueTimeout = MongoDefaults.WaitQueueTimeout;
             _wTimeout = null;
         }
@@ -139,15 +127,6 @@ namespace MongoDB.Driver
         }
 
         // public properties
-        /// <summary>
-        /// Gets or sets whether to relax TLS constraints as much as possible.
-        /// </summary>
-        public bool AllowInsecureTls
-        {
-            get => _allowInsecureTls;
-            set => _allowInsecureTls = value;
-        }
-
         /// <summary>
         /// Gets or sets the application name.
         /// </summary>
@@ -193,18 +172,8 @@ namespace MongoDB.Driver
         }
 
         /// <summary>
-        /// Gets or sets the compressors.
-        /// </summary>
-        public IReadOnlyList<CompressorConfiguration> Compressors
-        {
-            get { return _compressors; }
-            set { _compressors = value; }
-        }
-
-        /// <summary>
         /// Gets the actual wait queue size (either WaitQueueSize or WaitQueueMultiple x MaxConnectionPoolSize).
         /// </summary>
-        [Obsolete("This property will be removed in a later release.")]
         public int ComputedWaitQueueSize
         {
             get
@@ -269,25 +238,10 @@ namespace MongoDB.Driver
         /// <summary>
         /// Gets or sets the representation to use for Guids.
         /// </summary>
-        [Obsolete("Configure serializers instead.")]
         public GuidRepresentation GuidRepresentation
         {
-            get
-            {
-                if (BsonDefaults.GuidRepresentationMode != GuidRepresentationMode.V2)
-                {
-                    throw new InvalidOperationException("MongoUrlBuilder.GuidRepresentation can only be used when BsonDefaults.GuidRepresentationMode is V2.");
-                }
-                return _guidRepresentation;
-            }
-            set
-            {
-                if (BsonDefaults.GuidRepresentationMode != GuidRepresentationMode.V2)
-                {
-                    throw new InvalidOperationException("MongoUrlBuilder.GuidRepresentation can only be used when BsonDefaults.GuidRepresentationMode is V2.");
-                }
-                _guidRepresentation = value;
-            }
+            get { return _guidRepresentation; }
+            set { _guidRepresentation = value; }
         }
 
         /// <summary>
@@ -470,15 +424,6 @@ namespace MongoDB.Driver
         }
 
         /// <summary>
-        /// Gets or sets whether to retry reads.
-        /// </summary>
-        public bool? RetryReads
-        {
-            get { return _retryReads; }
-            set { _retryReads = value; }
-        }
-
-        /// <summary>
         /// Gets or sets whether to retry writes.
         /// </summary>
         public bool? RetryWrites
@@ -488,7 +433,7 @@ namespace MongoDB.Driver
         }
 
         /// <summary>
-        /// The connection string scheme.
+        /// The scheme used to connect with mongodb.
         /// </summary>
         public ConnectionStringScheme Scheme
         {
@@ -547,15 +492,6 @@ namespace MongoDB.Driver
         }
 
         /// <summary>
-        /// Gets or sets whether to disable certificate revocation checking during the TLS handshake.
-        /// </summary>
-        public bool TlsDisableCertificateRevocationCheck
-        {
-            get => _tlsDisableCertificateRevocationCheck;
-            set => _tlsDisableCertificateRevocationCheck = value;
-        }
-
-        /// <summary>
         /// Gets or sets the username.
         /// </summary>
         public string Username
@@ -567,30 +503,19 @@ namespace MongoDB.Driver
         /// <summary>
         /// Gets or sets a value indicating whether to use SSL.
         /// </summary>
-        [Obsolete("Use UseTls instead.")]
         public bool UseSsl
         {
-            get { return _useTls; }
-            set { _useTls = value; }
-        }
-
-        /// <summary>
-        /// Gets or sets a value indicating whether to use TLS.
-        /// </summary>
-        public bool UseTls
-        {
-            get => _useTls;
-            set => _useTls = value;
+            get { return _useSsl; }
+            set { _useSsl = value; }
         }
 
         /// <summary>
         /// Gets or sets a value indicating whether to verify an SSL certificate.
         /// </summary>
-        [Obsolete("Use AllowInsecureTls instead.")]
         public bool VerifySslCertificate
         {
-            get => !_allowInsecureTls;
-            set => _allowInsecureTls = !value;
+            get { return _verifySslCertificate; }
+            set { _verifySslCertificate = value; }
         }
 
         /// <summary>
@@ -608,7 +533,6 @@ namespace MongoDB.Driver
         /// <summary>
         /// Gets or sets the wait queue multiple (the actual wait queue size will be WaitQueueMultiple x MaxConnectionPoolSize).
         /// </summary>
-        [Obsolete("This property will be removed in a later release.")]
         public double WaitQueueMultiple
         {
             get { return _waitQueueMultiple; }
@@ -626,7 +550,6 @@ namespace MongoDB.Driver
         /// <summary>
         /// Gets or sets the wait queue size.
         /// </summary>
-        [Obsolete("This property will be removed in a later release.")]
         public int WaitQueueSize
         {
             get { return _waitQueueSize; }
@@ -696,12 +619,10 @@ namespace MongoDB.Driver
         public void Parse(string url)
         {
             var connectionString = new ConnectionString(url);
-            _allowInsecureTls = connectionString.TlsInsecure.GetValueOrDefault(false);
             _applicationName = connectionString.ApplicationName;
             _authenticationMechanism = connectionString.AuthMechanism;
             _authenticationMechanismProperties = connectionString.AuthMechanismProperties.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
             _authenticationSource = connectionString.AuthSource;
-            _compressors = connectionString.Compressors;
             switch (connectionString.Connect)
             {
                 case ClusterConnectionMode.Direct:
@@ -723,19 +644,7 @@ namespace MongoDB.Driver
             _connectTimeout = connectionString.ConnectTimeout.GetValueOrDefault(MongoDefaults.ConnectTimeout);
             _databaseName = connectionString.DatabaseName;
             _fsync = connectionString.FSync;
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                _guidRepresentation = connectionString.UuidRepresentation.GetValueOrDefault(MongoDefaults.GuidRepresentation);
-            }
-            else
-            {
-                if (connectionString.UuidRepresentation.HasValue)
-                {
-                    throw new InvalidOperationException("ConnectionString.UuidRepresentation can only be used when BsonDefaults.GuidRepresentationMode is V2.");
-                }
-            }
-#pragma warning restore 618
+            _guidRepresentation = connectionString.UuidRepresentation.GetValueOrDefault(MongoDefaults.GuidRepresentation);
             _heartbeatInterval = connectionString.HeartbeatInterval ?? ServerSettings.DefaultHeartbeatInterval;
             _heartbeatTimeout = connectionString.HeartbeatTimeout ?? ServerSettings.DefaultHeartbeatTimeout;
             _ipv6 = connectionString.Ipv6.GetValueOrDefault(false);
@@ -755,7 +664,6 @@ namespace MongoDB.Driver
                 _readPreference = new ReadPreference(connectionString.ReadPreference.Value, connectionString.ReadPreferenceTags, connectionString.MaxStaleness);
             }
             _replicaSetName = connectionString.ReplicaSet;
-            _retryReads = connectionString.RetryReads;
             _retryWrites = connectionString.RetryWrites;
             _localThreshold = connectionString.LocalThreshold.GetValueOrDefault(MongoDefaults.LocalThreshold);
             _scheme = connectionString.Scheme;
@@ -783,12 +691,10 @@ namespace MongoDB.Driver
             });
             _serverSelectionTimeout = connectionString.ServerSelectionTimeout.GetValueOrDefault(MongoDefaults.ServerSelectionTimeout);
             _socketTimeout = connectionString.SocketTimeout.GetValueOrDefault(MongoDefaults.SocketTimeout);
-            _tlsDisableCertificateRevocationCheck =
-                connectionString.TlsDisableCertificateRevocationCheck.GetValueOrDefault(false);
             _username = connectionString.Username;
-            _useTls = connectionString.Tls.GetValueOrDefault(false);
+            _useSsl = connectionString.Ssl.GetValueOrDefault(false);
+            _verifySslCertificate = connectionString.SslVerifyCertificate.GetValueOrDefault(true);
             _w = connectionString.W;
-#pragma warning disable 618
             if (connectionString.WaitQueueSize != null)
             {
                 _waitQueueSize = connectionString.WaitQueueSize.Value;
@@ -799,7 +705,6 @@ namespace MongoDB.Driver
                 _waitQueueMultiple = connectionString.WaitQueueMultiple.Value;
                 _waitQueueSize = 0;
             }
-#pragma warning restore 618
             _waitQueueTimeout = connectionString.WaitQueueTimeout.GetValueOrDefault(MongoDefaults.WaitQueueTimeout);
             _wTimeout = connectionString.WTimeout;
         }
@@ -848,7 +753,7 @@ namespace MongoDB.Driver
                 foreach (MongoServerAddress server in _servers)
                 {
                     if (!firstServer) { url.Append(","); }
-                    if (server.Port == 27017 || _scheme == ConnectionStringScheme.MongoDBPlusSrv)
+                    if (server.Port == 27017)
                     {
                         url.Append(server.Host);
                     }
@@ -888,37 +793,13 @@ namespace MongoDB.Driver
             {
                 query.AppendFormat("ipv6=true;");
             }
-            if (_scheme == ConnectionStringScheme.MongoDBPlusSrv)
+            if (_useSsl)
             {
-                if (!_useTls)
-                {
-                    query.AppendFormat("tls=false;");
-                }
+                query.AppendFormat("ssl=true;");
             }
-            else
+            if (!_verifySslCertificate)
             {
-                if (_useTls)
-                {
-                    query.AppendFormat("tls=true;");
-                }
-            }
-            if (_allowInsecureTls)
-            {
-                query.AppendFormat("tlsInsecure=true;");
-            }
-
-            if (_tlsDisableCertificateRevocationCheck)
-            {
-                query.AppendFormat("tlsDisableCertificateRevocationCheck=true;");
-            }
-
-            if (_compressors?.Any() ?? false)
-            {
-                query.AppendFormat("compressors={0};", string.Join(",", _compressors.Select(x => x.Type.ToString().ToLowerInvariant())));
-                foreach (var compressor in _compressors)
-                {
-                    ParseAndAppendCompressorOptions(query, compressor);
-                }
+                query.AppendFormat("sslVerifyCertificate=false;");
             }
             if (_connectionMode != ConnectionMode.Automatic)
             {
@@ -1003,15 +884,11 @@ namespace MongoDB.Driver
             {
                 query.AppendFormat("socketTimeout={0};", FormatTimeSpan(_socketTimeout));
             }
-#pragma warning disable 618
             if (_waitQueueMultiple != 0.0 && _waitQueueMultiple != MongoDefaults.WaitQueueMultiple)
-#pragma warning restore 618
             {
                 query.AppendFormat("waitQueueMultiple={0};", _waitQueueMultiple);
             }
-#pragma warning disable 618
             if (_waitQueueSize != 0 && _waitQueueSize != MongoDefaults.WaitQueueSize)
-#pragma warning restore 618
             {
                 query.AppendFormat("waitQueueSize={0};", _waitQueueSize);
             }
@@ -1019,20 +896,13 @@ namespace MongoDB.Driver
             {
                 query.AppendFormat("waitQueueTimeout={0};", FormatTimeSpan(WaitQueueTimeout));
             }
-#pragma warning disable 618
-            var defaultGuidRepresentation = BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 ? BsonDefaults.GuidRepresentation : GuidRepresentation.Unspecified;
-            if (_guidRepresentation != defaultGuidRepresentation)
+            if (_guidRepresentation != MongoDefaults.GuidRepresentation)
             {
                 query.AppendFormat("uuidRepresentation={0};", (_guidRepresentation == GuidRepresentation.CSharpLegacy) ? "csharpLegacy" : MongoUtils.ToCamelCase(_guidRepresentation.ToString()));
             }
-#pragma warning restore 618
-            if (!_retryReads.GetValueOrDefault(true))
+            if (_retryWrites.GetValueOrDefault(false))
             {
-                query.AppendFormat("retryReads=false;");
-            }
-            if (_retryWrites.HasValue)
-            {
-                query.AppendFormat("retryWrites={0};", JsonConvert.ToString(_retryWrites.Value));
+                query.AppendFormat("retryWrites=true;");
             }
             if (query.Length != 0)
             {
@@ -1079,21 +949,6 @@ namespace MongoDB.Driver
             else
             {
                 return value.ToString();
-            }
-        }
-
-        private static void ParseAndAppendCompressorOptions(StringBuilder builder, CompressorConfiguration compressorConfiguration)
-        {
-            switch (compressorConfiguration.Type)
-            {
-                case CompressorType.Zlib:
-                    {
-                        if (compressorConfiguration.Properties.TryGetValue("Level", out var zlibCompressionLevel))
-                        {
-                            builder.AppendFormat("zlibCompressionLevel={0};", zlibCompressionLevel);
-                        }
-                    }
-                    break;
             }
         }
     }

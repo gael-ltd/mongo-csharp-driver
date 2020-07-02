@@ -69,20 +69,6 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
         }
 
         /// <summary>
-        /// Gets a flag whether encryption has been configured.
-        /// </summary>
-        /// <value>
-        /// The flag whether encryption is configured or not.
-        /// </value>
-        protected bool IsEncryptionConfigured
-        {
-            get
-            {
-                return _encoderSettings?.GetOrDefault<IBinaryCommandFieldEncryptor>(MessageEncoderSettingsName.BinaryDocumentFieldEncryptor, null) != null;
-            }
-        }
-
-        /// <summary>
         /// Gets the maximum size of the document.
         /// </summary>
         /// <value>
@@ -137,12 +123,7 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
                 readerSettings.Encoding = _encoderSettings.GetOrDefault(MessageEncoderSettingsName.ReadEncoding, readerSettings.Encoding);
                 readerSettings.FixOldBinarySubTypeOnInput = _encoderSettings.GetOrDefault(MessageEncoderSettingsName.FixOldBinarySubTypeOnInput, readerSettings.FixOldBinarySubTypeOnInput);
                 readerSettings.FixOldDateTimeMaxValueOnInput = _encoderSettings.GetOrDefault(MessageEncoderSettingsName.FixOldBinarySubTypeOnOutput, readerSettings.FixOldDateTimeMaxValueOnInput);
-#pragma warning disable 618
-                if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-                {
-                    readerSettings.GuidRepresentation = _encoderSettings.GetOrDefault(MessageEncoderSettingsName.GuidRepresentation, readerSettings.GuidRepresentation);
-                }
-#pragma warning restore 618
+                readerSettings.GuidRepresentation = _encoderSettings.GetOrDefault(MessageEncoderSettingsName.GuidRepresentation, readerSettings.GuidRepresentation);
                 readerSettings.MaxDocumentSize = _encoderSettings.GetOrDefault(MessageEncoderSettingsName.MaxDocumentSize, readerSettings.MaxDocumentSize);
             }
             return new BsonBinaryReader(_stream, readerSettings);
@@ -159,12 +140,7 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
             {
                 writerSettings.Encoding = _encoderSettings.GetOrDefault(MessageEncoderSettingsName.WriteEncoding, writerSettings.Encoding);
                 writerSettings.FixOldBinarySubTypeOnOutput = _encoderSettings.GetOrDefault(MessageEncoderSettingsName.FixOldBinarySubTypeOnOutput, writerSettings.FixOldBinarySubTypeOnOutput);
-#pragma warning disable 618
-                if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-                {
-                    writerSettings.GuidRepresentation = _encoderSettings.GetOrDefault(MessageEncoderSettingsName.GuidRepresentation, writerSettings.GuidRepresentation);
-                }
-#pragma warning restore 618
+                writerSettings.GuidRepresentation = _encoderSettings.GetOrDefault(MessageEncoderSettingsName.GuidRepresentation, writerSettings.GuidRepresentation);
                 writerSettings.MaxDocumentSize = _encoderSettings.GetOrDefault(MessageEncoderSettingsName.MaxDocumentSize, writerSettings.MaxDocumentSize);
                 writerSettings.MaxSerializationDepth = _encoderSettings.GetOrDefault(MessageEncoderSettingsName.MaxSerializationDepth, writerSettings.MaxSerializationDepth);
             }

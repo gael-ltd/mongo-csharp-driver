@@ -73,23 +73,9 @@ namespace MongoDB.Driver
         }
 
         [Fact]
-        public void BackingDocument_should_allow_duplicate_elements_in_full_document()
+        public void ClusterTime_should_return_expected_result()
         {
-            var fullDocument = new BsonDocument(allowDuplicateNames: true) { { "x", 1 }, { "x", 2 } };
-            var backingDocument = new BsonDocument("fullDocument", fullDocument);
-            var subject = CreateSubject(backingDocument: backingDocument);
-
-            var result = subject.BackingDocument;
-
-            result.Should().BeSameAs(backingDocument);
-        }
-
-        [Theory]
-        [InlineData(1, 2)]
-        [InlineData(3, 4)]
-        public void ClusterTime_should_return_expected_result(int timestamp, int increment)
-        {
-            var value = new BsonTimestamp(timestamp, increment);
+            var value = new BsonDocument("x", 1234);
             var backingDocument = new BsonDocument { { "other", 1 }, { "clusterTime", value } };
             var subject = CreateSubject(backingDocument: backingDocument);
 
@@ -172,24 +158,6 @@ namespace MongoDB.Driver
         }
 
         [Fact]
-        public void FullDocument_should_allow_duplicate_elements()
-        {
-            var fullDocument = new BsonDocument(allowDuplicateNames: true) { { "x", 1 }, { "x", 2 } };
-            var backingDocument = new BsonDocument { { "other", 1 }, { "fullDocument", fullDocument } };
-            var subject = CreateSubject(backingDocument: backingDocument);
-
-            var result = subject.FullDocument;
-
-            result.ElementCount.Should().Be(2);
-            var firstElement = result.GetElement(0);
-            firstElement.Name.Should().Be("x");
-            firstElement.Value.Should().Be(1);
-            var secondElement = result.GetElement(1);
-            secondElement.Name.Should().Be("x");
-            secondElement.Value.Should().Be(2);
-        }
-
-        [Fact]
         public void FullDocument_should_return_null_when_not_present()
         {
             var value = new BsonDocument("x", 1234);
@@ -206,8 +174,6 @@ namespace MongoDB.Driver
         [InlineData("update", ChangeStreamOperationType.Update)]
         [InlineData("replace", ChangeStreamOperationType.Replace)]
         [InlineData("delete", ChangeStreamOperationType.Delete)]
-        [InlineData("rename", ChangeStreamOperationType.Rename)]
-        [InlineData("drop", ChangeStreamOperationType.Drop)]
         public void OperationType_should_return_expected_result(string operationTypeName, ChangeStreamOperationType expectedResult)
         {
             var backingDocument = new BsonDocument { { "other", 1 }, { "operationType", operationTypeName } };
@@ -228,31 +194,6 @@ namespace MongoDB.Driver
             var result = subject.OperationType;
 
             result.Should().Be((ChangeStreamOperationType)(-1));
-        }
-
-        [Fact]
-        public void RenameTo_should_return_expected_result()
-        {
-            var value = new CollectionNamespace(new DatabaseNamespace("database"), "collection");
-            var to = new BsonDocument { { "db", value.DatabaseNamespace.DatabaseName }, { "coll", value.CollectionName } };
-            var backingDocument = new BsonDocument { { "other", 1 }, { "to", to } };
-            var subject = CreateSubject(backingDocument: backingDocument);
-
-            var result = subject.RenameTo;
-
-            result.Should().Be(value);
-        }
-
-        [Fact]
-        public void RenameTo_should_return_null_when_not_present()
-        {
-            var value = new BsonDocument("x", 1234);
-            var backingDocument = new BsonDocument { { "other", 1 } };
-            var subject = CreateSubject(backingDocument: backingDocument);
-
-            var result = subject.RenameTo;
-
-            result.Should().BeNull();
         }
 
         [Fact]

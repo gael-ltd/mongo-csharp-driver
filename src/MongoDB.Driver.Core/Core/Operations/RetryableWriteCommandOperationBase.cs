@@ -211,11 +211,7 @@ namespace MongoDB.Driver.Core.Operations
         /// <summary>
         /// Creates the command payloads.
         /// </summary>
-        /// <param name="channel">The channel.</param>
-        /// <param name="attempt">The attempt.</param>
-        /// <returns>
-        /// The command payloads.
-        /// </returns>
+        /// <returns>The command payloads.</returns>
         protected abstract IEnumerable<Type1CommandMessageSection> CreateCommandPayloads(IChannelHandle channel, int attempt);
 
         // private methods

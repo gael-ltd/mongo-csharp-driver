@@ -17,7 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-#if NET452
+#if NET45
 using System.Runtime.Serialization;
 #endif
 using System.Text;
@@ -35,7 +35,7 @@ namespace MongoDB.Driver.Core.Connections
     /// <summary>
     /// Represents a connection identifier.
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     public sealed class ConnectionId : IEquatable<ConnectionId>

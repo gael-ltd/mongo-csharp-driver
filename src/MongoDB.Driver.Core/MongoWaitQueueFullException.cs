@@ -15,7 +15,7 @@
 
 using System;
 using System.Net;
-#if NET452
+#if NET45
 using System.Runtime.Serialization;
 #endif
 using MongoDB.Driver.Core.Clusters;
@@ -26,7 +26,7 @@ namespace MongoDB.Driver
     /// <summary>
     /// Represents a MongoDB connection pool wait queue full exception.
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     public class MongoWaitQueueFullException : MongoClientException
@@ -58,7 +58,7 @@ namespace MongoDB.Driver
         {
         }
 
-#if NET452
+#if NET45
         /// <summary>
         /// Initializes a new instance of the <see cref="MongoWaitQueueFullException"/> class.
         /// </summary>

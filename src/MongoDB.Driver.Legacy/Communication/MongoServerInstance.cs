@@ -18,7 +18,6 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using MongoDB.Bson;
 using MongoDB.Bson.IO;
 using MongoDB.Driver.Core.Bindings;
 using MongoDB.Driver.Core.Clusters;
@@ -261,7 +260,7 @@ namespace MongoDB.Driver
         /// <returns>The IP end point of this server instance.</returns>
         public IPEndPoint GetIPEndPoint()
         {
-#if NETSTANDARD1_5
+#if NETSTANDARD1_5 || NETSTANDARD1_6
             var ipAddresses = Dns.GetHostAddressesAsync(_address.Host).GetAwaiter().GetResult();
 #else
             var ipAddresses = Dns.GetHostAddresses(_address.Host);
@@ -333,7 +332,7 @@ namespace MongoDB.Driver
 
                 // supported in 2.6.0 and newer but not on mongos
                 case FeatureId.ParallelScanCommand:
-                    return BuildInfo.Version >= new Version(2, 6, 0) && BuildInfo.Version < new Version(4, 1, 0) && InstanceType != MongoServerInstanceType.ShardRouter;
+                    return BuildInfo.Version >= new Version(2, 6, 0) && InstanceType != MongoServerInstanceType.ShardRouter;
 
                 default:
                     return false;
@@ -343,18 +342,12 @@ namespace MongoDB.Driver
         // private methods
         private MessageEncoderSettings GetMessageEncoderSettings()
         {
-            var messageEncoderSettings = new MessageEncoderSettings
+            return new MessageEncoderSettings
             {
+                { MessageEncoderSettingsName.GuidRepresentation, _settings.GuidRepresentation },
                 { MessageEncoderSettingsName.ReadEncoding, _settings.ReadEncoding ?? Utf8Encodings.Strict },
                 { MessageEncoderSettingsName.WriteEncoding, _settings.WriteEncoding ?? Utf8Encodings.Strict }
             };
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                messageEncoderSettings.Add(MessageEncoderSettingsName.GuidRepresentation, _settings.GuidRepresentation);
-            }
-#pragma warning restore 618
-            return messageEncoderSettings;
         }
 
         private IServer GetServer()

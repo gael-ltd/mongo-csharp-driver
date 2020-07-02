@@ -15,40 +15,30 @@
 
 using System.Collections.Generic;
 using System.Threading;
-using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Bson.TestHelpers.JsonDrivenTests;
 
 namespace MongoDB.Driver.Tests.JsonDrivenTests
 {
-    public sealed class JsonDrivenAbortTransactionTest : JsonDrivenSessionTest
+    public sealed class JsonDrivenAbortTransactionTest : JsonDrivenClientTest
     {
         // public constructors
-        public JsonDrivenAbortTransactionTest(Dictionary<string, object> objectMap)
-            : base(objectMap)
+        public JsonDrivenAbortTransactionTest(IMongoClient client, Dictionary<string, IClientSessionHandle> sessionMap)
+            : base(client, sessionMap)
         {
         }
 
         // public methods
         public override void Arrange(BsonDocument document)
         {
-            JsonDrivenHelper.EnsureAllFieldsAreValid(document, "name", "object", "result");
+            JsonDrivenHelper.EnsureAllFieldsAreValid(document, "name", "arguments", "result");
             base.Arrange(document);
         }
 
         // protected methods
-        protected override void AssertResult()
+        protected override void CallMethod(IClientSessionHandle session, CancellationToken cancellationToken)
         {
-        }
-
-        protected override void CallMethod(CancellationToken cancellationToken)
-        {
-            _session.AbortTransaction(cancellationToken);
-        }
-
-        protected override Task CallMethodAsync(CancellationToken cancellationToken)
-        {
-            return _session.AbortTransactionAsync(cancellationToken);
+            session.AbortTransaction(cancellationToken);
         }
     }
 }

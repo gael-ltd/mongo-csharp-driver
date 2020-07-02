@@ -22,7 +22,7 @@ namespace MongoDB.Bson
     /// <summary>
     /// Represents a BSON value (this is an abstract class, see the various subclasses).
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     public abstract class BsonValue : IComparable<BsonValue>, IConvertible, IEquatable<BsonValue>
@@ -729,7 +729,6 @@ namespace MongoDB.Bson
         /// </summary>
         /// <param name="value">A Guid.</param>
         /// <returns>A BsonValue.</returns>
-        [Obsolete("Use the BsonBinaryData constructor instead and specify a Guid representation.")]
         public static implicit operator BsonValue(Guid value)
         {
             return new BsonBinaryData(value);
@@ -740,7 +739,6 @@ namespace MongoDB.Bson
         /// </summary>
         /// <param name="value">A Guid?.</param>
         /// <returns>A BsonValue.</returns>
-        [Obsolete("Use the BsonBinaryData constructor instead and specify a Guid representation.")]
         public static implicit operator BsonValue(Guid? value)
         {
             return value.HasValue ? (BsonValue)new BsonBinaryData(value.Value) : BsonNull.Value;

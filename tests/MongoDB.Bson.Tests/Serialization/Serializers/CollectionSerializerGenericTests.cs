@@ -15,13 +15,10 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using MongoDB.Bson.IO;
+using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Attributes;
-using MongoDB.Bson.TestHelpers;
-using MongoDB.Bson.TestHelpers.XunitExtensions;
 using Xunit;
 
 namespace MongoDB.Bson.Tests.Serialization.CollectionSerializersGeneric
@@ -213,66 +210,32 @@ namespace MongoDB.Bson.Tests.Serialization.CollectionSerializersGeneric
             Assert.True(bson.SequenceEqual(rehydrated.ToBson()));
         }
 
-        [Theory]
-        [ParameterAttributeData]
-        [ResetGuidModeAfterTest]
-        public void TestMixedPrimitiveTypes(
-            [ClassValues(typeof(GuidModeValues))] GuidMode mode)
+        [Fact]
+        public void TestMixedPrimitiveTypes()
         {
-            mode.Set();
-
-#pragma warning disable 618
             var dateTime = DateTime.SpecifyKind(new DateTime(2010, 1, 1, 11, 22, 33), DateTimeKind.Utc);
             var isoDate = string.Format("ISODate(\"{0}\")", dateTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.FFFZ"));
             var guid = Guid.Empty;
-            string expectedGuidJson = null;
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                switch (BsonDefaults.GuidRepresentation)
-                {
-                    case GuidRepresentation.CSharpLegacy: expectedGuidJson = "CSUUID('00000000-0000-0000-0000-000000000000')"; break;
-                    case GuidRepresentation.JavaLegacy: expectedGuidJson = "JUUID('00000000-0000-0000-0000-000000000000')"; break;
-                    case GuidRepresentation.PythonLegacy: expectedGuidJson = "PYUUID('00000000-0000-0000-0000-000000000000')"; break;
-                    case GuidRepresentation.Standard: expectedGuidJson = "UUID('00000000-0000-0000-0000-000000000000')"; break;
-                }
-            }
             var objectId = ObjectId.Empty;
-            List<object> list;
-            if (expectedGuidJson == null)
-            {
-                list = new List<object>(new object[] { true, dateTime, 1.5, 1, 2L, objectId, "x" });
-            }
-            else
-            {
-                list = new List<object>(new object[] { true, dateTime, 1.5, 1, 2L, guid, objectId, "x" });
-            }
+            var list = new List<object>(new object[] { true, dateTime, 1.5, 1, 2L, guid, objectId, "x" });
             var obj = new T { L = list, IC = list, IE = list, IL = list, Q = new Queue<object>(list), S = new Stack<object>(list), H = new HashSet<object>(list), LL = new LinkedList<object>(list) };
-            var json = obj.ToJson(new JsonWriterSettings());
-            string rep;
-            if (expectedGuidJson == null)
-            {
-                rep = "[true, #Date, 1.5, 1, NumberLong(2), #ObjectId, 'x']";
-            }
-            else
-            {
-                rep = "[true, #Date, 1.5, 1, NumberLong(2), #Guid, #ObjectId, 'x']";
-            }
+            var json = obj.ToJson();
+            var rep = "[true, #Date, 1.5, 1, NumberLong(2), #Guid, #ObjectId, 'x']";
             rep = rep.Replace("#Date", isoDate);
-            rep = rep.Replace("#Guid", expectedGuidJson);
+            rep = rep.Replace("#Guid", "CSUUID('00000000-0000-0000-0000-000000000000')");
             rep = rep.Replace("#ObjectId", "ObjectId('000000000000000000000000')");
             var expected = "{ 'L' : #R, 'IC' : #R, 'IE' : #R, 'IL' : #R, 'Q' : #R, 'S' : #R, 'H' : #R, 'LL' : #R }".Replace("#R", rep).Replace("'", "\"");
             Assert.Equal(expected, json);
 
-            var bson = obj.ToBson(writerSettings: new BsonBinaryWriterSettings());
-            var rehydrated = BsonSerializer.Deserialize<T>(new BsonBinaryReader(new MemoryStream(bson), new BsonBinaryReaderSettings()));
+            var bson = obj.ToBson();
+            var rehydrated = BsonSerializer.Deserialize<T>(bson);
             Assert.IsType<List<object>>(rehydrated.L);
             Assert.IsType<Queue<object>>(rehydrated.Q);
             Assert.IsType<Stack<object>>(rehydrated.S);
             Assert.IsType<List<object>>(rehydrated.IC);
             Assert.IsType<List<object>>(rehydrated.IE);
             Assert.IsType<List<object>>(rehydrated.IL);
-            Assert.True(bson.SequenceEqual(rehydrated.ToBson(writerSettings: new BsonBinaryWriterSettings())));
-#pragma warning restore 618
+            Assert.True(bson.SequenceEqual(rehydrated.ToBson()));
         }
     }
 
@@ -317,7 +280,7 @@ namespace MongoDB.Bson.Tests.Serialization.CollectionSerializersGeneric
             Assert.Equal(expected, json);
 
             var bson = obj.ToBson(configurator: c => c.IsDynamicType = t => false);
-            var rehydrated = BsonSerializer.Deserialize<T>(bson, configurator: c =>
+            var rehydrated = BsonSerializer.Deserialize<T>(bson, configurator: c => 
             {
                 c.DynamicArraySerializer = null;
                 c.DynamicDocumentSerializer = null;

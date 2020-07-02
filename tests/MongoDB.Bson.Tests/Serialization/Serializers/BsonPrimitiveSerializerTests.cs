@@ -14,19 +14,15 @@
 */
 
 using System;
-using System.IO;
 using System.Linq;
-using FluentAssertions;
-using MongoDB.Bson.IO;
+using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Attributes;
-using MongoDB.Bson.TestHelpers;
-using MongoDB.Bson.TestHelpers.XunitExtensions;
 using Xunit;
 
-namespace MongoDB.Bson.Tests.Serialization.Serializers
+namespace MongoDB.Bson.Tests.Serialization
 {
-    public class ClassWithBooleanSerializerTests
+    public class BooleanSerializerTests
     {
         public class TestClass
         {
@@ -45,31 +41,12 @@ namespace MongoDB.Bson.Tests.Serialization.Serializers
             public bool S;
         }
 
-        public class TestClassWithPrivate
-        {
-            [BsonRepresentation(BsonType.String)]
-            private bool _b;
-
-            public TestClassWithPrivate(bool b)
-            {
-                _b = b;
-            }
-
-            public bool GetPrivateB() => _b;
-        }
-
         [Fact]
         public void TestFalse()
         {
             var obj = new TestClass
             {
-                N = false,
-                B = false,
-                D128 = false,
-                D = false,
-                I = false,
-                L = false,
-                S = false
+                N = false, B = false, D128 = false, D = false, I = false, L = false, S = false
             };
             var json = obj.ToJson();
             var expected = "{ 'N' : false, 'B' : false, 'D128' : NumberDecimal('0'), 'D' : 0.0, 'I' : 0, 'L' : NumberLong(0), 'S' : 'false' }".Replace("'", "\"");
@@ -85,13 +62,7 @@ namespace MongoDB.Bson.Tests.Serialization.Serializers
         {
             var obj = new TestClass
             {
-                N = true,
-                B = true,
-                D128 = true,
-                D = true,
-                I = true,
-                L = true,
-                S = true
+                N = true, B = true, D128 = true, D = true, I = true, L = true, S = true
             };
             var json = obj.ToJson();
             var expected = "{ 'N' : true, 'B' : true, 'D128' : NumberDecimal('1'), 'D' : 1.0, 'I' : 1, 'L' : NumberLong(1), 'S' : 'true' }".Replace("'", "\"");
@@ -101,19 +72,9 @@ namespace MongoDB.Bson.Tests.Serialization.Serializers
             var rehydrated = BsonSerializer.Deserialize<TestClass>(bson);
             Assert.True(bson.SequenceEqual(rehydrated.ToBson()));
         }
-
-        [Fact]
-        public void TestPrivateFieldWithBsonRepresentation()
-        {
-            var testValue = true;
-            var json = $"{{ _b : '{testValue}' }}";
-
-            var deserialized = BsonSerializer.Deserialize<TestClassWithPrivate>(json);
-            Assert.Equal(testValue, deserialized.GetPrivateB());
-        }
     }
 
-    public class ClassWithDateTimeSerializerTests
+    public class DateTimeSerializerTests
     {
         public class TestClass
         {
@@ -132,19 +93,6 @@ namespace MongoDB.Bson.Tests.Serialization.Serializers
             public DateTime DateOnlyString;
             [BsonDateTimeOptions(Representation = BsonType.Document)]
             public DateTime Document;
-        }
-
-        public class TestClassWithPrivateField
-        {
-            [BsonDateTimeOptions(Representation = BsonType.String)]
-            private DateTime _d;
-
-            public TestClassWithPrivateField(DateTime d)
-            {
-                _d = d;
-            }
-
-            public DateTime GetPrivateD() => _d;
         }
 
         private static string __expectedTemplate =
@@ -595,19 +543,9 @@ namespace MongoDB.Bson.Tests.Serialization.Serializers
             Assert.Equal(DateTimeKind.Utc, rehydrated.DateOnlyString.Kind);
             Assert.Equal(DateTimeKind.Utc, rehydrated.Document.Kind);
         }
-
-        [Fact]
-        public void TestPrivateFieldWithBsonRepresentation()
-        {
-            var testValue = new DateTime(2020, 01, 01);
-            var json = $"{{ '_d' : '{testValue:yyyy-MM-ddTHH:mm:ss.FFFZ}' }}";
-
-            var deserialized = BsonSerializer.Deserialize<TestClassWithPrivateField>(json);
-            Assert.Equal(testValue, deserialized.GetPrivateD());
-        }
     }
 
-    public class ClassWithDoubleSerializerTests
+    public class DoubleSerializerTests
     {
         public class TestClass
         {
@@ -618,19 +556,6 @@ namespace MongoDB.Bson.Tests.Serialization.Serializers
             public double L;
             [BsonRepresentation(BsonType.String)]
             public double S;
-        }
-
-        public class TestClassWithPrivateField
-        {
-            [BsonRepresentation(BsonType.String)]
-            private double _d;
-
-            public TestClassWithPrivateField(double d)
-            {
-                _d = d;
-            }
-
-            public double GetPrivateD() => _d;
         }
 
         [Fact]
@@ -813,19 +738,9 @@ namespace MongoDB.Bson.Tests.Serialization.Serializers
             var rehydrated = BsonSerializer.Deserialize<TestClass>(bson);
             Assert.True(bson.SequenceEqual(rehydrated.ToBson()));
         }
-
-        [Fact]
-        public void TestPrivateFieldWithBsonRepresentation()
-        {
-            var testValue = 5;
-            var json = $"{{ '_d' : '{testValue}' }}";
-
-            var deserialized = BsonSerializer.Deserialize<TestClassWithPrivateField>(json);
-            Assert.Equal(testValue, deserialized.GetPrivateD());
-        }
     }
 
-    public class ClassWithGuidSerializerTests
+    public class GuidSerializerTests
     {
         public class TestClass
         {
@@ -834,73 +749,30 @@ namespace MongoDB.Bson.Tests.Serialization.Serializers
             public Guid String { get; set; }
         }
 
-        public class TestClassWithPrivate
+        [Fact]
+        public void TestEmpty()
         {
-            [BsonRepresentation(BsonType.String)]
-            private Guid _b;
-
-            public TestClassWithPrivate(Guid b)
-            {
-                _b = b;
-            }
-
-            public Guid GetPrivateB() => _b;
-        }
-
-        [Theory]
-        [ParameterAttributeData]
-        [ResetGuidModeAfterTest]
-        public void TestEmpty(
-            [ClassValues(typeof(GuidModeValues))] GuidMode mode)
-        {
-            mode.Set();
-
-#pragma warning disable 618
             var guid = Guid.Empty;
             var obj = new TestClass
             {
                 Binary = guid,
                 String = guid
             };
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 && BsonDefaults.GuidRepresentation != GuidRepresentation.Unspecified)
-            {
-                var json = obj.ToJson(new JsonWriterSettings());
-                string expectedGuidJson;
-                var guidRepresentation = BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 ? BsonDefaults.GuidRepresentation : GuidRepresentation.Unspecified;
-                switch (guidRepresentation)
-                {
-                    case GuidRepresentation.CSharpLegacy: expectedGuidJson = "CSUUID('00000000-0000-0000-0000-000000000000')"; break;
-                    case GuidRepresentation.JavaLegacy: expectedGuidJson = "JUUID('00000000-0000-0000-0000-000000000000')"; break;
-                    case GuidRepresentation.PythonLegacy: expectedGuidJson = "PYUUID('00000000-0000-0000-0000-000000000000')"; break;
-                    case GuidRepresentation.Standard: expectedGuidJson = "UUID('00000000-0000-0000-0000-000000000000')"; break;
-                    case GuidRepresentation.Unspecified: expectedGuidJson = null; break;
-                    default: throw new Exception("Unexpected GuidRepresentation.");
-                }
-                var expected = $"{{ 'Binary' : {expectedGuidJson}, 'String' : '00000000-0000-0000-0000-000000000000' }}";
-                expected = expected.Replace("'", "\"");
-                Assert.Equal(expected, json);
+            var json = obj.ToJson();
+            var expected = "{ 'Binary' : CSUUID('#B'), 'String' : '#S' }";
+            expected = expected.Replace("#B", "00000000-0000-0000-0000-000000000000");
+            expected = expected.Replace("#S", "00000000-0000-0000-0000-000000000000");
+            expected = expected.Replace("'", "\"");
+            Assert.Equal(expected, json);
 
-                var bson = obj.ToBson(writerSettings: new BsonBinaryWriterSettings());
-                var rehydrated = BsonSerializer.Deserialize<TestClass>(new BsonBinaryReader(new MemoryStream(bson), new BsonBinaryReaderSettings()));
-                Assert.True(bson.SequenceEqual(rehydrated.ToBson(writerSettings: new BsonBinaryWriterSettings())));
-            }
-            else
-            {
-                var exception = Record.Exception(() => obj.ToJson(new JsonWriterSettings()));
-                exception.Should().BeOfType<BsonSerializationException>();
-            }
-#pragma warning restore 618
+            var bson = obj.ToBson();
+            var rehydrated = BsonSerializer.Deserialize<TestClass>(bson);
+            Assert.True(bson.SequenceEqual(rehydrated.ToBson()));
         }
 
-        [Theory]
-        [ParameterAttributeData]
-        [ResetGuidModeAfterTest]
-        public void TestGuidRepresentation(
-            [ClassValues(typeof(GuidModeValues))] GuidMode mode)
+        [Fact]
+        public void TestGuidRepresentation()
         {
-            mode.Set();
-
-#pragma warning disable 618
             var s = "01020304-0506-0708-090a-0b0c0d0e0f10";
             var guid = new Guid(s);
             var obj = new TestClass
@@ -908,48 +780,20 @@ namespace MongoDB.Bson.Tests.Serialization.Serializers
                 Binary = guid,
                 String = guid
             };
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 && BsonDefaults.GuidRepresentation != GuidRepresentation.Unspecified)
-            {
-                var json = obj.ToJson(new JsonWriterSettings());
-                string expectedGuidJson;
-                var guidRepresentation = BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 ? BsonDefaults.GuidRepresentation : GuidRepresentation.Unspecified;
-                switch (guidRepresentation)
-                {
-                    case GuidRepresentation.CSharpLegacy: expectedGuidJson = $"CSUUID('{s}')"; break;
-                    case GuidRepresentation.JavaLegacy: expectedGuidJson = $"JUUID('{s}')"; break;
-                    case GuidRepresentation.PythonLegacy: expectedGuidJson = $"PYUUID('{s}')"; break;
-                    case GuidRepresentation.Standard: expectedGuidJson = $"UUID('{s}')"; break;
-                    case GuidRepresentation.Unspecified: expectedGuidJson = null; break;
-                    default: throw new Exception("Unexpected GuidRepresentation.");
-                }
-                var expected = $"{{ 'Binary' : {expectedGuidJson}, 'String' : '{s}' }}";
-                expected = expected.Replace("'", "\"");
-                Assert.Equal(expected, json);
+            var json = obj.ToJson();
+            var expected = "{ 'Binary' : CSUUID('#B'), 'String' : '#S' }";
+            expected = expected.Replace("#B", s);
+            expected = expected.Replace("#S", s);
+            expected = expected.Replace("'", "\"");
+            Assert.Equal(expected, json);
 
-                var bson = obj.ToBson(writerSettings: new BsonBinaryWriterSettings());
-                var rehydrated = BsonSerializer.Deserialize<TestClass>(new BsonBinaryReader(new MemoryStream(bson), new BsonBinaryReaderSettings()));
-                Assert.True(bson.SequenceEqual(rehydrated.ToBson(writerSettings: new BsonBinaryWriterSettings())));
-            }
-            else
-            {
-                var exception = Record.Exception(() => obj.ToJson(new JsonWriterSettings()));
-                exception.Should().BeOfType<BsonSerializationException>();
-            }
-#pragma warning restore 618
-        }
-
-        [Fact]
-        public void TestPrivateFieldWithBsonRepresentation()
-        {
-            var testValue = new Guid("01020304-0506-0708-090a-0b0c0d0e0f10");
-            var json = $"{{ '_b' : '{testValue}' }}";
-
-            var deserialized = BsonSerializer.Deserialize<TestClassWithPrivate>(json);
-            Assert.Equal(testValue, deserialized.GetPrivateB());
+            var bson = obj.ToBson();
+            var rehydrated = BsonSerializer.Deserialize<TestClass>(bson);
+            Assert.True(bson.SequenceEqual(rehydrated.ToBson()));
         }
     }
 
-    public class ClassWithInt32SerializerTests
+    public class Int32SerializerTests
     {
         public class TestClass
         {
@@ -963,19 +807,6 @@ namespace MongoDB.Bson.Tests.Serialization.Serializers
             public int L;
             [BsonRepresentation(BsonType.String)]
             public int S;
-        }
-
-        public class TestClassWithPrivate
-        {
-            [BsonRepresentation(BsonType.String)]
-            private int _i;
-
-            public TestClassWithPrivate(int i)
-            {
-                _i = i;
-            }
-
-            public int GetPrivateI() => _i;
         }
 
         [Fact]
@@ -1081,19 +912,9 @@ namespace MongoDB.Bson.Tests.Serialization.Serializers
             var rehydrated = BsonSerializer.Deserialize<TestClass>(bson);
             Assert.True(bson.SequenceEqual(rehydrated.ToBson()));
         }
-
-        [Fact]
-        public void TestPrivateFieldWithBsonRepresentation()
-        {
-            var testValue = 3;
-            var json = $"{{ '_i' : '{testValue}' }}";
-
-            var deserialized = BsonSerializer.Deserialize<TestClassWithPrivate>(json);
-            Assert.Equal(testValue, deserialized.GetPrivateI());
-        }
     }
 
-    public class ClassWithInt64SerializerTests
+    public class Int64SerializerTests
     {
         public class TestClass
         {
@@ -1107,19 +928,6 @@ namespace MongoDB.Bson.Tests.Serialization.Serializers
             public long L;
             [BsonRepresentation(BsonType.String)]
             public long S;
-        }
-
-        public class TestClassWithPrivate
-        {
-            [BsonRepresentation(BsonType.String)]
-            private long _i;
-
-            public TestClassWithPrivate(long i)
-            {
-                _i = i;
-            }
-
-            public long GetPrivateI() => _i;
         }
 
         [Fact]
@@ -1225,19 +1033,9 @@ namespace MongoDB.Bson.Tests.Serialization.Serializers
             var rehydrated = BsonSerializer.Deserialize<TestClass>(bson);
             Assert.True(bson.SequenceEqual(rehydrated.ToBson()));
         }
-
-        [Fact]
-        public void TestPrivateFieldWithBsonRepresentation()
-        {
-            var testValue = long.MaxValue;
-            var json = $"{{ '_i' : '{testValue}' }}";
-
-            var deserialized = BsonSerializer.Deserialize<TestClassWithPrivate>(json);
-            Assert.Equal(testValue, deserialized.GetPrivateI());
-        }
     }
 
-    public class ClassWithObjectIdSerializerTests
+    public class ObjectIdSerializerTests
     {
         public class TestClass
         {
@@ -1246,25 +1044,10 @@ namespace MongoDB.Bson.Tests.Serialization.Serializers
             public ObjectId String { get; set; }
         }
 
-        public class TestClassWithPrivate
-        {
-            [BsonRepresentation(BsonType.String)]
-            private ObjectId _o;
-
-            public TestClassWithPrivate(ObjectId o)
-            {
-                _o = o;
-            }
-
-            public ObjectId GetPrivateO() => _o;
-        }
-
         [Fact]
         public void TestSerializer()
         {
-#pragma warning disable 618
             var objectId = new ObjectId(1, 2, 3, 4);
-#pragma warning restore 618
             var obj = new TestClass
             {
                 ObjectId = objectId,
@@ -1281,38 +1064,13 @@ namespace MongoDB.Bson.Tests.Serialization.Serializers
             var rehydrated = BsonSerializer.Deserialize<TestClass>(bson);
             Assert.True(bson.SequenceEqual(rehydrated.ToBson()));
         }
-
-        [Fact]
-        public void TestPrivateFieldWithBsonRepresentation()
-        {
-#pragma warning disable 618
-            var testValue = new ObjectId(1, 2, 3, 4);
-#pragma warning restore 618
-            var json = "{ '_o' : '000000010000020003000004' }";
-
-            var deserialized = BsonSerializer.Deserialize<TestClassWithPrivate>(json);
-            Assert.Equal(testValue, deserialized.GetPrivateO());
-        }
     }
 
-    public class ClassWithStringSerializerTests
+    public class StringSerializerTests
     {
         public class TestClass
         {
             public String String { get; set; }
-        }
-
-        public class TestClassWithPrivate
-        {
-            [BsonRepresentation(BsonType.String)]
-            private string _s;
-
-            public TestClassWithPrivate(string s)
-            {
-                _s = s;
-            }
-
-            public string GetPrivateS() => _s;
         }
 
         [Fact]
@@ -1361,16 +1119,6 @@ namespace MongoDB.Bson.Tests.Serialization.Serializers
             var bson = obj.ToBson();
             var rehydrated = BsonSerializer.Deserialize<TestClass>(bson);
             Assert.True(bson.SequenceEqual(rehydrated.ToBson()));
-        }
-
-        [Fact]
-        public void TestPrivateFieldWithBsonRepresentation()
-        {
-            var testValue = "test";
-            var json = $"{{ '_s' : '{testValue}' }}";
-
-            var deserialized = BsonSerializer.Deserialize<TestClassWithPrivate>(json);
-            Assert.Equal(testValue, deserialized.GetPrivateS());
         }
     }
 }

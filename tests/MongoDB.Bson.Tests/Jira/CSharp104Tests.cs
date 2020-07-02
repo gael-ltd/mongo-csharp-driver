@@ -13,7 +13,7 @@
 * limitations under the License.
 */
 
-#if NET452
+#if NET45
 using System.Linq;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;

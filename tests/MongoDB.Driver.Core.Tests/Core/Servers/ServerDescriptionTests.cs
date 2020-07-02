@@ -18,12 +18,14 @@ using System.Net;
 using FluentAssertions;
 using MongoDB.Bson;
 using MongoDB.Driver.Core.Clusters;
+using MongoDB.Driver.Core.Connections;
 using MongoDB.Driver.Core.Misc;
+using MongoDB.Driver.Core.Servers;
 using Xunit;
 
 namespace MongoDB.Driver.Core.Servers
 {
-    public class ServerDescriptionTests
+    class ServerDescriptionTests
     {
         #region static
         // static fields
@@ -185,17 +187,8 @@ namespace MongoDB.Driver.Core.Servers
         [Fact]
         public void Equals_should_return_true_when_all_fields_are_equal()
         {
-            var lastUpdateTimestamp = DateTime.UtcNow;
-            ServerDescription subject = new ServerDescription(
-                __serverId,
-                __endPoint,
-                type: ServerType.Standalone,
-                lastUpdateTimestamp: lastUpdateTimestamp);
-            ServerDescription serverDescription2 = new ServerDescription(
-                __serverId,
-                __endPoint,
-                type: ServerType.Standalone,
-                lastUpdateTimestamp: lastUpdateTimestamp);
+            ServerDescription subject = new ServerDescription(__serverId, __endPoint);
+            ServerDescription serverDescription2 = new ServerDescription(__serverId, __endPoint);
             subject.Equals(serverDescription2).Should().BeTrue();
             subject.Equals((object)serverDescription2).Should().BeTrue();
             subject.GetHashCode().Should().Be(serverDescription2.GetHashCode());
@@ -213,15 +206,15 @@ namespace MongoDB.Driver.Core.Servers
         [InlineData(new[] { 2, 7 }, true)]
         [InlineData(new[] { 6, 6 }, true)]
         [InlineData(new[] { 6, 7 }, true)]
-        [InlineData(new[] { 7, 7 }, true)]
-        [InlineData(new[] { 7, 8 }, true)]
+        [InlineData(new[] { 7, 7 }, false)]
+        [InlineData(new[] { 7, 8 }, false)]
         public void IsCompatibleWithDriver_should_return_expected_result(int[] minMaxWireVersions, bool expectedResult)
         {
             var clusterId = new ClusterId(1);
             var endPoint = new DnsEndPoint("localhost", 27017);
             var serverId = new ServerId(clusterId, endPoint);
             var wireVersionRange = minMaxWireVersions == null ? null : new Range<int>(minMaxWireVersions[0], minMaxWireVersions[1]);
-            var subject = new ServerDescription(serverId, endPoint, wireVersionRange: wireVersionRange, type: ServerType.Standalone);
+            var subject = new ServerDescription(serverId, endPoint, wireVersionRange: wireVersionRange);
 
             var result = subject.IsCompatibleWithDriver;
 
@@ -380,7 +373,7 @@ namespace MongoDB.Driver.Core.Servers
                 version: version,
                 wireVersionRange: wireVersionRange);
 
-            result.ShouldBeEquivalentTo(subject);
+            result.Should().BeSameAs(subject);
         }
     }
 }

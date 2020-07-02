@@ -152,89 +152,6 @@ namespace MongoDB.Driver.Core.Operations
 
         [Theory]
         [ParameterAttributeData]
-        public void Execute_delete_with_hint_should_throw_when_hint_is_not_supported(
-            [Values(0, 1)] int w,
-            [Values(false, true)] bool async)
-        {
-            var writeConcern = new WriteConcern(w);
-            var serverVersion = CoreTestConfiguration.ServerVersion;
-            var requests = new List<WriteRequest>
-            {
-                new DeleteRequest(new BsonDocument("x", 1))
-                {
-                    Hint = new BsonDocument("_id", 1)
-                }
-            };
-            var subject = new BulkMixedWriteOperation(_collectionNamespace, requests, _messageEncoderSettings)
-            {
-                WriteConcern = writeConcern
-            };
-
-            var exception = Record.Exception(() => ExecuteOperation(subject, async, useImplicitSession: true));
-
-            if (!writeConcern.IsAcknowledged)
-            {
-                exception.Should().BeOfType<NotSupportedException>();
-            }
-            else if (Feature.HintForDeleteOperations.DriverMustThrowIfNotSupported(serverVersion))
-            {
-                exception.Should().BeOfType<NotSupportedException>();
-            }
-            else if (Feature.HintForDeleteOperations.IsSupported(serverVersion))
-            {
-                exception.Should().BeNull();
-            }
-            else
-            {
-                exception.Should().BeOfType<MongoCommandException>();
-            }
-        }
-
-        [Theory]
-        [ParameterAttributeData]
-        public void Execute_update_with_hint_should_throw_when_hint_is_not_supported(
-            [Values(0, 1)] int w,
-            [Values(false, true)] bool async)
-        {
-            var writeConcern = new WriteConcern(w);
-            var serverVersion = CoreTestConfiguration.ServerVersion;
-            var requests = new List<WriteRequest>
-            {
-                new UpdateRequest(
-                    UpdateType.Update,
-                    new BsonDocument("x", 1),
-                    new BsonDocument("$set", new BsonDocument("x", 2)))
-                {
-                    Hint = new BsonDocument("_id", 1)
-                }
-            };
-            var subject = new BulkMixedWriteOperation(_collectionNamespace, requests, _messageEncoderSettings)
-            {
-                WriteConcern = writeConcern
-            };
-
-            var exception = Record.Exception(() => ExecuteOperation(subject, async, useImplicitSession: true));
-
-            if (!writeConcern.IsAcknowledged)
-            {
-                exception.Should().BeOfType<NotSupportedException>();
-            }
-            else if (Feature.HintForUpdateAndReplaceOperations.DriverMustThrowIfNotSupported(serverVersion))
-            {
-                exception.Should().BeOfType<NotSupportedException>();
-            }
-            else if (Feature.HintForUpdateAndReplaceOperations.IsSupported(serverVersion))
-            {
-                exception.Should().BeNull();
-            }
-            else
-            {
-                exception.Should().BeOfType<MongoCommandException>();
-            }
-        }
-
-        [Theory]
-        [ParameterAttributeData]
         public void Execute_with_zero_requests_should_throw_an_exception(
             [Values(false, true)]
             bool async)
@@ -734,7 +651,7 @@ namespace MongoDB.Driver.Core.Operations
             [Values(false, true)]
             bool async)
         {
-            RequireServer.Check();
+            RequireServer.Check().Supports(Feature.WriteCommands);
             EnsureTestData();
             var smallDocument = new BsonDocument { { "_id", 7 }, { "x", "" } };
             var smallDocumentSize = smallDocument.ToBson().Length;
@@ -1175,11 +1092,11 @@ namespace MongoDB.Driver.Core.Operations
             list.Should().HaveCount(3);
         }
 
+        //
+
         [SkippableTheory]
         [ParameterAttributeData]
         public void Execute_unacknowledged_with_an_error_in_the_first_batch_and_ordered_is_false(
-            [Values(false, true)]
-            bool retryRequested,
             [Values(false, true)]
             bool async)
         {
@@ -1197,11 +1114,10 @@ namespace MongoDB.Driver.Core.Operations
             var subject = new BulkMixedWriteOperation(_collectionNamespace, requests, _messageEncoderSettings)
             {
                 IsOrdered = false,
-                RetryRequested = retryRequested,
                 WriteConcern = WriteConcern.Unacknowledged
             };
 
-            using (var readWriteBinding = CreateReadWriteBinding(useImplicitSession: true))
+            using (var readWriteBinding = CreateReadWriteBinding())
             using (var channelSource = readWriteBinding.GetWriteChannelSource(CancellationToken.None))
             using (var channel = channelSource.GetChannel(CancellationToken.None))
             using (var channelBinding = new ChannelReadWriteBinding(channelSource.Server, channel, readWriteBinding.Session.Fork()))
@@ -1219,8 +1135,6 @@ namespace MongoDB.Driver.Core.Operations
         [SkippableTheory]
         [ParameterAttributeData]
         public void Execute_unacknowledged_with_an_error_in_the_first_batch_and_ordered_is_true(
-            [Values(false, true)]
-            bool retryRequested,
             [Values(false, true)]
             bool async)
         {
@@ -1244,11 +1158,10 @@ namespace MongoDB.Driver.Core.Operations
             var subject = new BulkMixedWriteOperation(_collectionNamespace, requests, _messageEncoderSettings)
             {
                 IsOrdered = true,
-                RetryRequested = retryRequested,
                 WriteConcern = WriteConcern.Unacknowledged
             };
 
-            using (var readWriteBinding = CreateReadWriteBinding(useImplicitSession: true))
+            using (var readWriteBinding = CreateReadWriteBinding())
             using (var channelSource = readWriteBinding.GetWriteChannelSource(CancellationToken.None))
             using (var channel = channelSource.GetChannel(CancellationToken.None))
             using (var channelBinding = new ChannelReadWriteBinding(channelSource.Server, channel, readWriteBinding.Session.Fork()))
@@ -1265,8 +1178,6 @@ namespace MongoDB.Driver.Core.Operations
         [SkippableTheory]
         [ParameterAttributeData]
         public void Execute_unacknowledged_with_an_error_in_the_second_batch_and_ordered_is_false(
-            [Values(false, true)]
-            bool retryRequested,
             [Values(false, true)]
             bool async)
         {
@@ -1285,11 +1196,10 @@ namespace MongoDB.Driver.Core.Operations
             {
                 IsOrdered = false,
                 MaxBatchCount = 2,
-                RetryRequested = retryRequested,
                 WriteConcern = WriteConcern.Unacknowledged
             };
 
-            using (var readWriteBinding = CreateReadWriteBinding(useImplicitSession: true))
+            using (var readWriteBinding = CreateReadWriteBinding())
             using (var channelSource = readWriteBinding.GetWriteChannelSource(CancellationToken.None))
             using (var channel = channelSource.GetChannel(CancellationToken.None))
             using (var channelBinding = new ChannelReadWriteBinding(channelSource.Server, channel, readWriteBinding.Session.Fork()))
@@ -1306,8 +1216,6 @@ namespace MongoDB.Driver.Core.Operations
         [SkippableTheory]
         [ParameterAttributeData]
         public void Execute_unacknowledged_with_an_error_in_the_second_batch_and_ordered_is_true(
-            [Values(false, true)]
-            bool retryRequested,
             [Values(false, true)]
             bool async)
         {
@@ -1326,11 +1234,10 @@ namespace MongoDB.Driver.Core.Operations
             {
                 IsOrdered = true,
                 MaxBatchCount = 2,
-                RetryRequested = retryRequested,
                 WriteConcern = WriteConcern.Unacknowledged
             };
 
-            using (var readWriteBinding = CreateReadWriteBinding(useImplicitSession: true))
+            using (var readWriteBinding = CreateReadWriteBinding())
             using (var channelSource = readWriteBinding.GetWriteChannelSource(CancellationToken.None))
             using (var channel = channelSource.GetChannel(CancellationToken.None))
             using (var channelBinding = new ChannelReadWriteBinding(channelSource.Server, channel, readWriteBinding.Session.Fork()))
@@ -1346,27 +1253,6 @@ namespace MongoDB.Driver.Core.Operations
 
         [SkippableTheory]
         [ParameterAttributeData]
-        public void Execute_with_delete_should_not_send_session_id_when_unacknowledged_writes(
-            [Values(false, true)] bool retryRequested,
-            [Values(false, true)] bool useImplicitSession,
-            [Values(false, true)] bool async)
-        {
-            RequireServer.Check();
-
-            var collectionNamespace = CoreTestConfiguration.GetCollectionNamespaceForTestMethod(nameof(BulkMixedWriteOperationTests), nameof(Execute_with_delete_should_not_send_session_id_when_unacknowledged_writes));
-            DropCollection(collectionNamespace);
-            var requests = new[] { new DeleteRequest(BsonDocument.Parse("{ x : 1 }")) };
-            var subject = new BulkMixedWriteOperation(collectionNamespace, requests, _messageEncoderSettings)
-            {
-                RetryRequested = retryRequested,
-                WriteConcern = WriteConcern.Unacknowledged
-            };
-
-            VerifySessionIdWasNotSentIfUnacknowledgedWrite(subject, "delete", async, useImplicitSession);
-        }
-
-        [SkippableTheory]
-        [ParameterAttributeData]
         public void Execute_with_delete_should_send_session_id_when_supported(
             [Values(false, true)] bool async)
         {
@@ -1375,28 +1261,6 @@ namespace MongoDB.Driver.Core.Operations
             var subject = new BulkMixedWriteOperation(_collectionNamespace, requests, _messageEncoderSettings);
 
             VerifySessionIdWasSentWhenSupported(subject, "delete", async);
-        }
-
-
-        [SkippableTheory]
-        [ParameterAttributeData]
-        public void Execute_with_insert_should_not_send_session_id_when_unacknowledged_writes(
-            [Values(false, true)] bool retryRequested,
-            [Values(false, true)] bool useImplicitSession,
-            [Values(false, true)] bool async)
-        {
-            RequireServer.Check();
-
-            var collectionNamespace = CoreTestConfiguration.GetCollectionNamespaceForTestMethod(nameof(BulkMixedWriteOperationTests), nameof(Execute_with_insert_should_not_send_session_id_when_unacknowledged_writes));
-            DropCollection(collectionNamespace);
-            var requests = new[] { new InsertRequest(BsonDocument.Parse("{ _id : 1, x : 3 }")) };
-            var subject = new BulkMixedWriteOperation(collectionNamespace, requests, _messageEncoderSettings)
-            {
-                RetryRequested = retryRequested,
-                WriteConcern = WriteConcern.Unacknowledged
-            };
-
-            VerifySessionIdWasNotSentIfUnacknowledgedWrite(subject, "insert", async, useImplicitSession);
         }
 
         [SkippableTheory]
@@ -1410,27 +1274,6 @@ namespace MongoDB.Driver.Core.Operations
             var subject = new BulkMixedWriteOperation(_collectionNamespace, requests, _messageEncoderSettings);
 
             VerifySessionIdWasSentWhenSupported(subject, "insert", async);
-        }
-
-        [SkippableTheory]
-        [ParameterAttributeData]
-        public void Execute_with_update_should_not_send_session_id_when_unacknowledged_writes(
-            [Values(false, true)] bool retryRequested,
-            [Values(false, true)] bool useImplicitSession,
-            [Values(false, true)] bool async)
-        {
-            RequireServer.Check();
-
-            var collectionNamespace = CoreTestConfiguration.GetCollectionNamespaceForTestMethod(nameof(BulkMixedWriteOperationTests), nameof(Execute_with_update_should_not_send_session_id_when_unacknowledged_writes));
-            DropCollection(collectionNamespace);
-            var requests = new[] { new UpdateRequest(UpdateType.Update, BsonDocument.Parse("{ x : 1 }"), BsonDocument.Parse("{ $set : { a : 1 } }")) };
-            var subject = new BulkMixedWriteOperation(collectionNamespace, requests, _messageEncoderSettings)
-            {
-                RetryRequested = retryRequested,
-                WriteConcern = WriteConcern.Unacknowledged
-            };
-
-            VerifySessionIdWasNotSentIfUnacknowledgedWrite(subject, "update", async, useImplicitSession);
         }
 
         [SkippableTheory]
@@ -1453,7 +1296,7 @@ namespace MongoDB.Driver.Core.Operations
         [InlineData(new[] { 10000000, 10000000, 10000000, 10000000, 7999888 }, new[] { 4, 1 })]
         public void Execute_with_multiple_deletes_should_split_batches_as_expected_when_using_write_commands_via_opmessage(int[] requestSizes, int[] expectedBatchCounts)
         {
-            RequireServer.Check().Supports(Feature.CommandMessage);
+            RequireServer.Check().Supports(Feature.WriteCommands, Feature.CommandMessage);
             DropCollection();
 
             using (EventContext.BeginOperation())
@@ -1485,7 +1328,7 @@ namespace MongoDB.Driver.Core.Operations
         [InlineData(new[] { 16777216, 16777216 }, new[] { 1, 1 })]
         public void Execute_with_multiple_deletes_should_split_batches_as_expected_when_using_write_commands_via_opquery(int[] requestSizes, int[] expectedBatchCounts)
         {
-            RequireServer.Check().DoesNotSupport(Feature.CommandMessage);
+            RequireServer.Check().Supports(Feature.WriteCommands).DoesNotSupport(Feature.CommandMessage);
             DropCollection();
 
             using (EventContext.BeginOperation())
@@ -1516,7 +1359,7 @@ namespace MongoDB.Driver.Core.Operations
         [InlineData(new[] { 10000000, 10000000, 10000000, 10000000, 7999886 }, new[] { 4, 1 })]
         public void Execute_with_multiple_inserts_should_split_batches_as_expected_when_using_write_commands_via_opmessage(int[] documentSizes, int[] expectedBatchCounts)
         {
-            RequireServer.Check().Supports(Feature.CommandMessage);
+            RequireServer.Check().Supports(Feature.WriteCommands, Feature.CommandMessage);
             DropCollection();
 
             using (EventContext.BeginOperation())
@@ -1550,7 +1393,7 @@ namespace MongoDB.Driver.Core.Operations
         [InlineData(new[] { 16777216, 16777216 }, new[] { 1, 1 })]
         public void Execute_with_multiple_inserts_should_split_batches_as_expected_when_using_write_commands_via_opquery(int[] documentSizes, int[] expectedBatchCounts)
         {
-            RequireServer.Check().DoesNotSupport(Feature.CommandMessage);
+            RequireServer.Check().Supports(Feature.WriteCommands).DoesNotSupport(Feature.CommandMessage);
             DropCollection();
 
             using (EventContext.BeginOperation())
@@ -1582,7 +1425,7 @@ namespace MongoDB.Driver.Core.Operations
         [InlineData(new[] { 10000000, 10000000, 10000000, 10000000, 7999888 }, new[] { 4, 1 })]
         public void Execute_with_multiple_updates_should_split_batches_as_expected_when_using_write_commands_via_opmessage(int[] requestSizes, int[] expectedBatchCounts)
         {
-            RequireServer.Check().Supports(Feature.CommandMessage);
+            RequireServer.Check().Supports(Feature.WriteCommands, Feature.CommandMessage);
             DropCollection();
 
             using (EventContext.BeginOperation())
@@ -1614,7 +1457,7 @@ namespace MongoDB.Driver.Core.Operations
         [InlineData(new[] { 16777216, 16777216 }, new[] { 1, 1 })]
         public void Execute_with_multiple_updates_should_split_batches_as_expected_when_using_write_commands_via_opquery(int[] requestSizes, int[] expectedBatchCounts)
         {
-            RequireServer.Check().DoesNotSupport(Feature.CommandMessage);
+            RequireServer.Check().Supports(Feature.WriteCommands).DoesNotSupport(Feature.CommandMessage);
             DropCollection();
 
             using (EventContext.BeginOperation())

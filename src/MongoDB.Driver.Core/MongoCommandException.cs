@@ -14,18 +14,24 @@
 */
 
 using System;
-#if NET452
+using System.Collections.Generic;
+using System.Linq;
+#if NET45
 using System.Runtime.Serialization;
 #endif
+using System.Text;
+using System.Threading.Tasks;
 using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
 using MongoDB.Driver.Core.Connections;
+using MongoDB.Driver.Core.Misc;
 
 namespace MongoDB.Driver
 {
     /// <summary>
     /// Represents a MongoDB command exception.
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     public class MongoCommandException : MongoServerException
@@ -54,29 +60,13 @@ namespace MongoDB.Driver
         /// <param name="command">The command.</param>
         /// <param name="result">The command result.</param>
         public MongoCommandException(ConnectionId connectionId, string message, BsonDocument command, BsonDocument result)
-            : this(connectionId, message, command, result, innerException: null)
-        {
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="MongoCommandException"/> class.
-        /// </summary>
-        /// <param name="connectionId">The connection identifier.</param>
-        /// <param name="message">The message.</param>
-        /// <param name="command">The command.</param>
-        /// // <param name="result">The command result.</param>
-        /// <param name="innerException">The inner exception.</param>
-        ///
-        public MongoCommandException(ConnectionId connectionId, string message, BsonDocument command, BsonDocument result, Exception innerException)
-            : base(connectionId, message, innerException)
+            : base(connectionId, message)
         {
             _command = command; // can be null
             _result = result; // can be null
-
-            AddErrorLabelsFromCommandResult(this, result);
         }
 
-#if NET452
+#if NET45
         /// <summary>
         /// Initializes a new instance of the <see cref="MongoCommandException"/> class.
         /// </summary>
@@ -110,7 +100,7 @@ namespace MongoDB.Driver
         /// </value>
         public string CodeName
         {
-            get { return _result.GetValue("codeName", null)?.AsString; }
+            get { return _result.GetValue("codeName", null).AsString; }
         }
 
         /// <summary>
@@ -147,7 +137,7 @@ namespace MongoDB.Driver
         }
 
         // methods
-#if NET452
+#if NET45
         /// <inheritdoc/>
         public override void GetObjectData(SerializationInfo info, StreamingContext context)
         {

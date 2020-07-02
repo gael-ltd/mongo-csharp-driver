@@ -21,6 +21,7 @@ using System.Threading;
 using MongoDB.Bson;
 using MongoDB.Bson.IO;
 using MongoDB.Bson.Serialization.Attributes;
+using MongoDB.Driver;
 using MongoDB.Driver.Builders;
 using MongoDB.Driver.Core;
 using MongoDB.Driver.GeoJsonObjectModel;
@@ -30,17 +31,15 @@ using MongoDB.Bson.TestHelpers.XunitExtensions;
 using MongoDB.Driver.Core.TestHelpers.XunitExtensions;
 using MongoDB.Driver.Core.Clusters;
 using MongoDB.Driver.Core.Misc;
+using MongoDB.Driver.TestHelpers;
 using MongoDB.Driver.Core.Events;
 using MongoDB.Driver.Legacy.Tests;
+using MongoDB.Bson.TestHelpers;
 
 namespace MongoDB.Driver.Tests
 {
     public class MongoCollectionTests
     {
-        #region static
-        private static readonly SemanticVersion __mapReduceNewServerImplementationServerVersion = new SemanticVersion(4, 3, 0);
-        #endregion
-
         private class TestClass
         {
             public ObjectId Id { get; set; }
@@ -55,9 +54,9 @@ namespace MongoDB.Driver.Tests
         public MongoCollectionTests()
         {
             _server = LegacyTestConfiguration.Server;
-            _primary = GetPrimary(_server);
+            _primary = _server.Instances.First(x => x.IsPrimary);
             _database = LegacyTestConfiguration.Database;
-            _collection = _database.GetCollection(GetType().Name);
+            _collection = LegacyTestConfiguration.Collection;
         }
 
         // TODO: more tests for MongoCollection
@@ -93,178 +92,147 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestAggregateAllowDiskUsage()
         {
-            _collection.Drop();
-
-            var query = _collection.Aggregate(new AggregateArgs
+            if (_primary.Supports(FeatureId.AggregateAllowDiskUse))
             {
-                Pipeline = new BsonDocument[]
-                {
-                    new BsonDocument("$project", new BsonDocument("x", 1))
-                },
-                AllowDiskUse = true
-            });
-            var results = query.ToList(); // all we can test is that the server doesn't reject the allowDiskUsage argument
+                _collection.Drop();
 
-            Assert.Equal(0, results.Count);
+                var query = _collection.Aggregate(new AggregateArgs
+                {
+                    Pipeline = new BsonDocument[]
+                    {
+                        new BsonDocument("$project", new BsonDocument("x", 1))
+                    },
+                    AllowDiskUse = true
+                });
+                var results = query.ToList(); // all we can test is that the server doesn't reject the allowDiskUsage argument
+
+                Assert.Equal(0, results.Count);
+            }
         }
 
         [Fact]
         public void TestAggregateCursor()
         {
-            _collection.Drop();
-            _collection.Insert(new BsonDocument("x", 1));
-            _collection.Insert(new BsonDocument("x", 2));
-            _collection.Insert(new BsonDocument("x", 3));
-            _collection.Insert(new BsonDocument("x", 3));
-
-            var query = _collection.Aggregate(new AggregateArgs
+            if (_primary.Supports(FeatureId.AggregateCursor))
             {
-                Pipeline = new BsonDocument[]
+                _collection.Drop();
+                _collection.Insert(new BsonDocument("x", 1));
+                _collection.Insert(new BsonDocument("x", 2));
+                _collection.Insert(new BsonDocument("x", 3));
+                _collection.Insert(new BsonDocument("x", 3));
+
+                var query = _collection.Aggregate(new AggregateArgs
                 {
-                    new BsonDocument("$group", new BsonDocument { { "_id", "$x" }, { "count", new BsonDocument("$sum", 1) } })
-                },
-#pragma warning disable 618
-                OutputMode = AggregateOutputMode.Cursor,
-#pragma warning disable 618
-                BatchSize = 1
-            });
-            var results = query.ToList();
+                    Pipeline = new BsonDocument[]
+                    {
+                        new BsonDocument("$group", new BsonDocument { { "_id", "$x" }, { "count", new BsonDocument("$sum", 1) } })
+                    },
+                    OutputMode = AggregateOutputMode.Cursor,
+                    BatchSize = 1
+                });
+                var results = query.ToList();
 
-            var dictionary = new Dictionary<int, int>();
-            foreach (var result in results)
-            {
-                var x = result["_id"].AsInt32;
-                var count = result["count"].AsInt32;
-                dictionary[x] = count;
+                var dictionary = new Dictionary<int, int>();
+                foreach (var result in results)
+                {
+                    var x = result["_id"].AsInt32;
+                    var count = result["count"].AsInt32;
+                    dictionary[x] = count;
+                }
+                Assert.Equal(3, dictionary.Count);
+                Assert.Equal(1, dictionary[1]);
+                Assert.Equal(1, dictionary[2]);
+                Assert.Equal(2, dictionary[3]);
             }
-            Assert.Equal(3, dictionary.Count);
-            Assert.Equal(1, dictionary[1]);
-            Assert.Equal(1, dictionary[2]);
-            Assert.Equal(2, dictionary[3]);
         }
 
         [Fact]
         public void TestAggregateExplain()
         {
-            _collection.Drop();
-            _collection.Insert(new BsonDocument("x", 1));
-
-            var result = _collection.AggregateExplain(new AggregateArgs
+            if (_primary.Supports(FeatureId.AggregateExplain))
             {
-                Pipeline = new BsonDocument[]
-                {
-                    new BsonDocument("$project", new BsonDocument("x", "$x"))
-                }
-            });
+                _collection.Drop();
+                _collection.Insert(new BsonDocument("x", 1));
 
-            var response = result.Response;
-            Assert.True(response.Contains("stages") || response.Contains("queryPlanner"));
+                var result = _collection.AggregateExplain(new AggregateArgs
+                {
+                    Pipeline = new BsonDocument[]
+                    {
+                        new BsonDocument("$project", new BsonDocument("x", "$x"))
+                    }
+                });
+
+                Assert.True(result.Response.Contains("stages"));
+            }
         }
 
         [Fact]
         public void TestAggregateMaxTime()
         {
-            using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
+            if (_primary.Supports(FeatureId.MaxTime))
             {
-                if (failpoint.IsSupported())
+                using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
                 {
-                    _collection.Drop();
-                    _collection.Insert(new BsonDocument("x", 1));
-
-                    failpoint.SetAlwaysOn();
-                    var query = _collection.Aggregate(new AggregateArgs
+                    if (failpoint.IsSupported())
                     {
-                        Pipeline = new BsonDocument[]
+                        _collection.Drop();
+                        _collection.Insert(new BsonDocument("x", 1));
+
+                        failpoint.SetAlwaysOn();
+                        var query = _collection.Aggregate(new AggregateArgs
                         {
-                            new BsonDocument("$match", Query.Exists("_id").ToBsonDocument())
-                        },
-                        MaxTime = TimeSpan.FromMilliseconds(1)
-                    });
-                    Assert.Throws<MongoExecutionTimeoutException>(() => query.ToList());
+                            Pipeline = new BsonDocument[]
+                            {
+                                new BsonDocument("$match", Query.Exists("_id").ToBsonDocument())
+                            },
+                            MaxTime = TimeSpan.FromMilliseconds(1)
+                        });
+                        Assert.Throws<MongoExecutionTimeoutException>(() => query.ToList());
+                    }
                 }
             }
         }
 
-        [SkippableTheory]
-        [ParameterAttributeData]
-        public void TestAggregateOutputToCollection(
-            [Values("$out", "$merge")] string lastStageName,
-            [Values(false, true)] bool usingDifferentOutputDatabase)
+        [Fact]
+        public void TestAggregateOutputToCollection()
         {
-            RequireServer.Check();
-
-            var inputDatabaseName = _collection.Database.Name;
-            var inputCollectionName = _collection.Name;
-            var outputDatabaseName = usingDifferentOutputDatabase ? $"{inputDatabaseName}-output" : inputDatabaseName;
-            var outputCollectionName = $"{inputCollectionName}-output";
-
-            _collection.Drop();
-            _collection.Insert(new BsonDocument("x", 1));
-            _collection.Insert(new BsonDocument("x", 2));
-            _collection.Insert(new BsonDocument("x", 3));
-            _collection.Insert(new BsonDocument("x", 3));
-            EnsureDatabaseExists(outputDatabaseName);
-
-            var pipeline = new List<BsonDocument> { new BsonDocument("$group", new BsonDocument { { "_id", "$x" }, { "count", new BsonDocument("$sum", 1) } }) };
-            switch (lastStageName)
+            if (_primary.Supports(FeatureId.AggregateOutputToCollection))
             {
-                case "$out":
-                    RequireServer.Check().Supports(Feature.AggregateOut);
-                    BsonValue outValue;
-                    if (usingDifferentOutputDatabase)
-                    {
-                        RequireServer.Check().Supports(Feature.AggregateOutToDifferentDatabase);
-                        outValue = new BsonDocument { { "db", outputDatabaseName }, { "coll", outputCollectionName } };
-                    }
-                    else
-                    {
-                        outValue = outputCollectionName;
-                    }
-                    pipeline.Add(new BsonDocument("$out", outValue));
-                    break;
+                _collection.Drop();
+                _collection.Insert(new BsonDocument("x", 1));
+                _collection.Insert(new BsonDocument("x", 2));
+                _collection.Insert(new BsonDocument("x", 3));
+                _collection.Insert(new BsonDocument("x", 3));
 
-                case "$merge":
-                    RequireServer.Check().Supports(Feature.AggregateMerge);
-                    BsonValue intoValue;
-                    if (usingDifferentOutputDatabase)
+                var query = _collection.Aggregate(new AggregateArgs
+                {
+                    BypassDocumentValidation = true,
+                    Pipeline = new BsonDocument[]
                     {
-                        intoValue = new BsonDocument { { "db", outputDatabaseName }, { "coll", outputCollectionName } };
+                        new BsonDocument("$group", new BsonDocument { { "_id", "$x" }, { "count", new BsonDocument("$sum", 1) } }),
+                        new BsonDocument("$out", "temp")
                     }
-                    else
-                    {
-                        intoValue = outputCollectionName;
-                    }
-                    pipeline.Add(new BsonDocument("$merge", new BsonDocument("into", intoValue)));
-                    break;
+                });
+                var results = query.ToList();
 
-                default:
-                    throw new Exception($"Invalid lastStageName: \"{lastStageName}\".");
+                var dictionary = new Dictionary<int, int>();
+                foreach (var result in results)
+                {
+                    var x = result["_id"].AsInt32;
+                    var count = result["count"].AsInt32;
+                    dictionary[x] = count;
+                }
+                Assert.Equal(3, dictionary.Count);
+                Assert.Equal(1, dictionary[1]);
+                Assert.Equal(1, dictionary[2]);
+                Assert.Equal(2, dictionary[3]);
             }
-
-            var query = _collection.Aggregate(new AggregateArgs
-            {
-                BypassDocumentValidation = true,
-                Pipeline = pipeline
-            });
-            var results = query.ToList();
-
-            var dictionary = new Dictionary<int, int>();
-            foreach (var result in results)
-            {
-                var x = result["_id"].AsInt32;
-                var count = result["count"].AsInt32;
-                dictionary[x] = count;
-            }
-            Assert.Equal(3, dictionary.Count);
-            Assert.Equal(1, dictionary[1]);
-            Assert.Equal(1, dictionary[2]);
-            Assert.Equal(2, dictionary[3]);
         }
 
         [SkippableFact]
         public void TestAggregateWriteConcern()
         {
-            RequireServer.Check().Supports(Feature.CommandsThatWriteAcceptWriteConcern).ClusterType(ClusterType.ReplicaSet);
+            RequireServer.Check().Supports(Feature.AggregateOut, Feature.CommandsThatWriteAcceptWriteConcern).ClusterType(ClusterType.ReplicaSet);
             var writeConcern = new WriteConcern(9, wTimeout: TimeSpan.FromMilliseconds(1));
             var args = new AggregateArgs
             {
@@ -362,8 +330,16 @@ namespace MongoDB.Driver.Tests
 
             Assert.Equal(1, result.DeletedCount);
             Assert.Equal(1, result.InsertedCount);
-            Assert.Equal(true, result.IsModifiedCountAvailable);
-            Assert.Equal(1, result.ModifiedCount);
+            if (_primary.Supports(FeatureId.WriteCommands))
+            {
+                Assert.Equal(true, result.IsModifiedCountAvailable);
+                Assert.Equal(1, result.ModifiedCount);
+            }
+            else
+            {
+                Assert.Equal(false, result.IsModifiedCountAvailable);
+                Assert.Throws<NotSupportedException>(() => { var _ = result.ModifiedCount; });
+            }
             Assert.Equal(3, result.RequestCount);
             Assert.Equal(1, result.MatchedCount);
         }
@@ -382,8 +358,16 @@ namespace MongoDB.Driver.Tests
 
             Assert.Equal(0, result.DeletedCount);
             Assert.Equal(0, result.InsertedCount);
-            Assert.Equal(true, result.IsModifiedCountAvailable);
-            Assert.Equal(1, result.ModifiedCount);
+            if (_primary.Supports(FeatureId.WriteCommands))
+            {
+                Assert.Equal(true, result.IsModifiedCountAvailable);
+                Assert.Equal(1, result.ModifiedCount);
+            }
+            else
+            {
+                Assert.Equal(false, result.IsModifiedCountAvailable);
+                Assert.Throws<NotSupportedException>(() => { var _ = result.ModifiedCount; });
+            }
             Assert.Equal(3, result.RequestCount);
             Assert.Equal(2, result.MatchedCount);
             Assert.Equal(1, result.Upserts.Count);
@@ -423,17 +407,17 @@ namespace MongoDB.Driver.Tests
             Assert.Equal(0, _collection.Count());
         }
 
+#pragma warning disable 618
         [Fact]
         public void TestConstructorArgumentChecking()
         {
             var settings = new MongoCollectionSettings();
-#pragma warning disable 618
             Assert.Throws<ArgumentNullException>(() => { new MongoCollection<BsonDocument>(null, "name", settings); });
             Assert.Throws<ArgumentNullException>(() => { new MongoCollection<BsonDocument>(_database, null, settings); });
             Assert.Throws<ArgumentNullException>(() => { new MongoCollection<BsonDocument>(_database, "name", null); });
             Assert.Throws<ArgumentOutOfRangeException>(() => { new MongoCollection<BsonDocument>(_database, "", settings); });
-#pragma warning restore
         }
+#pragma warning disable
 
         [Fact]
         public void TestCountZero()
@@ -475,13 +459,16 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestCountWithMaxTime()
         {
-            using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
+            if (_primary.Supports(FeatureId.MaxTime))
             {
-                if (failpoint.IsSupported())
+                using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
                 {
-                    failpoint.SetAlwaysOn();
-                    var args = new CountArgs { MaxTime = TimeSpan.FromMilliseconds(1) };
-                    Assert.Throws<MongoExecutionTimeoutException>(() => _collection.Count(args));
+                    if (failpoint.IsSupported())
+                    {
+                        failpoint.SetAlwaysOn();
+                        var args = new CountArgs { MaxTime = TimeSpan.FromMilliseconds(1) };
+                        Assert.Throws<MongoExecutionTimeoutException>(() => _collection.Count(args));
+                    }
                 }
             }
         }
@@ -490,12 +477,15 @@ namespace MongoDB.Driver.Tests
         public void TestCountWithMaxTimeFromFind()
         {
             RequireServer.Check();
-            using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
+            if (_primary.Supports(FeatureId.MaxTime))
             {
-                if (failpoint.IsSupported())
+                using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
                 {
-                    failpoint.SetAlwaysOn();
-                    Assert.Throws<MongoExecutionTimeoutException>(() => _collection.Find(Query.EQ("x", 1)).SetMaxTime(TimeSpan.FromMilliseconds(1)).Count());
+                    if (failpoint.IsSupported())
+                    {
+                        failpoint.SetAlwaysOn();
+                        Assert.Throws<MongoExecutionTimeoutException>(() => _collection.Find(Query.EQ("x", 1)).SetMaxTime(TimeSpan.FromMilliseconds(1)).Count());
+                    }
                 }
             }
         }
@@ -530,7 +520,7 @@ namespace MongoDB.Driver.Tests
         [SkippableFact]
         public void TestCountWithHint()
         {
-            RequireServer.Check();
+            RequireServer.Check().VersionGreaterThanOrEqualTo("2.6.0");
             _collection.Drop();
             _collection.Insert(new BsonDocument("x", 1));
             _collection.Insert(new BsonDocument("x", 2));
@@ -547,7 +537,7 @@ namespace MongoDB.Driver.Tests
         [SkippableFact]
         public void TestCountWithHintFromFind()
         {
-            RequireServer.Check();
+            RequireServer.Check().VersionGreaterThanOrEqualTo("2.6.0");
             _collection.Drop();
             _collection.Insert(new BsonDocument("x", 1));
             _collection.Insert(new BsonDocument("x", 2));
@@ -559,7 +549,7 @@ namespace MongoDB.Driver.Tests
         [SkippableFact]
         public void TestCountWithHintAndLimitFromFind()
         {
-            RequireServer.Check();
+            RequireServer.Check().VersionGreaterThanOrEqualTo("2.6.0");
             _collection.Drop();
             _collection.Insert(new BsonDocument("x", 1));
             _collection.Insert(new BsonDocument("x", 2));
@@ -587,9 +577,7 @@ namespace MongoDB.Driver.Tests
             RequireServer.Check().VersionLessThan("3.7.0");
             var collection = _database.GetCollection("cappedcollection");
             collection.Drop();
-#pragma warning disable 618
             var options = CollectionOptions.SetAutoIndexId(autoIndexId);
-#pragma warning restore
             var expectedIndexCount = autoIndexId ? 1 : 0;
 
             _database.CreateCollection(collection.Name, options);
@@ -674,20 +662,6 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestCreateIndex()
         {
-            void assertNamespace(IndexInfo indexInfo)
-            {
-                if (CoreTestConfiguration.ServerVersion < new SemanticVersion(4, 3, 0, ""))
-                {
-                    Assert.Equal(_collection.FullName, indexInfo.Namespace);
-                }
-                else
-                {
-                    var exception = Record.Exception(() => indexInfo.Namespace);
-                    var e = exception.Should().BeOfType<KeyNotFoundException>().Subject;
-                    e.Message.Should().Be("Element 'ns' not found.");
-                }
-            }
-
             _collection.Drop();
             _collection.Insert(new BsonDocument("x", 1));
 
@@ -699,7 +673,7 @@ namespace MongoDB.Driver.Tests
             Assert.Equal(false, indexes[0].IsUnique);
             Assert.Equal(new IndexKeysDocument("_id", 1), indexes[0].Key);
             Assert.Equal("_id_", indexes[0].Name);
-            assertNamespace(indexes[0]);
+            Assert.Equal(_collection.FullName, indexes[0].Namespace);
             Assert.True(indexes[0].Version >= 0);
 
             var result = _collection.CreateIndex("x");
@@ -715,7 +689,7 @@ namespace MongoDB.Driver.Tests
             Assert.Equal(false, indexes[0].IsUnique);
             Assert.Equal(new IndexKeysDocument("_id", 1), indexes[0].Key);
             Assert.Equal("_id_", indexes[0].Name);
-            assertNamespace(indexes[0]);
+            Assert.Equal(_collection.FullName, indexes[0].Namespace);
             Assert.True(indexes[0].Version >= 0);
             Assert.Equal(false, indexes[1].DroppedDups);
             Assert.Equal(false, indexes[1].IsBackground);
@@ -723,7 +697,7 @@ namespace MongoDB.Driver.Tests
             Assert.Equal(false, indexes[1].IsUnique);
             Assert.Equal(new IndexKeysDocument("x", 1), indexes[1].Key);
             Assert.Equal("x_1", indexes[1].Name);
-            assertNamespace(indexes[1]);
+            Assert.Equal(_collection.FullName, indexes[1].Namespace);
             Assert.True(indexes[1].Version >= 0);
 
             // note: DropDups is silently ignored in server 2.8
@@ -776,7 +750,7 @@ namespace MongoDB.Driver.Tests
         [SkippableFact]
         public void TestCreateIndexWriteConcern()
         {
-            RequireServer.Check().Supports(Feature.CommandsThatWriteAcceptWriteConcern).ClusterType(ClusterType.ReplicaSet);
+            RequireServer.Check().Supports(Feature.AggregateOut, Feature.CommandsThatWriteAcceptWriteConcern).ClusterType(ClusterType.ReplicaSet);
             var writeConcern = new WriteConcern(9, wTimeout: TimeSpan.FromMilliseconds(1));
             var keys = IndexKeys.Ascending("x");
 
@@ -834,20 +808,23 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestDistinctWithMaxTime()
         {
-            using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
+            if (_primary.Supports(FeatureId.MaxTime))
             {
-                if (failpoint.IsSupported())
+                using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
                 {
-                    _collection.Drop();
-                    _collection.Insert(new BsonDocument("x", 1)); // ensure collection is not empty
-
-                    failpoint.SetAlwaysOn();
-                    var args = new DistinctArgs
+                    if (failpoint.IsSupported())
                     {
-                        Key = "x",
-                        MaxTime = TimeSpan.FromMilliseconds(1)
-                    };
-                    Assert.Throws<MongoExecutionTimeoutException>(() => _collection.Distinct<BsonValue>(args));
+                        _collection.Drop();
+                        _collection.Insert(new BsonDocument("x", 1)); // ensure collection is not empty
+
+                        failpoint.SetAlwaysOn();
+                        var args = new DistinctArgs
+                        {
+                            Key = "x",
+                            MaxTime = TimeSpan.FromMilliseconds(1)
+                        };
+                        Assert.Throws<MongoExecutionTimeoutException>(() => _collection.Distinct<BsonValue>(args));
+                    }
                 }
             }
         }
@@ -913,10 +890,7 @@ namespace MongoDB.Driver.Tests
         [SkippableFact]
         public void TestDropIndexWriteConcern()
         {
-            RequireServer.Check().Supports(Feature.CommandsThatWriteAcceptWriteConcern).ClusterType(ClusterType.ReplicaSet);
-
-            _collection.Drop();
-            _collection.CreateIndex("x");
+            RequireServer.Check().Supports(Feature.AggregateOut, Feature.CommandsThatWriteAcceptWriteConcern).ClusterType(ClusterType.ReplicaSet);
             var writeConcern = new WriteConcern(9, wTimeout: TimeSpan.FromMilliseconds(1));
 
             var exception = Record.Exception(() => _collection.WithWriteConcern(writeConcern).DropIndex("x"));
@@ -1037,17 +1011,20 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestFindAndModifyWithMaxTime()
         {
-            using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
+            if (_primary.Supports(FeatureId.MaxTime))
             {
-                if (failpoint.IsSupported())
+                using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
                 {
-                    failpoint.SetAlwaysOn();
-                    var args = new FindAndModifyArgs
+                    if (failpoint.IsSupported())
                     {
-                        Update = Update.Set("x", 1),
-                        MaxTime = TimeSpan.FromMilliseconds(1)
-                    };
-                    Assert.Throws<MongoExecutionTimeoutException>(() => _collection.FindAndModify(args));
+                        failpoint.SetAlwaysOn();
+                        var args = new FindAndModifyArgs
+                        {
+                            Update = Update.Set("x", 1),
+                            MaxTime = TimeSpan.FromMilliseconds(1)
+                        };
+                        Assert.Throws<MongoExecutionTimeoutException>(() => _collection.FindAndModify(args));
+                    }
                 }
             }
         }
@@ -1248,17 +1225,16 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestFindAndRemoveWithMaxTime()
         {
-            var server = LegacyTestConfiguration.GetServer(retryWrites: false);
-            var primary = GetPrimary(server);
-            var collection = GetCollection(server);
-
-            using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, server, primary))
+            if (_primary.Supports(FeatureId.MaxTime))
             {
-                if (failpoint.IsSupported())
+                using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
                 {
-                    failpoint.SetAlwaysOn();
-                    var args = new FindAndRemoveArgs { MaxTime = TimeSpan.FromMilliseconds(1) };
-                    Assert.Throws<MongoExecutionTimeoutException>(() => collection.FindAndRemove(args));
+                    if (failpoint.IsSupported())
+                    {
+                        failpoint.SetAlwaysOn();
+                        var args = new FindAndRemoveArgs { MaxTime = TimeSpan.FromMilliseconds(1) };
+                        Assert.Throws<MongoExecutionTimeoutException>(() => _collection.FindAndRemove(args));
+                    }
                 }
             }
         }
@@ -1427,16 +1403,19 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestFindOneAsGenericWithMaxTime()
         {
-            using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
+            if (_primary.Supports(FeatureId.MaxTime))
             {
-                if (failpoint.IsSupported())
+                using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
                 {
-                    _collection.Drop();
-                    _collection.Insert(new BsonDocument { { "X", 1 } });
+                    if (failpoint.IsSupported())
+                    {
+                        _collection.Drop();
+                        _collection.Insert(new BsonDocument { { "X", 1 } });
 
-                    failpoint.SetAlwaysOn();
-                    var args = new FindOneArgs { MaxTime = TimeSpan.FromMilliseconds(1) };
-                    Assert.Throws<MongoExecutionTimeoutException>(() => _collection.FindOneAs<TestClass>(args));
+                        failpoint.SetAlwaysOn();
+                        var args = new FindOneArgs { MaxTime = TimeSpan.FromMilliseconds(1) };
+                        Assert.Throws<MongoExecutionTimeoutException>(() => _collection.FindOneAs<TestClass>(args));
+                    }
                 }
             }
         }
@@ -1456,16 +1435,19 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestFindOneAsWithMaxTime()
         {
-            using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
+            if (_primary.Supports(FeatureId.MaxTime))
             {
-                if (failpoint.IsSupported())
+                using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
                 {
-                    _collection.Drop();
-                    _collection.Insert(new BsonDocument { { "X", 1 } });
+                    if (failpoint.IsSupported())
+                    {
+                        _collection.Drop();
+                        _collection.Insert(new BsonDocument { { "X", 1 } });
 
-                    failpoint.SetAlwaysOn();
-                    var args = new FindOneArgs { MaxTime = TimeSpan.FromMilliseconds(1) };
-                    Assert.Throws<MongoExecutionTimeoutException>(() => _collection.FindOneAs(typeof(TestClass), args));
+                        failpoint.SetAlwaysOn();
+                        var args = new FindOneArgs { MaxTime = TimeSpan.FromMilliseconds(1) };
+                        Assert.Throws<MongoExecutionTimeoutException>(() => _collection.FindOneAs(typeof(TestClass), args));
+                    }
                 }
             }
         }
@@ -1579,33 +1561,33 @@ namespace MongoDB.Driver.Tests
             // note: the hits are unordered
         }
 
-        [SkippableFact]
+        [Fact]
         public void TestFindWithMaxScan()
         {
-            RequireServer.Check().VersionLessThan("4.1.0-");
             _collection.Drop();
             var docs = Enumerable.Range(0, 10).Select(x => new BsonDocument("_id", x));
             _collection.InsertBatch(docs);
 
-#pragma warning disable 618
             var results = _collection.FindAll().SetMaxScan(4).ToList();
-#pragma warning restore
             Assert.Equal(4, results.Count);
         }
 
         [Fact]
         public void TestFindWithMaxTime()
         {
-            using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
+            if (_primary.Supports(FeatureId.MaxTime))
             {
-                if (failpoint.IsSupported())
+                using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
                 {
-                    _collection.Drop();
-                    _collection.Insert(new BsonDocument("x", 1));
+                    if (failpoint.IsSupported())
+                    {
+                        _collection.Drop();
+                        _collection.Insert(new BsonDocument("x", 1));
 
-                    failpoint.SetAlwaysOn();
-                    var maxTime = TimeSpan.FromMilliseconds(1);
-                    Assert.Throws<MongoExecutionTimeoutException>(() => _collection.FindAll().SetMaxTime(maxTime).ToList());
+                        failpoint.SetAlwaysOn();
+                        var maxTime = TimeSpan.FromMilliseconds(1);
+                        Assert.Throws<MongoExecutionTimeoutException>(() => _collection.FindAll().SetMaxTime(maxTime).ToList());
+                    }
                 }
             }
         }
@@ -1629,7 +1611,6 @@ namespace MongoDB.Driver.Tests
                 _collection.Insert(new Place { Location = new[] { 34.2, 33.3 }, Type = "restaurant" });
                 _collection.Insert(new Place { Location = new[] { 34.2, 37.3 }, Type = "restaurant" });
                 _collection.Insert(new Place { Location = new[] { 59.1, 87.2 }, Type = "office" });
-#pragma warning disable 618
                 _collection.CreateIndex(IndexKeys.GeoSpatialHaystack("Location", "Type"), IndexOptions.SetBucketSize(1));
 
                 var args = new GeoHaystackSearchArgs
@@ -1641,7 +1622,6 @@ namespace MongoDB.Driver.Tests
                     MaxDistance = 6
                 };
                 var result = _collection.GeoHaystackSearchAs<Place>(args);
-#pragma warning restore 618
 
                 Assert.True(result.Ok);
                 Assert.True(result.Stats.Duration >= TimeSpan.Zero);
@@ -1659,31 +1639,32 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestGeoHaystackSearchWithMaxTime()
         {
-            if (_primary.InstanceType != MongoServerInstanceType.ShardRouter)
+            if (_primary.Supports(FeatureId.MaxTime))
             {
-                using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
+                if (_primary.InstanceType != MongoServerInstanceType.ShardRouter)
                 {
-                    if (failpoint.IsSupported())
+                    using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
                     {
-                        _collection.Drop();
-                        _collection.Insert(new Place { Location = new[] { 34.2, 33.3 }, Type = "restaurant" });
-                        _collection.Insert(new Place { Location = new[] { 34.2, 37.3 }, Type = "restaurant" });
-                        _collection.Insert(new Place { Location = new[] { 59.1, 87.2 }, Type = "office" });
-#pragma warning disable 618
-                        _collection.CreateIndex(IndexKeys.GeoSpatialHaystack("Location", "Type"), IndexOptions.SetBucketSize(1));
-
-                        failpoint.SetAlwaysOn();
-                        var args = new GeoHaystackSearchArgs
+                        if (failpoint.IsSupported())
                         {
-                            Near = new XYPoint(33, 33),
-                            AdditionalFieldName = "Type",
-                            AdditionalFieldValue = "restaurant",
-                            Limit = 30,
-                            MaxDistance = 6,
-                            MaxTime = TimeSpan.FromMilliseconds(1)
-                        };
-                        Assert.Throws<MongoExecutionTimeoutException>(() => _collection.GeoHaystackSearchAs<Place>(args));
-#pragma warning restore 618
+                            _collection.Drop();
+                            _collection.Insert(new Place { Location = new[] { 34.2, 33.3 }, Type = "restaurant" });
+                            _collection.Insert(new Place { Location = new[] { 34.2, 37.3 }, Type = "restaurant" });
+                            _collection.Insert(new Place { Location = new[] { 59.1, 87.2 }, Type = "office" });
+                            _collection.CreateIndex(IndexKeys.GeoSpatialHaystack("Location", "Type"), IndexOptions.SetBucketSize(1));
+
+                            failpoint.SetAlwaysOn();
+                            var args = new GeoHaystackSearchArgs
+                            {
+                                Near = new XYPoint(33, 33),
+                                AdditionalFieldName = "Type",
+                                AdditionalFieldValue = "restaurant",
+                                Limit = 30,
+                                MaxDistance = 6,
+                                MaxTime = TimeSpan.FromMilliseconds(1)
+                            };
+                            Assert.Throws<MongoExecutionTimeoutException>(() => _collection.GeoHaystackSearchAs<Place>(args));
+                        }
                     }
                 }
             }
@@ -1698,7 +1679,6 @@ namespace MongoDB.Driver.Tests
                 _collection.Insert(new Place { Location = new[] { 34.2, 33.3 }, Type = "restaurant" });
                 _collection.Insert(new Place { Location = new[] { 34.2, 37.3 }, Type = "restaurant" });
                 _collection.Insert(new Place { Location = new[] { 59.1, 87.2 }, Type = "office" });
-#pragma warning disable 618
                 _collection.CreateIndex(IndexKeys<Place>.GeoSpatialHaystack(x => x.Location, x => x.Type), IndexOptions.SetBucketSize(1));
 
                 var args = new GeoHaystackSearchArgs
@@ -1709,7 +1689,6 @@ namespace MongoDB.Driver.Tests
                 }
                 .SetAdditionalField<Place, string>(x => x.Type, "restaurant");
                 var result = _collection.GeoHaystackSearchAs<Place>(args);
-#pragma warning restore 618
 
                 Assert.True(result.Ok);
                 Assert.True(result.Stats.Duration >= TimeSpan.Zero);
@@ -1724,10 +1703,9 @@ namespace MongoDB.Driver.Tests
             }
         }
 
-        [SkippableFact]
+        [Fact]
         public void TestGeoNear()
         {
-            RequireServer.Check().Supports(Feature.GeoNearCommand);
             _collection.Drop();
             _collection.Insert(new Place { Location = new[] { 1.0, 1.0 }, Name = "One", Type = "Museum" });
             _collection.Insert(new Place { Location = new[] { 1.0, 2.0 }, Name = "Two", Type = "Coffee" });
@@ -1771,10 +1749,9 @@ namespace MongoDB.Driver.Tests
             Assert.Equal("Coffee", place.Type);
         }
 
-        [SkippableFact]
+        [Fact]
         public void TestGeoNearGeneric()
         {
-            RequireServer.Check().Supports(Feature.GeoNearCommand);
             _collection.Drop();
             _collection.Insert(new Place { Location = new[] { 1.0, 1.0 }, Name = "One", Type = "Museum" });
             _collection.Insert(new Place { Location = new[] { 1.0, 2.0 }, Name = "Two", Type = "Coffee" });
@@ -1818,10 +1795,9 @@ namespace MongoDB.Driver.Tests
             Assert.Equal("Coffee", place.Type);
         }
 
-        [SkippableFact]
+        [Fact]
         public void TestGeoNearSphericalFalse()
         {
-            RequireServer.Check().Supports(Feature.GeoNearCommand);
             _collection.Drop();
             _collection.Insert(new Place { Location = new[] { -74.0, 40.74 }, Name = "10gen", Type = "Office" });
             _collection.Insert(new Place { Location = new[] { -75.0, 40.74 }, Name = "Two", Type = "Coffee" });
@@ -1874,10 +1850,9 @@ namespace MongoDB.Driver.Tests
             Assert.Equal("Coffee", hit2.RawDocument["Type"].AsString);
         }
 
-        [SkippableFact]
+        [Fact]
         public void TestGeoNearSphericalTrue()
         {
-            RequireServer.Check().Supports(Feature.GeoNearCommand);
             if (_server.BuildInfo.Version >= new Version(1, 8, 0))
             {
                 _collection.Drop();
@@ -1933,10 +1908,9 @@ namespace MongoDB.Driver.Tests
             }
         }
 
-        [SkippableFact]
+        [Fact]
         public void TestGeoNearWithGeoJsonPoints()
         {
-            RequireServer.Check().Supports(Feature.GeoNearCommand);
             if (_server.BuildInfo.Version >= new Version(2, 4, 0))
             {
                 _collection.Drop();
@@ -1974,26 +1948,27 @@ namespace MongoDB.Driver.Tests
             }
         }
 
-        [SkippableFact]
+        [Fact]
         public void TestGeoNearWithMaxTime()
         {
-            RequireServer.Check().Supports(Feature.GeoNearCommand);
-
-            using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
+            if (_primary.Supports(FeatureId.MaxTime))
             {
-                if (failpoint.IsSupported())
+                using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
                 {
-                    _collection.Drop();
-                    _collection.Insert(new BsonDocument("loc", new BsonArray { 0, 0 }));
-                    _collection.CreateIndex(IndexKeys.GeoSpatial("loc"));
-
-                    failpoint.SetAlwaysOn();
-                    var args = new GeoNearArgs
+                    if (failpoint.IsSupported())
                     {
-                        Near = new XYPoint(0, 0),
-                        MaxTime = TimeSpan.FromMilliseconds(1)
-                    };
-                    Assert.Throws<MongoExecutionTimeoutException>(() => _collection.GeoNearAs<BsonDocument>(args));
+                        _collection.Drop();
+                        _collection.Insert(new BsonDocument("loc", new BsonArray { 0, 0 }));
+                        _collection.CreateIndex(IndexKeys.GeoSpatial("loc"));
+
+                        failpoint.SetAlwaysOn();
+                        var args = new GeoNearArgs
+                        {
+                            Near = new XYPoint(0, 0),
+                            MaxTime = TimeSpan.FromMilliseconds(1)
+                        };
+                        Assert.Throws<MongoExecutionTimeoutException>(() => _collection.GeoNearAs<BsonDocument>(args));
+                    }
                 }
             }
         }
@@ -2070,10 +2045,9 @@ namespace MongoDB.Driver.Tests
             _collection.FindAll().ToList();
         }
 
-        [SkippableFact]
+        [Fact]
         public void TestGroupWithFinalizeFunction()
         {
-            RequireServer.Check().Supports(Feature.GroupCommand);
             _collection.Drop();
             _collection.Insert(new BsonDocument("x", 1));
             _collection.Insert(new BsonDocument("x", 1));
@@ -2081,9 +2055,8 @@ namespace MongoDB.Driver.Tests
             _collection.Insert(new BsonDocument("x", 3));
             _collection.Insert(new BsonDocument("x", 3));
             _collection.Insert(new BsonDocument("x", 3));
-#pragma warning disable 618
+
             var results = _collection.Group(new GroupArgs
-#pragma warning restore
             {
                 KeyFields = GroupBy.Keys("x"),
                 Initial = new BsonDocument("count", 0),
@@ -2100,10 +2073,9 @@ namespace MongoDB.Driver.Tests
             Assert.Equal(-3, results[2]["count"].ToInt32());
         }
 
-        [SkippableFact]
+        [Fact]
         public void TestGroupWithKeyFields()
         {
-            RequireServer.Check().Supports(Feature.GroupCommand);
             _collection.Drop();
             _collection.Insert(new BsonDocument("x", 1));
             _collection.Insert(new BsonDocument("x", 1));
@@ -2111,9 +2083,8 @@ namespace MongoDB.Driver.Tests
             _collection.Insert(new BsonDocument("x", 3));
             _collection.Insert(new BsonDocument("x", 3));
             _collection.Insert(new BsonDocument("x", 3));
-#pragma warning disable 618
+
             var results = _collection.Group(new GroupArgs
-#pragma warning restore
             {
                 KeyFields = GroupBy.Keys("x"),
                 Initial = new BsonDocument("count", 0),
@@ -2129,10 +2100,9 @@ namespace MongoDB.Driver.Tests
             Assert.Equal(3, results[2]["count"].ToInt32());
         }
 
-        [SkippableFact]
+        [Fact]
         public void TestGroupWithKeyFunction()
         {
-            RequireServer.Check().Supports(Feature.GroupCommand);
             _collection.Drop();
             _collection.Insert(new BsonDocument("x", 1));
             _collection.Insert(new BsonDocument("x", 1));
@@ -2140,9 +2110,8 @@ namespace MongoDB.Driver.Tests
             _collection.Insert(new BsonDocument("x", 3));
             _collection.Insert(new BsonDocument("x", 3));
             _collection.Insert(new BsonDocument("x", 3));
-#pragma warning disable 618
+
             var results = _collection.Group(new GroupArgs
-#pragma warning restore
             {
                 KeyFunction = "function(doc) { return { x : doc.x }; }",
                 Initial = new BsonDocument("count", 0),
@@ -2158,37 +2127,35 @@ namespace MongoDB.Driver.Tests
             Assert.Equal(3, results[2]["count"].ToInt32());
         }
 
-        [SkippableFact]
+        [Fact]
         public void TestGroupWithMaxTime()
         {
-            RequireServer.Check().Supports(Feature.GroupCommand);
-
-            using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
+            if (_primary.Supports(FeatureId.MaxTime))
             {
-                if (failpoint.IsSupported())
+                using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
                 {
-                    _collection.Drop();
-                    _collection.Insert(new BsonDocument("x", 1)); // ensure collection is not empty
-
-                    failpoint.SetAlwaysOn();
-                    var args = new GroupArgs
+                    if (failpoint.IsSupported())
                     {
-                        KeyFields = GroupBy.Keys("x"),
-                        Initial = new BsonDocument("count", 0),
-                        ReduceFunction = "function(doc, prev) { prev.count += 1 }",
-                        MaxTime = TimeSpan.FromMilliseconds(1)
-                    };
-#pragma warning disable 618
-                    Assert.Throws<MongoExecutionTimeoutException>(() => _collection.Group(args));
-#pragma warning restore 618
+                        _collection.Drop();
+                        _collection.Insert(new BsonDocument("x", 1)); // ensure collection is not empty
+
+                        failpoint.SetAlwaysOn();
+                        var args = new GroupArgs
+                        {
+                            KeyFields = GroupBy.Keys("x"),
+                            Initial = new BsonDocument("count", 0),
+                            ReduceFunction = "function(doc, prev) { prev.count += 1 }",
+                            MaxTime = TimeSpan.FromMilliseconds(1)
+                        };
+                        Assert.Throws<MongoExecutionTimeoutException>(() => _collection.Group(args));
+                    }
                 }
             }
         }
 
-        [SkippableFact]
+        [Fact]
         public void TestGroupWithQuery()
         {
-            RequireServer.Check().Supports(Feature.GroupCommand);
             _collection.Drop();
             _collection.Insert(new BsonDocument("x", 1));
             _collection.Insert(new BsonDocument("x", 1));
@@ -2196,9 +2163,8 @@ namespace MongoDB.Driver.Tests
             _collection.Insert(new BsonDocument("x", 3));
             _collection.Insert(new BsonDocument("x", 3));
             _collection.Insert(new BsonDocument("x", 3));
-#pragma warning disable 618
+
             var results = _collection.Group(new GroupArgs
-#pragma warning restore
             {
                 Query = Query.LT("x", 3),
                 KeyFields = GroupBy.Keys("x"),
@@ -2300,16 +2266,12 @@ namespace MongoDB.Driver.Tests
             }
         }
 
-        [Theory]
-        [ParameterAttributeData]
-        public void TestInsertBatchMultipleBatchesWriteConcernDisabledContinueOnErrorFalse(
-            [Values(false, true)] bool retryWrites)
+        [Fact]
+        public void TestInsertBatchMultipleBatchesWriteConcernDisabledContinueOnErrorFalse()
         {
-            var server = LegacyTestConfiguration.GetServer(retryWrites);
-            var database = server.GetDatabase(LegacyTestConfiguration.Database.Name);
             var collectionName = LegacyTestConfiguration.Collection.Name;
             var collectionSettings = new MongoCollectionSettings { WriteConcern = WriteConcern.Unacknowledged };
-            var collection = database.GetCollection<BsonDocument>(collectionName, collectionSettings);
+            var collection = LegacyTestConfiguration.Database.GetCollection<BsonDocument>(collectionName, collectionSettings);
             collection.Drop();
 
             var maxMessageLength = _primary.MaxMessageLength;
@@ -2339,16 +2301,12 @@ namespace MongoDB.Driver.Tests
             Assert.Equal(0, collection.Count(Query.EQ("_id", 5)));
         }
 
-        [Theory]
-        [ParameterAttributeData]
-        public void TestInsertBatchMultipleBatchesWriteConcernDisabledContinueOnErrorTrue(
-            [Values(false, true)] bool retryWrites)
+        [Fact]
+        public void TestInsertBatchMultipleBatchesWriteConcernDisabledContinueOnErrorTrue()
         {
-            var server = LegacyTestConfiguration.GetServer(retryWrites);
-            var database = server.GetDatabase(LegacyTestConfiguration.Database.Name);
             var collectionName = LegacyTestConfiguration.Collection.Name;
             var collectionSettings = new MongoCollectionSettings { WriteConcern = WriteConcern.Unacknowledged };
-            var collection = database.GetCollection<BsonDocument>(collectionName, collectionSettings);
+            var collection = LegacyTestConfiguration.Database.GetCollection<BsonDocument>(collectionName, collectionSettings);
             collection.Drop();
 
             var maxMessageLength = _primary.MaxMessageLength;
@@ -2415,9 +2373,18 @@ namespace MongoDB.Driver.Tests
             CheckExpectedResult(expectedResult, result);
 
             var results = ((IEnumerable<WriteConcernResult>)exception.Data["results"]).ToArray();
-            // because the opcode was emulated there will just be one synthesized result
-            Assert.Equal(1, results.Length);
-            Assert.Equal(true, results[0].HasLastErrorMessage);
+            if (_primary.Supports(FeatureId.WriteCommands))
+            {
+                // it the opcode was emulated there will just be one synthesized result
+                Assert.Equal(1, results.Length);
+                Assert.Equal(true, results[0].HasLastErrorMessage);
+            }
+            else
+            {
+                Assert.Equal(2, results.Length);
+                Assert.Equal(false, results[0].HasLastErrorMessage);
+                Assert.Equal(true, results[1].HasLastErrorMessage);
+            }
 
             Assert.Equal(1, collection.Count(Query.EQ("_id", 1)));
             Assert.Equal(1, collection.Count(Query.EQ("_id", 2)));
@@ -2461,9 +2428,19 @@ namespace MongoDB.Driver.Tests
             CheckExpectedResult(expectedResult, result);
 
             var results = ((IEnumerable<WriteConcernResult>)exception.Data["results"]).ToArray();
-            // because the opcode was emulated there will just be one synthesized result
-            Assert.Equal(1, results.Length);
-            Assert.Equal(true, results[0].HasLastErrorMessage);
+            if (_primary.Supports(FeatureId.WriteCommands))
+            {
+                // it the opcode was emulated there will just be one synthesized result
+                Assert.Equal(1, results.Length);
+                Assert.Equal(true, results[0].HasLastErrorMessage);
+            }
+            else
+            {
+                Assert.Equal(3, results.Length);
+                Assert.Equal(false, results[0].HasLastErrorMessage);
+                Assert.Equal(true, results[1].HasLastErrorMessage);
+                Assert.Equal(false, results[2].HasLastErrorMessage);
+            }
 
             Assert.Equal(1, collection.Count(Query.EQ("_id", 1)));
             Assert.Equal(1, collection.Count(Query.EQ("_id", 2)));
@@ -2542,7 +2519,7 @@ namespace MongoDB.Driver.Tests
         [SkippableFact]
         public void TestInsertWithWriteConcernError()
         {
-            RequireServer.Check().ClusterType(ClusterType.ReplicaSet);
+            RequireServer.Check().Supports(Feature.WriteCommands).ClusterType(ClusterType.ReplicaSet);
             _collection.Drop();
             var document = new BsonDocument { { "_id", 1 }, { "x", 1 } };
             var collectionSettings = new MongoCollectionSettings
@@ -2667,15 +2644,10 @@ namespace MongoDB.Driver.Tests
             });
 
             Assert.True(result.Ok);
-            if (CoreTestConfiguration.ServerVersion < __mapReduceNewServerImplementationServerVersion)
-            {
-#pragma warning disable 618
-                Assert.True(result.Duration >= TimeSpan.Zero);
-                Assert.Equal(9, result.EmitCount);
-                Assert.Equal(5, result.OutputCount);
-                Assert.Equal(3, result.InputCount);
-#pragma warning restore 618
-            }
+            Assert.True(result.Duration >= TimeSpan.Zero);
+            Assert.Equal(9, result.EmitCount);
+            Assert.Equal(5, result.OutputCount);
+            Assert.Equal(3, result.InputCount);
             result.CollectionName.Should().NotBeNullOrEmpty();
 
             var expectedCounts = new Dictionary<string, int>
@@ -2746,15 +2718,10 @@ namespace MongoDB.Driver.Tests
                 });
 
                 Assert.True(result.Ok);
-                if (CoreTestConfiguration.ServerVersion < __mapReduceNewServerImplementationServerVersion)
-                {
-#pragma warning disable 618
-                    Assert.True(result.Duration >= TimeSpan.Zero);
-                    Assert.Equal(9, result.EmitCount);
-                    Assert.Equal(5, result.OutputCount);
-                    Assert.Equal(3, result.InputCount);
-#pragma warning restore 618
-                }
+                Assert.True(result.Duration >= TimeSpan.Zero);
+                Assert.Equal(9, result.EmitCount);
+                Assert.Equal(5, result.OutputCount);
+                Assert.Equal(3, result.InputCount);
                 result.CollectionName.Should().BeNullOrEmpty();
 
                 var expectedCounts = new Dictionary<string, int>
@@ -2801,21 +2768,24 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestMapReduceInlineWithMaxTime()
         {
-            using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
+            if (_primary.Supports(FeatureId.MaxTime))
             {
-                if (failpoint.IsSupported())
+                using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
                 {
-                    _collection.Drop();
-                    _collection.Insert(new BsonDocument("x", 1)); // make sure collection has at least one document so map gets called
-
-                    failpoint.SetAlwaysOn();
-                    var args = new MapReduceArgs
+                    if (failpoint.IsSupported())
                     {
-                        MapFunction = "function() { }",
-                        ReduceFunction = "function(key, value) { return 0; }",
-                        MaxTime = TimeSpan.FromMilliseconds(1)
-                    };
-                    Assert.Throws<MongoExecutionTimeoutException>(() => _collection.MapReduce(args));
+                        _collection.Drop();
+                        _collection.Insert(new BsonDocument("x", 1)); // make sure collection has at least one document so map gets called
+
+                        failpoint.SetAlwaysOn();
+                        var args = new MapReduceArgs
+                        {
+                            MapFunction = "function() { }",
+                            ReduceFunction = "function(key, value) { return 0; }",
+                            MaxTime = TimeSpan.FromMilliseconds(1)
+                        };
+                        Assert.Throws<MongoExecutionTimeoutException>(() => _collection.MapReduce(args));
+                    }
                 }
             }
         }
@@ -2859,15 +2829,10 @@ namespace MongoDB.Driver.Tests
                 });
 
                 Assert.True(result.Ok);
-                if (CoreTestConfiguration.ServerVersion < __mapReduceNewServerImplementationServerVersion)
-                {
-#pragma warning disable 618
-                    Assert.True(result.Duration >= TimeSpan.Zero);
-                    Assert.Equal(9, result.EmitCount);
-                    Assert.Equal(5, result.OutputCount);
-                    Assert.Equal(3, result.InputCount);
-#pragma warning restore 618
-                }
+                Assert.True(result.Duration >= TimeSpan.Zero);
+                Assert.Equal(9, result.EmitCount);
+                Assert.Equal(5, result.OutputCount);
+                Assert.Equal(3, result.InputCount);
                 result.CollectionName.Should().BeNullOrEmpty();
 
                 var expectedCounts = new Dictionary<string, int>
@@ -2962,13 +2927,11 @@ namespace MongoDB.Driver.Tests
                     _collection.Insert(new BsonDocument("_id", i));
                 }
 
-#pragma warning disable 618
                 var enumerators = _collection.ParallelScanAs(typeof(BsonDocument), new ParallelScanArgs
                 {
                     BatchSize = 100,
                     NumberOfCursors = numberOfCursors
                 });
-#pragma warning restore
                 Assert.True(enumerators.Count >= 1);
 
                 var ids = new List<int>();
@@ -2989,7 +2952,7 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestReIndex()
         {
-            if (_primary.InstanceType == MongoServerInstanceType.StandAlone)
+            if (_primary.InstanceType != MongoServerInstanceType.ShardRouter)
             {
                 _collection.Drop();
                 _collection.Insert(new BsonDocument("x", 1));
@@ -2998,9 +2961,7 @@ namespace MongoDB.Driver.Tests
                 // note: prior to 1.8.1 the reIndex command was returning duplicate ok elements
                 try
                 {
-#pragma warning disable 618
                     var result = _collection.ReIndex();
-#pragma warning restore 618
                     Assert.Equal(2, result.Response["nIndexes"].ToInt32());
                     Assert.Equal(2, result.Response["nIndexesWas"].ToInt32());
                 }
@@ -3060,29 +3021,24 @@ namespace MongoDB.Driver.Tests
             Assert.Equal(0, _collection.Count());
         }
 
-        [Theory]
-        [ParameterAttributeData]
-        public void TestRemoveUnacknowledeged(
-            [Values(false, true)] bool retryWrites)
+        [Fact]
+        public void TestRemoveUnacknowledeged()
         {
-            var server = LegacyTestConfiguration.GetServer(retryWrites);
-            using (server.RequestStart())
+            using (_server.RequestStart())
             {
-                var database = server.GetDatabase(LegacyTestConfiguration.Database.Name);
-                var collection = database.GetCollection(GetType().Name);
-                collection.Drop();
-                collection.Insert(new BsonDocument("x", 1));
-                var result = collection.Remove(Query.EQ("x", 1), WriteConcern.Unacknowledged);
+                _collection.Drop();
+                _collection.Insert(new BsonDocument("x", 1));
+                var result = _collection.Remove(Query.EQ("x", 1), WriteConcern.Unacknowledged);
 
                 Assert.Equal(null, result);
-                Assert.Equal(0, collection.Count());
+                Assert.Equal(0, _collection.Count());
             }
         }
 
         [SkippableFact]
         public void TestRemoveWithWriteConcernError()
         {
-            RequireServer.Check().ClusterType(ClusterType.ReplicaSet);
+            RequireServer.Check().Supports(Feature.WriteCommands).ClusterType(ClusterType.ReplicaSet);
             _collection.Drop();
             _collection.Insert(new BsonDocument { { "_id", 1 }, { "x", 1 } });
             var collectionSettings = new MongoCollectionSettings
@@ -3205,19 +3161,22 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestGetStatsWithMaxTime()
         {
-            using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
+            if (_primary.Supports(FeatureId.MaxTime))
             {
-                if (failpoint.IsSupported())
+                using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
                 {
-                    _collection.Drop();
-                    _collection.Insert(new BsonDocument("x", 1)); // ensure collection is not empty
-
-                    failpoint.SetAlwaysOn();
-                    var args = new GetStatsArgs
+                    if (failpoint.IsSupported())
                     {
-                        MaxTime = TimeSpan.FromMilliseconds(1)
-                    };
-                    Assert.Throws<MongoExecutionTimeoutException>(() => _collection.GetStats(args));
+                        _collection.Drop();
+                        _collection.Insert(new BsonDocument("x", 1)); // ensure collection is not empty
+
+                        failpoint.SetAlwaysOn();
+                        var args = new GetStatsArgs
+                        {
+                            MaxTime = TimeSpan.FromMilliseconds(1)
+                        };
+                        Assert.Throws<MongoExecutionTimeoutException>(() => _collection.GetStats(args));
+                    }
                 }
             }
         }
@@ -3337,32 +3296,27 @@ namespace MongoDB.Driver.Tests
             Assert.Equal(2, _collection.Count());
         }
 
-        [Theory]
-        [ParameterAttributeData]
-        public void TestUpdateUnacknowledged(
-            [Values(false, true)] bool retryWrites)
+        [Fact]
+        public void TestUpdateUnacknowledged()
         {
-            var server = LegacyTestConfiguration.GetServer(retryWrites);
-            using (server.RequestStart())
+            using (_server.RequestStart())
             {
-                var database = server.GetDatabase(LegacyTestConfiguration.Database.Name);
-                var collection = database.GetCollection(GetType().Name);
-                collection.Drop();
-                collection.Insert(new BsonDocument("x", 1));
-                var result = collection.Update(Query.EQ("x", 1), Update.Set("x", 2), WriteConcern.Unacknowledged);
+                _collection.Drop();
+                _collection.Insert(new BsonDocument("x", 1));
+                var result = _collection.Update(Query.EQ("x", 1), Update.Set("x", 2), WriteConcern.Unacknowledged);
 
                 Assert.Equal(null, result);
 
-                var document = collection.FindOne();
+                var document = _collection.FindOne();
                 Assert.Equal(2, document["x"].AsInt32);
-                Assert.Equal(1, collection.Count());
+                Assert.Equal(1, _collection.Count());
             }
         }
 
         [SkippableFact]
         public void TestUpdateWithWriteConcernError()
         {
-            RequireServer.Check().ClusterType(ClusterType.ReplicaSet);
+            RequireServer.Check().Supports(Feature.WriteCommands).ClusterType(ClusterType.ReplicaSet);
             _collection.Drop();
             _collection.Insert(new BsonDocument { { "_id", 1 }, { "x", 1 } });
             var collectionSettings = new MongoCollectionSettings
@@ -3494,7 +3448,7 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestValidateWithMaxTime()
         {
-            if (_primary.InstanceType != MongoServerInstanceType.ShardRouter)
+            if (_primary.Supports(FeatureId.MaxTime) && _primary.InstanceType != MongoServerInstanceType.ShardRouter)
             {
                 using (var failpoint = new FailPoint(FailPointName.MaxTimeAlwaysTimeout, _server, _primary))
                 {
@@ -3602,28 +3556,6 @@ namespace MongoDB.Driver.Tests
         {
             _database.DropCollection(collectionName);
             _database.CreateCollection(collectionName);
-        }
-
-        private void EnsureDatabaseExists(string databaseName)
-        {
-            var server = _database.Server;
-            var database = server.GetDatabase(databaseName);
-            var tempCollectionName = Guid.NewGuid().ToString();
-            var tempCollection = database.GetCollection(tempCollectionName);
-            tempCollection.Insert(new BsonDocument("_id", 1));
-            tempCollection.Drop();
-        }
-
-        private MongoCollection<BsonDocument> GetCollection(MongoServer server)
-        {
-            return server
-                .GetDatabase(CoreTestConfiguration.DatabaseNamespace.DatabaseName)
-                .GetCollection(GetType().Name);
-        }
-
-        private MongoServerInstance GetPrimary(MongoServer server)
-        {
-            return server.Instances.First(c => c.IsPrimary);
         }
 
         // nested types

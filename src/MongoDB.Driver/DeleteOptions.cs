@@ -13,8 +13,6 @@
 * limitations under the License.
 */
 
-using MongoDB.Bson;
-
 namespace MongoDB.Driver
 {
     /// <summary>
@@ -24,7 +22,6 @@ namespace MongoDB.Driver
     {
         // fields
         private Collation _collation;
-        private BsonValue _hint;
 
         // properties
         /// <summary>
@@ -34,15 +31,6 @@ namespace MongoDB.Driver
         {
             get { return _collation; }
             set { _collation = value; }
-        }
-
-        /// <summary>
-        /// Gets or sets the hint.
-        /// </summary>
-        public BsonValue Hint
-        {
-            get { return _hint; }
-            set { _hint = value; }
         }
     }
 }

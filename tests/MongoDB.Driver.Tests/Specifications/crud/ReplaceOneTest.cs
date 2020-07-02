@@ -14,6 +14,7 @@
 */
 
 using System.Linq;
+using System.Threading.Tasks;
 using FluentAssertions;
 using MongoDB.Bson;
 using MongoDB.Driver.Core.Misc;
@@ -24,7 +25,7 @@ namespace MongoDB.Driver.Tests.Specifications.crud
     {
         private BsonDocument _filter;
         private BsonDocument _replacement;
-        private ReplaceOptions _options = new ReplaceOptions();
+        private UpdateOptions _options = new UpdateOptions();
 
         protected override bool TrySetArgument(string name, BsonValue value)
         {
@@ -41,9 +42,6 @@ namespace MongoDB.Driver.Tests.Specifications.crud
                     return true;
                 case "collation":
                     _options.Collation = Collation.FromBsonDocument(value.AsBsonDocument);
-                    return true;
-                case "hint":
-                    _options.Hint = value;
                     return true;
             }
 
@@ -63,7 +61,7 @@ namespace MongoDB.Driver.Tests.Specifications.crud
             return new ReplaceOneResult.Acknowledged(expectedResult["matchedCount"].ToInt64(), modifiedCount, upsertedId);
         }
 
-        protected override ReplaceOneResult ExecuteAndGetResult(IMongoDatabase database, IMongoCollection<BsonDocument> collection, bool async)
+        protected override ReplaceOneResult ExecuteAndGetResult(IMongoCollection<BsonDocument> collection, bool async)
         {
             if (async)
             {

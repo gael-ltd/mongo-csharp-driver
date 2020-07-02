@@ -25,7 +25,7 @@ namespace MongoDB.Driver
     /// Base class for a write model.
     /// </summary>
     /// <typeparam name="TDocument">The type of the document.</typeparam>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     public abstract class WriteModel<TDocument>
@@ -38,9 +38,6 @@ namespace MongoDB.Driver
         // way. In addition, we know that there will always 
         // be one level of BsonDocumentWrapper for everything, even
         // when the type is already a BsonDocument :(.
-
-        // NOTE: we need to consider that these static methods
-        // can be potentially called from outside of the Legacy code
         internal static WriteModel<TDocument> FromCore(WriteRequest request)
         {
             switch (request.RequestType)
@@ -62,15 +59,13 @@ namespace MongoDB.Driver
             {
                 return new DeleteOneModel<TDocument>(UnwrapFilter(request.Filter))
                 {
-                    Collation = request.Collation,
-                    Hint = request.Hint
+                    Collation = request.Collation
                 };
             }
 
             return new DeleteManyModel<TDocument>(UnwrapFilter(request.Filter))
             {
-                Collation = request.Collation,
-                Hint = request.Hint
+                Collation = request.Collation
             };
         }
 
@@ -88,18 +83,17 @@ namespace MongoDB.Driver
                 {
                     ArrayFilters = request.ArrayFilters == null ? null : new List<ArrayFilterDefinition>(request.ArrayFilters.Select(f => new BsonDocumentArrayFilterDefinition<BsonValue>(f))),
                     Collation = request.Collation,
-                    Hint = request.Hint,
                     IsUpsert = request.IsUpsert
                 };
             }
 
-            if (!IsReplaceOneUpdate(request.Update))
+            var firstElement = request.Update.GetElement(0).Name;
+            if (firstElement.StartsWith("$"))
             {
                 return new UpdateOneModel<TDocument>(UnwrapFilter(request.Filter), UnwrapUpdate(request.Update))
                 {
                     ArrayFilters = request.ArrayFilters == null ? null : new List<ArrayFilterDefinition>(request.ArrayFilters.Select(f => new BsonDocumentArrayFilterDefinition<BsonValue>(f))),
                     Collation = request.Collation,
-                    Hint = request.Hint,
                     IsUpsert = request.IsUpsert
                 };
             }
@@ -109,7 +103,7 @@ namespace MongoDB.Driver
 
         private static WriteModel<TDocument> ConvertToReplaceOne(UpdateRequest request)
         {
-            var document = (TDocument)Unwrap(request.Update.AsBsonDocument);
+            var document = (TDocument)Unwrap(request.Update);
             if (request.ArrayFilters != null)
             {
                 throw new ArgumentException("ReplaceOne does not support arrayFilters.", nameof(request));
@@ -118,25 +112,8 @@ namespace MongoDB.Driver
             return new ReplaceOneModel<TDocument>(UnwrapFilter(request.Filter), document)
             {
                 Collation = request.Collation,
-                Hint = request.Hint,
                 IsUpsert = request.IsUpsert
             };
-        }
-
-        private static bool IsReplaceOneUpdate(BsonValue update)
-        {
-            if (update is BsonDocument updateDocument)
-            {
-                var firstElementName = updateDocument.GetElement(0).Name;
-                return !firstElementName.StartsWith("$", StringComparison.Ordinal);
-            }
-
-            if (update is BsonArray)
-            {
-                return false;
-            }
-
-            return true;
         }
 
         private static FilterDefinition<TDocument> UnwrapFilter(BsonDocument filter)
@@ -154,7 +131,7 @@ namespace MongoDB.Driver
             return new BsonDocumentFilterDefinition<TDocument>(filter);
         }
 
-        private static UpdateDefinition<TDocument> UnwrapUpdate(BsonValue update)
+        private static UpdateDefinition<TDocument> UnwrapUpdate(BsonDocument update)
         {
             var wrapper = update as BsonDocumentWrapper;
             if (wrapper != null)
@@ -166,13 +143,7 @@ namespace MongoDB.Driver
                 return new ObjectUpdateDefinition<TDocument>(wrapper.Wrapped);
             }
 
-            if (update is BsonArray stages)
-            {
-                var pipeline = new BsonDocumentStagePipelineDefinition<TDocument, TDocument>(stages.Cast<BsonDocument>());
-                return new PipelineUpdateDefinition<TDocument>(pipeline);
-            }
-
-            return new BsonDocumentUpdateDefinition<TDocument>((BsonDocument)update);
+            return new BsonDocumentUpdateDefinition<TDocument>(update);
         }
 
         private static object Unwrap(BsonDocument wrapper)
@@ -191,14 +162,5 @@ namespace MongoDB.Driver
         /// Gets the type of the model.
         /// </summary>
         public abstract WriteModelType ModelType { get; }
-
-        // public methods
-        /// <summary>
-        /// Validate model.
-        /// </summary>
-        public virtual void ThrowIfNotValid()
-        {
-            // do nothing by default
-        }
     }
 }

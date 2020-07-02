@@ -17,6 +17,7 @@ using MongoDB.Driver.Core.Clusters;
 
 namespace MongoDB.Driver.Core.Events
 {
+    /// <preliminary/>
     /// <summary>
     /// Occurs before a cluster is closed.
     /// </summary>

@@ -14,7 +14,6 @@
 */
 
 using System;
-using System.Threading;
 using FluentAssertions;
 using Xunit;
 
@@ -35,7 +34,7 @@ namespace MongoDB.Driver.Core.Configuration
         {
             var result = ServerSettings.DefaultHeartbeatTimeout;
 
-            result.Should().Be(Timeout.InfiniteTimeSpan);
+            result.Should().Be(TimeSpan.FromSeconds(10));
         }
 
         [Fact]
@@ -50,7 +49,7 @@ namespace MongoDB.Driver.Core.Configuration
         [Fact]
         public void constructor_should_throw_when_heartbeatInterval_is_negative()
         {
-            Action action = () => new ServerSettings(heartbeatInterval: TimeSpan.FromSeconds(-2));
+            Action action = () => new ServerSettings(heartbeatInterval: TimeSpan.FromSeconds(-1));
 
             action.ShouldThrow<ArgumentException>().And.ParamName.Should().Be("heartbeatInterval");
         }
@@ -58,7 +57,7 @@ namespace MongoDB.Driver.Core.Configuration
         [Fact]
         public void constructor_should_throw_when_heartbeatTimeout_is_negative()
         {
-            Action action = () => new ServerSettings(heartbeatTimeout: TimeSpan.FromSeconds(-2));
+            Action action = () => new ServerSettings(heartbeatTimeout: TimeSpan.FromSeconds(-1));
 
             action.ShouldThrow<ArgumentException>().And.ParamName.Should().Be("heartbeatTimeout");
         }

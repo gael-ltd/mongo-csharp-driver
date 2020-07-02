@@ -16,7 +16,7 @@
 using System;
 using MongoDB.Driver.Core.Misc;
 
-#if NET452
+#if NET45
 using System.Runtime.Remoting.Messaging;
 #endif
 #if !NET45
@@ -157,7 +157,7 @@ namespace MongoDB.Driver.Core.Events
             }
         }
 
-#if NET452
+#if NET45
         private class AsyncLocal<T>
         {
             private readonly string __name;

@@ -28,18 +28,17 @@ namespace MongoDB.Driver.Tests.JsonDrivenTests
         private FilterDefinition<BsonDocument> _filter = new BsonDocument();
         private CountOptions _options = new CountOptions();
         private long _result;
-        private IClientSessionHandle _session;
 
         // public constructors
-        public JsonDrivenCountTest(IMongoCollection<BsonDocument> collection, Dictionary<string, object> objectMap)
-            : base(collection, objectMap)
+        public JsonDrivenCountTest(IMongoClient client, IMongoDatabase database, IMongoCollection<BsonDocument> collection, Dictionary<string, IClientSessionHandle> sessionMap)
+            : base(client, database, collection, sessionMap)
         {
         }
 
         // public methods
         public override void Arrange(BsonDocument document)
         {
-            JsonDrivenHelper.EnsureAllFieldsAreValid(document, "name", "object", "collectionOptions", "arguments", "result", "error");
+            JsonDrivenHelper.EnsureAllFieldsAreValid(document, "name", "arguments", "result");
             base.Arrange(document);
         }
 
@@ -51,34 +50,22 @@ namespace MongoDB.Driver.Tests.JsonDrivenTests
 
         protected override void CallMethod(CancellationToken cancellationToken)
         {
-            if (_session == null)
-            {
-#pragma warning disable 618
-                _result = _collection.Count(_filter, _options, cancellationToken);
-#pragma warning restore
-            }
-            else
-            {
-#pragma warning disable 618
-                _result = _collection.Count(_session, _filter, _options, cancellationToken);
-#pragma warning restore
-            }
+            _result = _collection.Count(_filter, _options, cancellationToken);
+        }
+
+        protected override void CallMethod(IClientSessionHandle session, CancellationToken cancellationToken)
+        {
+            _result = _collection.Count(session, _filter, _options, cancellationToken);
         }
 
         protected override async Task CallMethodAsync(CancellationToken cancellationToken)
         {
-            if (_session == null)
-            {
-#pragma warning disable 618
-                _result = await _collection.CountAsync(_filter, _options, cancellationToken).ConfigureAwait(false);
-#pragma warning restore
-            }
-            else
-            {
-#pragma warning disable 618
-                _result = await _collection.CountAsync(_session, _filter, _options, cancellationToken).ConfigureAwait(false);
-#pragma warning restore
-            }
+            _result = await _collection.CountAsync(_filter, _options, cancellationToken);
+        }
+
+        protected override async Task CallMethodAsync(IClientSessionHandle session, CancellationToken cancellationToken)
+        {
+            _result = await _collection.CountAsync(session, _filter, _options, cancellationToken);
         }
 
         protected override void SetArgument(string name, BsonValue value)
@@ -87,10 +74,6 @@ namespace MongoDB.Driver.Tests.JsonDrivenTests
             {
                 case "filter":
                     _filter = new BsonDocumentFilterDefinition<BsonDocument>(value.AsBsonDocument);
-                    return;
-
-                case "session":
-                    _session = (IClientSessionHandle)_objectMap[value.AsString];
                     return;
             }
 

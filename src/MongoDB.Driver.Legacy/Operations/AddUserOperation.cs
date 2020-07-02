@@ -54,12 +54,15 @@ namespace MongoDB.Driver.Operations
             using (var channel = channelSource.GetChannel(cancellationToken))
             using (var channelBinding = new ChannelReadWriteBinding(channelSource.Server, channel, binding.Session.Fork()))
             {
-                var operation = new AddUserUsingUserManagementCommandsOperation(
-                    _databaseNamespace,
-                    _username,
-                    _passwordHash,
-                    _readOnly,
-                    _messageEncoderSettings);
+                IWriteOperation<bool> operation;
+                if (Feature.UserManagementCommands.IsSupported(channel.ConnectionDescription.ServerVersion))
+                {
+                    operation = new AddUserUsingUserManagementCommandsOperation(_databaseNamespace, _username, _passwordHash, _readOnly, _messageEncoderSettings);
+                }
+                else
+                {
+                    operation = new AddUserUsingSystemUsersCollectionOperation(_databaseNamespace, _username, _passwordHash, _readOnly, _messageEncoderSettings);
+                }
 
                 return operation.Execute(channelBinding, cancellationToken);
             }

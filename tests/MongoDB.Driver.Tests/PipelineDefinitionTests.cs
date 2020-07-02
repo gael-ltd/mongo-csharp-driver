@@ -25,43 +25,24 @@ namespace MongoDB.Driver.Tests
     public class PipelineStagePipelineDefinitionTests
     {
         [Fact]
-        public void Constructor_should_verify_the_inputs_and_outputs_of_the_stages_and_throw_when_intermediate_stage_is_invalid()
+        public void Constructor_should_verify_the_inputs_and_outputs_of_the_stages_and_throw_when_invalid()
         {
-            var stages = new IPipelineStageDefinition[]
+            var stages = new IPipelineStageDefinition[] 
             {
                 new BsonDocumentPipelineStageDefinition<Person, BsonDocument>(new BsonDocument()),
                 new BsonDocumentPipelineStageDefinition<BsonDocument, Pet>(new BsonDocument()),
                 new BsonDocumentPipelineStageDefinition<BsonDocument, Person>(new BsonDocument())
             };
 
-            var exception = Record.Exception(() => new PipelineStagePipelineDefinition<Person, Person>(stages));
+            Action act = () => new PipelineStagePipelineDefinition<Person, Person>(stages);
 
-            var e = exception.Should().BeOfType<ArgumentException>().Subject;
-            e.ParamName.Should().Be("stages");
-            e.Message.Should().Contain($"The input type to stage[2] was expected to be {typeof(Pet)}, but was {typeof(BsonDocument)}.");
-        }
-
-        [Fact]
-        public void Constructor_should_verify_the_inputs_and_outputs_of_the_stages_and_throw_when_final_stage_is_invalid()
-        {
-            var stages = new IPipelineStageDefinition[]
-            {
-                new BsonDocumentPipelineStageDefinition<Person, BsonDocument>(new BsonDocument()),
-                new BsonDocumentPipelineStageDefinition<BsonDocument, Pet>(new BsonDocument()),
-                new BsonDocumentPipelineStageDefinition<Pet, BsonDocument>(new BsonDocument())
-            };
-
-            var exception = Record.Exception(() => new PipelineStagePipelineDefinition<Person, Person>(stages));
-
-            var e = exception.Should().BeOfType<ArgumentException>().Subject;
-            e.ParamName.Should().Be("stages");
-            e.Message.Should().Contain($"The output type to the last stage was expected to be {typeof(Person)}, but was {typeof(BsonDocument)}.");
+            act.ShouldThrow<ArgumentException>();
         }
 
         [Fact]
         public void Constructor_should_verify_the_inputs_and_outputs_of_the_stages()
         {
-            var stages = new IPipelineStageDefinition[]
+            var stages = new IPipelineStageDefinition[] 
             {
                 new BsonDocumentPipelineStageDefinition<Person, BsonDocument>(new BsonDocument()),
                 new BsonDocumentPipelineStageDefinition<BsonDocument, Pet>(new BsonDocument()),
@@ -90,7 +71,7 @@ namespace MongoDB.Driver.Tests
         {
             [BsonElement("fn")]
             public string FirstName { get; set; }
-
+        
             [BsonElement("pets")]
             public Pet[] Pets { get; set; }
         }
@@ -99,6 +80,6 @@ namespace MongoDB.Driver.Tests
         {
             [BsonElement("name")]
             public string Name { get; set; }
-        }
+        }    
     }
 }

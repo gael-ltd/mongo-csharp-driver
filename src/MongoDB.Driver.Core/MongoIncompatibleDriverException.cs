@@ -15,19 +15,18 @@
 
 using System;
 using System.Linq;
-#if NET452
+#if NET45
 using System.Runtime.Serialization;
 #endif
 using MongoDB.Driver.Core.Clusters;
 using MongoDB.Driver.Core.Misc;
-using MongoDB.Driver.Core.Servers;
 
 namespace MongoDB.Driver
 {
     /// <summary>
     /// Represents a MongoDB incompatible driver exception.
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     public class MongoIncompatibleDriverException : MongoClientException
@@ -36,7 +35,8 @@ namespace MongoDB.Driver
         // static methods
         internal static void ThrowIfNotSupported(ClusterDescription description)
         {
-            var isIncompatible = description.Servers.Any(IsServerIncompatible);
+            var isIncompatible = description.Servers
+                .Any(sd => sd.WireVersionRange != null && !sd.WireVersionRange.Overlaps(Cluster.SupportedWireVersionRange));
 
             if (isIncompatible)
             {
@@ -46,7 +46,8 @@ namespace MongoDB.Driver
 
         private static string FormatMessage(ClusterDescription description)
         {
-            var incompatibleServer = description.Servers.FirstOrDefault(IsServerIncompatible);
+            var incompatibleServer = description.Servers
+                .FirstOrDefault(sd => sd.WireVersionRange != null && !sd.WireVersionRange.Overlaps(Cluster.SupportedWireVersionRange));
 
             if (incompatibleServer == null)
             {
@@ -62,14 +63,6 @@ namespace MongoDB.Driver
             return $"Server at {EndPointHelper.ToString(incompatibleServer.EndPoint)} requires wire version {incompatibleServer.WireVersionRange.Min},"
                 + $" but this version of the driver only supports up to {Cluster.SupportedWireVersionRange.Max}.";
         }
-
-        private static bool IsServerIncompatible(ServerDescription description)
-        {
-            return
-                description.Type != ServerType.Unknown &&
-                description.WireVersionRange != null &&
-                !description.WireVersionRange.Overlaps(Cluster.SupportedWireVersionRange);
-        }
         #endregion
 
         // constructors
@@ -82,7 +75,7 @@ namespace MongoDB.Driver
         {
         }
 
-#if NET452
+#if NET45
         /// <summary>
         /// Initializes a new instance of the <see cref="MongoIncompatibleDriverException"/> class.
         /// </summary>

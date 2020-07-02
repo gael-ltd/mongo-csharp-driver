@@ -60,8 +60,7 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
             var messageSize = stream.ReadInt32();
             var requestId = stream.ReadInt32();
             stream.ReadInt32(); // responseTo
-            var opcode = (Opcode)stream.ReadInt32();
-            EnsureOpcodeIsValid(opcode);
+            stream.ReadInt32(); // opcode
             var flags = (InsertFlags)stream.ReadInt32();
             var fullCollectionName = stream.ReadCString(Encoding);
             var documents = ReadDocuments(reader, messageStartPosition, messageSize);
@@ -112,14 +111,6 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
                 flags |= InsertFlags.ContinueOnError;
             }
             return flags;
-        }
-
-        private void EnsureOpcodeIsValid(Opcode opcode)
-        {
-            if (opcode != Opcode.Insert)
-            {
-                throw new FormatException("Insert message opcode is not OP_INSERT.");
-            }
         }
 
         private List<TDocument> ReadDocuments(BsonBinaryReader reader, long messageStartPosition, int messageSize)

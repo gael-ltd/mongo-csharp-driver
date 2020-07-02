@@ -14,11 +14,11 @@
 */
 
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver.Core.Clusters;
-using MongoDB.Driver.Core.Operations;
 
 namespace MongoDB.Driver
 {
@@ -66,24 +66,7 @@ namespace MongoDB.Driver
 
         /// <inheritdoc />
         public virtual IAsyncCursor<string> ListDatabaseNames(
-            ListDatabaseNamesOptions options,
-            CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
-        public virtual IAsyncCursor<string> ListDatabaseNames(
             IClientSessionHandle session,
-            CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
-        public virtual IAsyncCursor<string> ListDatabaseNames(
-            IClientSessionHandle session,
-            ListDatabaseNamesOptions options,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             throw new NotImplementedException();
@@ -98,24 +81,7 @@ namespace MongoDB.Driver
 
         /// <inheritdoc />
         public virtual Task<IAsyncCursor<string>> ListDatabaseNamesAsync(
-            ListDatabaseNamesOptions options,
-            CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
-        public virtual Task<IAsyncCursor<string>> ListDatabaseNamesAsync(
             IClientSessionHandle session,
-            CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
-        public virtual Task<IAsyncCursor<string>> ListDatabaseNamesAsync(
-            IClientSessionHandle session,
-            ListDatabaseNamesOptions options,
             CancellationToken cancellationToken = default(CancellationToken))
         {
             throw new NotImplementedException();
@@ -129,7 +95,7 @@ namespace MongoDB.Driver
 
         /// <inheritdoc />
         public virtual IAsyncCursor<BsonDocument> ListDatabases(
-            ListDatabasesOptions options,
+            ListDatabasesOptions options,                                                
             CancellationToken cancellationToken = default(CancellationToken))
         {
             throw new NotImplementedException();
@@ -145,7 +111,7 @@ namespace MongoDB.Driver
 
         /// <inheritdoc />
         public virtual IAsyncCursor<BsonDocument> ListDatabases(
-            IClientSessionHandle session,
+            IClientSessionHandle session, 
             ListDatabasesOptions options,
             CancellationToken cancellationToken = default(CancellationToken))
         {
@@ -171,7 +137,7 @@ namespace MongoDB.Driver
 
         /// <inheritdoc />
         public virtual Task<IAsyncCursor<BsonDocument>> ListDatabasesAsync(
-            IClientSessionHandle session,
+            IClientSessionHandle session, 
             ListDatabasesOptions options,
             CancellationToken cancellationToken = default(CancellationToken))
         {
@@ -188,44 +154,6 @@ namespace MongoDB.Driver
         public virtual Task<IClientSessionHandle> StartSessionAsync(ClientSessionOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             throw new NotImplementedException();
-        }
-
-        /// <inheritdoc />
-        public virtual IChangeStreamCursor<TResult> Watch<TResult>(
-            PipelineDefinition<ChangeStreamDocument<BsonDocument>, TResult> pipeline,
-            ChangeStreamOptions options = null,
-            CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotImplementedException(); // implemented by subclasses
-        }
-
-        /// <inheritdoc />
-        public virtual IChangeStreamCursor<TResult> Watch<TResult>(
-            IClientSessionHandle session,
-            PipelineDefinition<ChangeStreamDocument<BsonDocument>, TResult> pipeline,
-            ChangeStreamOptions options = null,
-            CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotImplementedException(); // implemented by subclasses
-        }
-
-        /// <inheritdoc />
-        public virtual Task<IChangeStreamCursor<TResult>> WatchAsync<TResult>(
-            PipelineDefinition<ChangeStreamDocument<BsonDocument>, TResult> pipeline,
-            ChangeStreamOptions options = null,
-            CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotImplementedException(); // implemented by subclasses
-        }
-
-        /// <inheritdoc />
-        public virtual Task<IChangeStreamCursor<TResult>> WatchAsync<TResult>(
-            IClientSessionHandle session,
-            PipelineDefinition<ChangeStreamDocument<BsonDocument>, TResult> pipeline,
-            ChangeStreamOptions options = null,
-            CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotImplementedException(); // implemented by subclasses
         }
 
         /// <inheritdoc />

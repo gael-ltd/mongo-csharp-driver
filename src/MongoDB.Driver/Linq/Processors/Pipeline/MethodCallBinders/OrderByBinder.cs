@@ -13,7 +13,6 @@
 * limitations under the License.
 */
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -34,7 +33,7 @@ namespace MongoDB.Driver.Linq.Processors.Pipeline.MethodCallBinders
 
         public Expression Bind(PipelineExpression pipeline, PipelineBindingContext bindingContext, MethodCallExpression node, IEnumerable<Expression> arguments)
         {
-            var direction = node.Method.Name.EndsWith("Descending", StringComparison.Ordinal) ?
+            var direction = node.Method.Name.EndsWith("Descending") ?
                 SortDirection.Descending :
                 SortDirection.Ascending;
 

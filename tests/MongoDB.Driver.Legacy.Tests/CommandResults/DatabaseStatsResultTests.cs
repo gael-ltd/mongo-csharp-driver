@@ -41,7 +41,6 @@ namespace MongoDB.Driver.Tests.CommandResults
             RequireServer.Check().StorageEngine("mmapv1");
             if (_server.Primary.InstanceType != MongoServerInstanceType.ShardRouter)
             {
-                _collection.Drop();
                 // make sure collection and database exist
                 _collection.Insert(new BsonDocument());
 

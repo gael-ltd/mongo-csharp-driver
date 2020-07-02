@@ -23,20 +23,10 @@ namespace MongoDB.Driver
     public sealed class ListDatabasesOptions
     {
         // fields
-        private bool? _authorizedDatabases;
         private FilterDefinition<BsonDocument> _filter;
         private bool? _nameOnly;
 
         // properties
-        /// <summary>
-        /// Gets or sets the AuthorizedDatabases flag.
-        /// </summary>
-        public bool? AuthorizedDatabases
-        {
-            get { return _authorizedDatabases; }
-            set { _authorizedDatabases = value; }
-        }
-
         /// <summary>
         /// Gets or sets the filter.
         /// </summary>

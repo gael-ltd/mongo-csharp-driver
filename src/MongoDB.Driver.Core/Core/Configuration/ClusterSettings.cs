@@ -17,7 +17,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using MongoDB.Bson;
 using MongoDB.Driver.Core.Clusters;
 using MongoDB.Driver.Core.Clusters.ServerSelectors;
 using MongoDB.Driver.Core.Misc;
@@ -37,12 +36,8 @@ namespace MongoDB.Driver.Core.Configuration
         // fields
         private readonly ClusterConnectionMode _connectionMode;
         private readonly IReadOnlyList<EndPoint> _endPoints;
-        private readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, object>> _kmsProviders;
-        private readonly TimeSpan _localThreshold;
         private readonly int _maxServerSelectionWaitQueueSize;
         private readonly string _replicaSetName;
-        private readonly IReadOnlyDictionary<string, BsonDocument> _schemaMap;
-        private readonly ConnectionStringScheme _scheme;
         private readonly TimeSpan _serverSelectionTimeout;
         private readonly IServerSelector _preServerSelector;
         private readonly IServerSelector _postServerSelector;
@@ -53,39 +48,27 @@ namespace MongoDB.Driver.Core.Configuration
         /// </summary>
         /// <param name="connectionMode">The connection mode.</param>
         /// <param name="endPoints">The end points.</param>
-        /// <param name="kmsProviders">The kms providers.</param>
-        /// <param name="localThreshold">The local threshold.</param>
         /// <param name="maxServerSelectionWaitQueueSize">Maximum size of the server selection wait queue.</param>
         /// <param name="replicaSetName">Name of the replica set.</param>
         /// <param name="serverSelectionTimeout">The server selection timeout.</param>
         /// <param name="preServerSelector">The pre server selector.</param>
         /// <param name="postServerSelector">The post server selector.</param>
-        /// <param name="schemaMap">The schema map.</param>
-        /// <param name="scheme">The connection string scheme.</param>
         public ClusterSettings(
             Optional<ClusterConnectionMode> connectionMode = default(Optional<ClusterConnectionMode>),
             Optional<IEnumerable<EndPoint>> endPoints = default(Optional<IEnumerable<EndPoint>>),
-            Optional<IReadOnlyDictionary<string, IReadOnlyDictionary<string, object>>> kmsProviders = default(Optional<IReadOnlyDictionary<string, IReadOnlyDictionary<string, object>>>),
-            Optional<TimeSpan> localThreshold = default,
             Optional<int> maxServerSelectionWaitQueueSize = default(Optional<int>),
             Optional<string> replicaSetName = default(Optional<string>),
             Optional<TimeSpan> serverSelectionTimeout = default(Optional<TimeSpan>),
             Optional<IServerSelector> preServerSelector = default(Optional<IServerSelector>),
-            Optional<IServerSelector> postServerSelector = default(Optional<IServerSelector>),
-            Optional<IReadOnlyDictionary<string, BsonDocument>> schemaMap = default(Optional<IReadOnlyDictionary<string, BsonDocument>>),
-            Optional<ConnectionStringScheme> scheme = default(Optional<ConnectionStringScheme>))
+            Optional<IServerSelector> postServerSelector = default(Optional<IServerSelector>))
         {
             _connectionMode = connectionMode.WithDefault(ClusterConnectionMode.Automatic);
             _endPoints = Ensure.IsNotNull(endPoints.WithDefault(__defaultEndPoints), "endPoints").ToList();
-            _kmsProviders = kmsProviders.WithDefault(null);
-            _localThreshold = Ensure.IsGreaterThanOrEqualToZero(localThreshold.WithDefault(TimeSpan.FromMilliseconds(15)), "localThreshold");
             _maxServerSelectionWaitQueueSize = Ensure.IsGreaterThanOrEqualToZero(maxServerSelectionWaitQueueSize.WithDefault(500), "maxServerSelectionWaitQueueSize");
             _replicaSetName = replicaSetName.WithDefault(null);
             _serverSelectionTimeout = Ensure.IsGreaterThanOrEqualToZero(serverSelectionTimeout.WithDefault(TimeSpan.FromSeconds(30)), "serverSelectionTimeout");
             _preServerSelector = preServerSelector.WithDefault(null);
             _postServerSelector = postServerSelector.WithDefault(null);
-            _scheme = scheme.WithDefault(ConnectionStringScheme.MongoDB);
-            _schemaMap = schemaMap.WithDefault(null);
         }
 
         // properties
@@ -112,28 +95,6 @@ namespace MongoDB.Driver.Core.Configuration
         }
 
         /// <summary>
-        /// Gets the kms providers.
-        /// </summary>
-        /// <value>
-        /// The kms providers.
-        /// </value>
-        public IReadOnlyDictionary<string, IReadOnlyDictionary<string, object>> KmsProviders
-        {
-            get { return _kmsProviders; }
-        }
-
-        /// <summary>
-        /// Gets the local threshold.
-        /// </summary>
-        /// <value>
-        /// The local threshold.
-        /// </value>
-        public TimeSpan LocalThreshold
-        {
-            get { return _localThreshold; }
-        }
-
-        /// <summary>
         /// Gets the maximum size of the server selection wait queue.
         /// </summary>
         /// <value>
@@ -153,28 +114,6 @@ namespace MongoDB.Driver.Core.Configuration
         public string ReplicaSetName
         {
             get { return _replicaSetName; }
-        }
-
-        /// <summary>
-        /// Gets the schema map.
-        /// </summary>
-        /// <value>
-        /// The schema map.
-        /// </value>
-        public IReadOnlyDictionary<string, BsonDocument> SchemaMap
-        {
-            get { return _schemaMap; }
-        }
-
-        /// <summary>
-        /// Gets the connection string scheme.
-        /// </summary>
-        /// <value>
-        /// The connection string scheme.
-        /// </value>
-        public ConnectionStringScheme Scheme
-        {
-            get { return _scheme; }
         }
 
         /// <summary>
@@ -216,41 +155,29 @@ namespace MongoDB.Driver.Core.Configuration
         /// </summary>
         /// <param name="connectionMode">The connection mode.</param>
         /// <param name="endPoints">The end points.</param>
-        /// <param name="kmsProviders">The kms providers.</param>
-        /// <param name="localThreshold">The local threshold.</param>
         /// <param name="maxServerSelectionWaitQueueSize">Maximum size of the server selection wait queue.</param>
         /// <param name="replicaSetName">Name of the replica set.</param>
         /// <param name="serverSelectionTimeout">The server selection timeout.</param>
         /// <param name="preServerSelector">The pre server selector.</param>
         /// <param name="postServerSelector">The post server selector.</param>
-        /// <param name="schemaMap">The schema map.</param>
-        /// <param name="scheme">The connection string scheme.</param>
         /// <returns>A new ClusterSettings instance.</returns>
         public ClusterSettings With(
             Optional<ClusterConnectionMode> connectionMode = default(Optional<ClusterConnectionMode>),
             Optional<IEnumerable<EndPoint>> endPoints = default(Optional<IEnumerable<EndPoint>>),
-            Optional<IReadOnlyDictionary<string, IReadOnlyDictionary<string, object>>> kmsProviders = default(Optional<IReadOnlyDictionary<string, IReadOnlyDictionary<string, object>>>),
-            Optional<TimeSpan> localThreshold = default(Optional<TimeSpan>),
             Optional<int> maxServerSelectionWaitQueueSize = default(Optional<int>),
             Optional<string> replicaSetName = default(Optional<string>),
             Optional<TimeSpan> serverSelectionTimeout = default(Optional<TimeSpan>),
             Optional<IServerSelector> preServerSelector = default(Optional<IServerSelector>),
-            Optional<IServerSelector> postServerSelector = default(Optional<IServerSelector>),
-            Optional<IReadOnlyDictionary<string, BsonDocument>> schemaMap = default(Optional<IReadOnlyDictionary<string, BsonDocument>>),
-            Optional<ConnectionStringScheme> scheme = default(Optional<ConnectionStringScheme>))
+            Optional<IServerSelector> postServerSelector = default(Optional<IServerSelector>))
         {
             return new ClusterSettings(
                 connectionMode: connectionMode.WithDefault(_connectionMode),
                 endPoints: Optional.Enumerable(endPoints.WithDefault(_endPoints)),
-                kmsProviders: Optional.Create(kmsProviders.WithDefault(_kmsProviders)),
-                localThreshold: localThreshold.WithDefault(_localThreshold),
                 maxServerSelectionWaitQueueSize: maxServerSelectionWaitQueueSize.WithDefault(_maxServerSelectionWaitQueueSize),
                 replicaSetName: replicaSetName.WithDefault(_replicaSetName),
                 serverSelectionTimeout: serverSelectionTimeout.WithDefault(_serverSelectionTimeout),
                 preServerSelector: Optional.Create(preServerSelector.WithDefault(_preServerSelector)),
-                postServerSelector: Optional.Create(postServerSelector.WithDefault(_postServerSelector)),
-                schemaMap: Optional.Create(schemaMap.WithDefault(_schemaMap)),
-                scheme: scheme.WithDefault(_scheme));
+                postServerSelector: Optional.Create(postServerSelector.WithDefault(_postServerSelector)));
         }
     }
 }

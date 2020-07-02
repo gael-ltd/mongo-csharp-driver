@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -86,7 +87,7 @@ namespace MongoDB.Driver.Core.Misc
             }
         }
 
-#if NET452
+#if NET45
         /// <summary>
         /// Gets the object data required to serialize an end point.
         /// </summary>
@@ -129,14 +130,6 @@ namespace MongoDB.Driver.Core.Misc
         /// <returns>True if both sequences contain the same end points in the same order, or if both sequences are null.</returns>
         public static bool SequenceEquals(IEnumerable<EndPoint> a, IEnumerable<EndPoint> b)
         {
-            if (a == null && b == null)
-            {
-                return true;
-            }
-            if (a == null || b == null)
-            {
-                return false;
-            }
             return a.SequenceEqual(b, __endPointEqualityComparer);
         }
 
@@ -187,7 +180,7 @@ namespace MongoDB.Driver.Core.Misc
         {
             return TryParse(value, 27017, out result);
         }
-
+        
         internal static bool TryParse(string value, int defaultPort, out EndPoint result)
         {
             result = null;

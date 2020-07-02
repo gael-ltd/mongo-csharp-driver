@@ -13,47 +13,35 @@
 * limitations under the License.
 */
 
-using System;
 using System.Collections.Generic;
 using System.Threading;
-using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Bson.TestHelpers.JsonDrivenTests;
 
 namespace MongoDB.Driver.Tests.JsonDrivenTests
 {
-    public sealed class JsonDrivenStartTransactionTest : JsonDrivenSessionTest
+    public sealed class JsonDrivenStartTransactionTest : JsonDrivenClientTest
     {
         // private fields
         private TransactionOptions _options = null;
 
         // public constructors
-        public JsonDrivenStartTransactionTest(Dictionary<string, object> objectMap)
-            : base(objectMap)
+        public JsonDrivenStartTransactionTest(IMongoClient client, Dictionary<string, IClientSessionHandle> sessionMap)
+            : base(client, sessionMap)
         {
         }
 
         // public methods
         public override void Arrange(BsonDocument document)
         {
-            JsonDrivenHelper.EnsureAllFieldsAreValid(document, "name", "object", "arguments", "result");
+            JsonDrivenHelper.EnsureAllFieldsAreValid(document, "name", "arguments", "result");
             base.Arrange(document);
         }
 
         // protected methods
-        protected override void AssertResult()
+        protected override void CallMethod(IClientSessionHandle session, CancellationToken cancellationToken)
         {
-        }
-
-        protected override void CallMethod(CancellationToken cancellationToken)
-        {
-            _session.StartTransaction(_options);
-        }
-
-        protected override Task CallMethodAsync(CancellationToken cancellationToken)
-        {
-            _session.StartTransaction(_options); // there is no async version, just call the sync version
-            return Task.FromResult(true);
+            session.StartTransaction(_options);
         }
 
         protected override void SetArgument(string name, BsonValue value)
@@ -61,7 +49,7 @@ namespace MongoDB.Driver.Tests.JsonDrivenTests
             switch (name)
             {
                 case "options":
-                    _options = ParseOptions(value.AsBsonDocument);
+                    SetOptions(value.AsBsonDocument);
                     return;
             }
 
@@ -69,9 +57,9 @@ namespace MongoDB.Driver.Tests.JsonDrivenTests
         }
 
         // private methods
-        private TransactionOptions ParseOptions(BsonDocument document)
+        private void SetOptions(BsonDocument document)
         {
-            JsonDrivenHelper.EnsureAllFieldsAreValid(document, "readConcern", "readPreference", "writeConcern", "maxCommitTimeMS");
+            JsonDrivenHelper.EnsureAllFieldsAreValid(document, "readConcern", "readPreference", "writeConcern");
 
             var options = new TransactionOptions();
             if (document.Contains("readConcern"))
@@ -89,12 +77,7 @@ namespace MongoDB.Driver.Tests.JsonDrivenTests
                 options = options.With(writeConcern: WriteConcern.FromBsonDocument(document["writeConcern"].AsBsonDocument));
             }
 
-            if (document.Contains("maxCommitTimeMS"))
-            {
-                options = options.With(maxCommitTime: TimeSpan.FromMilliseconds(document["maxCommitTimeMS"].ToInt32()));
-            }
-
-            return options;
+            _options = options;
         }
     }
 }

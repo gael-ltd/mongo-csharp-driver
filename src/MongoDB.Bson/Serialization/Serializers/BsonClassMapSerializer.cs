@@ -15,9 +15,7 @@
 
 using System;
 using System.Collections.Generic;
-#if NET452 || NETSTANDARD2_0
 using System.ComponentModel;
-#endif
 using System.Linq;
 using System.Reflection;
 using MongoDB.Bson.IO;
@@ -31,32 +29,8 @@ namespace MongoDB.Bson.Serialization
     /// <typeparam name="TClass">The type of the class.</typeparam>
     public class BsonClassMapSerializer<TClass> : SerializerBase<TClass>, IBsonIdProvider, IBsonDocumentSerializer, IBsonPolymorphicSerializer
     {
-#if NETSTANDARD1_5
-        #region static
-        private static void CheckForISupportInitializeInterface(out MethodInfo beginInitMethodInfo, out MethodInfo endInitMethodInfo)
-        {
-            var classTypeInfo = typeof(TClass).GetTypeInfo();
-            var iSupportInitializeType = classTypeInfo.GetInterface("ISupportInitialize");
-            if (iSupportInitializeType != null && iSupportInitializeType.FullName == "System.ComponentModel.ISupportInitialize")
-            {
-                var iSupportInitializeTypeInfo = iSupportInitializeType.GetTypeInfo();
-                beginInitMethodInfo = iSupportInitializeTypeInfo.GetMethod("BeginInit");
-                endInitMethodInfo = iSupportInitializeTypeInfo.GetMethod("EndInit");
-                return;
-            }
-
-            beginInitMethodInfo = null;
-            endInitMethodInfo = null;
-        }
-        #endregion
-#endif
-
         // private fields
         private BsonClassMap _classMap;
-#if NETSTANDARD1_5
-        private readonly MethodInfo _beginInitMethodInfo;
-        private readonly MethodInfo _endInitMethodInfo;
-#endif
 
         // constructors
         /// <summary>
@@ -80,9 +54,6 @@ namespace MongoDB.Bson.Serialization
             }
 
             _classMap = classMap;
-#if NETSTANDARD1_5
-            CheckForISupportInitializeInterface(out _beginInitMethodInfo, out _endInitMethodInfo);
-#endif
         }
 
         // public properties
@@ -157,7 +128,7 @@ namespace MongoDB.Bson.Serialization
 
             Dictionary<string, object> values = null;
             var document = default(TClass);
-#if NET452 || NETSTANDARD2_0
+#if NET45
             ISupportInitialize supportsInitialization = null;
 #endif
             if (_classMap.HasCreatorMaps)
@@ -170,17 +141,11 @@ namespace MongoDB.Bson.Serialization
                 // for mutable classes we deserialize the values directly into the result object
                 document = (TClass)_classMap.CreateInstance();
 
-#if NET452 || NETSTANDARD2_0
+#if NET45
                 supportsInitialization = document as ISupportInitialize;
                 if (supportsInitialization != null)
                 {
                     supportsInitialization.BeginInit();
-                }
-#endif
-#if NETSTANDARD1_5
-                if (_beginInitMethodInfo != null)
-                {
-                    _beginInitMethodInfo.Invoke(document, new object[0]);
                 }
 #endif
             }
@@ -321,18 +286,13 @@ namespace MongoDB.Bson.Serialization
 
             if (document != null)
             {
-#if NET452 || NETSTANDARD2_0
+#if NET45
                 if (supportsInitialization != null)
                 {
                     supportsInitialization.EndInit();
                 }
 #endif
-#if NETSTANDARD1_5
-                if (_endInitMethodInfo != null)
-                {
-                    _endInitMethodInfo.Invoke(document, new object[0]);
-                }
-#endif
+
                 return document;
             }
             else
@@ -473,7 +433,7 @@ namespace MongoDB.Bson.Serialization
             var creatorMap = ChooseBestCreator(values);
             var document = creatorMap.CreateInstance(values); // removes values consumed
 
-#if NET452 || NETSTANDARD2_0
+#if NET45
             var supportsInitialization = document as ISupportInitialize;
             if (supportsInitialization != null)
             {
@@ -493,7 +453,7 @@ namespace MongoDB.Bson.Serialization
                 }
             }
 
-#if NET452 || NETSTANDARD2_0
+#if NET45
             if (supportsInitialization != null)
             {
                 supportsInitialization.EndInit();

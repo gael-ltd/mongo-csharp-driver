@@ -15,13 +15,20 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
+using MongoDB.Driver.Core.Authentication;
 using MongoDB.Driver.Core.Clusters;
 using MongoDB.Driver.Core.Clusters.ServerSelectors;
 using MongoDB.Driver.Core.Configuration;
+using MongoDB.Driver.Core.ConnectionPools;
+using MongoDB.Driver.Core.Connections;
+using MongoDB.Driver.Core.Events;
+using MongoDB.Driver.Core.Events.Diagnostics;
 using MongoDB.Driver.Core.Misc;
+using MongoDB.Driver.Core.Servers;
 
 namespace MongoDB.Driver
 {
@@ -59,10 +66,9 @@ namespace MongoDB.Driver
                 .ConfigureServer(settings => ConfigureServer(settings, clusterKey))
                 .ConfigureConnectionPool(settings => ConfigureConnectionPool(settings, clusterKey))
                 .ConfigureConnection(settings => ConfigureConnection(settings, clusterKey))
-                .ConfigureTcp(settings => ConfigureTcp(settings, clusterKey))
-                .ConfigureSdamLogging(settings => ConfigureSdamLogging(settings, clusterKey));
+                .ConfigureTcp(settings => ConfigureTcp(settings, clusterKey));
 
-            if (clusterKey.UseTls)
+            if (clusterKey.UseSsl)
             {
                 builder.ConfigureSsl(settings => ConfigureSsl(settings, clusterKey));
             }
@@ -84,13 +90,10 @@ namespace MongoDB.Driver
             return settings.With(
                 connectionMode: clusterKey.ConnectionMode.ToCore(),
                 endPoints: Optional.Enumerable(endPoints),
-                kmsProviders: Optional.Create(clusterKey.KmsProviders),
-                localThreshold: clusterKey.LocalThreshold,
                 replicaSetName: clusterKey.ReplicaSetName,
                 maxServerSelectionWaitQueueSize: clusterKey.WaitQueueSize,
                 serverSelectionTimeout: clusterKey.ServerSelectionTimeout,
-                schemaMap: Optional.Create(clusterKey.SchemaMap),
-                scheme: clusterKey.Scheme);
+                postServerSelector: new LatencyLimitingServerSelector(clusterKey.LocalThreshold));
         }
 
         private ConnectionPoolSettings ConfigureConnectionPool(ConnectionPoolSettings settings, ClusterKey clusterKey)
@@ -108,15 +111,9 @@ namespace MongoDB.Driver
             var authenticators = clusterKey.Credentials.Select(c => c.ToAuthenticator());
             return settings.With(
                 authenticators: Optional.Enumerable(authenticators),
-                compressors: Optional.Enumerable(clusterKey.Compressors),
                 maxIdleTime: clusterKey.MaxConnectionIdleTime,
                 maxLifeTime: clusterKey.MaxConnectionLifeTime,
                 applicationName: clusterKey.ApplicationName);
-        }
-
-        private SdamLoggingSettings ConfigureSdamLogging(SdamLoggingSettings settings, ClusterKey clusterKey)
-        {
-            return settings.With(logFilename: clusterKey.SdamLogFilename);
         }
 
         private ServerSettings ConfigureServer(ServerSettings settings, ClusterKey clusterKey)
@@ -128,12 +125,12 @@ namespace MongoDB.Driver
 
         private SslStreamSettings ConfigureSsl(SslStreamSettings settings, ClusterKey clusterKey)
         {
-            if (clusterKey.UseTls)
+            if (clusterKey.UseSsl)
             {
                 var sslSettings = clusterKey.SslSettings ?? new SslSettings();
 
                 var validationCallback = sslSettings.ServerCertificateValidationCallback;
-                if (validationCallback == null && clusterKey.AllowInsecureTls)
+                if (validationCallback == null && !clusterKey.VerifySslCertificate)
                 {
                     validationCallback = AcceptAnySslCertificate;
                 }

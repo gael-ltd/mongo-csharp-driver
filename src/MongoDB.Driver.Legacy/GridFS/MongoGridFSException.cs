@@ -14,7 +14,7 @@
 */
 
 using System;
-#if NET452
+#if NET45
 using System.Runtime.Serialization;
 #endif
 using MongoDB.Driver.Core.Connections;
@@ -24,7 +24,7 @@ namespace MongoDB.Driver.GridFS
     /// <summary>
     /// Represents a MongoDB GridFS exception.
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     public class MongoGridFSException : MongoServerException
@@ -51,7 +51,7 @@ namespace MongoDB.Driver.GridFS
         {
         }
 
-#if NET452
+#if NET45
         /// <summary>
         /// Initializes a new instance of the MongoGridFSException class (this overload supports deserialization).
         /// </summary>

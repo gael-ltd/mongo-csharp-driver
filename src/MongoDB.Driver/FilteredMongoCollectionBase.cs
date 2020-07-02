@@ -13,7 +13,6 @@
 * limitations under the License.
 */
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -98,30 +97,6 @@ namespace MongoDB.Driver
             return _wrappedCollection.AggregateAsync(session, filteredPipeline, options, cancellationToken);
         }
 
-        public override void AggregateToCollection<TResult>(PipelineDefinition<TDocument, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            var filteredPipeline = CreateFilteredPipeline(pipeline);
-            _wrappedCollection.AggregateToCollection(filteredPipeline, options, cancellationToken);
-        }
-
-        public override void AggregateToCollection<TResult>(IClientSessionHandle session, PipelineDefinition<TDocument, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            var filteredPipeline = CreateFilteredPipeline(pipeline);
-            _wrappedCollection.AggregateToCollection(session, filteredPipeline, options, cancellationToken);
-        }
-
-        public override Task AggregateToCollectionAsync<TResult>(PipelineDefinition<TDocument, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            var filteredPipeline = CreateFilteredPipeline(pipeline);
-            return _wrappedCollection.AggregateToCollectionAsync(filteredPipeline, options, cancellationToken);
-        }
-
-        public override Task AggregateToCollectionAsync<TResult>(IClientSessionHandle session, PipelineDefinition<TDocument, TResult> pipeline, AggregateOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            var filteredPipeline = CreateFilteredPipeline(pipeline);
-            return _wrappedCollection.AggregateToCollectionAsync(session, filteredPipeline, options, cancellationToken);
-        }
-
         public override BulkWriteResult<TDocument> BulkWrite(IEnumerable<WriteModel<TDocument>> requests, BulkWriteOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             return _wrappedCollection.BulkWrite(CombineModelFilters(requests), options, cancellationToken);
@@ -142,48 +117,24 @@ namespace MongoDB.Driver
             return _wrappedCollection.BulkWriteAsync(session, CombineModelFilters(requests), options, cancellationToken);
         }
 
-        [Obsolete("Use CountDocuments or EstimatedDocumentCount instead.")]
         public override long Count(FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             return _wrappedCollection.Count(CombineFilters(filter), options, cancellationToken);
         }
 
-        [Obsolete("Use CountDocuments or EstimatedDocumentCount instead.")]
         public override long Count(IClientSessionHandle session, FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             return _wrappedCollection.Count(session, CombineFilters(filter), options, cancellationToken);
         }
 
-        [Obsolete("Use CountDocumentsAsync or EstimatedDocumentCountAsync instead.")]
         public override Task<long> CountAsync(FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             return _wrappedCollection.CountAsync(CombineFilters(filter), options, cancellationToken);
         }
 
-        [Obsolete("Use CountDocumentsAsync or EstimatedDocumentCountAsync instead.")]
         public override Task<long> CountAsync(IClientSessionHandle session, FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             return _wrappedCollection.CountAsync(session, CombineFilters(filter), options, cancellationToken);
-        }
-
-        public override long CountDocuments(FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            return _wrappedCollection.CountDocuments(CombineFilters(filter), options, cancellationToken);
-        }
-
-        public override long CountDocuments(IClientSessionHandle session, FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            return _wrappedCollection.CountDocuments(session, CombineFilters(filter), options, cancellationToken);
-        }
-
-        public override Task<long> CountDocumentsAsync(FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            return _wrappedCollection.CountDocumentsAsync(CombineFilters(filter), options, cancellationToken);
-        }
-
-        public override Task<long> CountDocumentsAsync(IClientSessionHandle session, FilterDefinition<TDocument> filter, CountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            return _wrappedCollection.CountDocumentsAsync(session, CombineFilters(filter), options, cancellationToken);
         }
 
         public override IAsyncCursor<TField> Distinct<TField>(FieldDefinition<TDocument, TField> field, FilterDefinition<TDocument> filter, DistinctOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
@@ -204,16 +155,6 @@ namespace MongoDB.Driver
         public override Task<IAsyncCursor<TField>> DistinctAsync<TField>(IClientSessionHandle session, FieldDefinition<TDocument, TField> field, FilterDefinition<TDocument> filter, DistinctOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             return _wrappedCollection.DistinctAsync(session, field, CombineFilters(filter), options, cancellationToken);
-        }
-
-        public override long EstimatedDocumentCount(EstimatedDocumentCountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotSupportedException("EstimatedDocumentCount is not supported for filtered collections.");
-        }
-
-        public override Task<long> EstimatedDocumentCountAsync(EstimatedDocumentCountOptions options = null, CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotSupportedException("EstimatedDocumentCountAsync is not supported for filtered collections.");
         }
 
         public override IAsyncCursor<TProjection> FindSync<TProjection>(FilterDefinition<TDocument> filter, FindOptions<TDocument, TProjection> options = null, CancellationToken cancellationToken = default(CancellationToken))
@@ -350,15 +291,13 @@ namespace MongoDB.Driver
                         var deleteManyModel = (DeleteManyModel<TDocument>)x;
                         return new DeleteManyModel<TDocument>(CombineFilters(deleteManyModel.Filter))
                         {
-                            Collation = deleteManyModel.Collation,
-                            Hint = deleteManyModel.Hint
+                            Collation = deleteManyModel.Collation
                         };
                     case WriteModelType.DeleteOne:
                         var deleteOneModel = (DeleteOneModel<TDocument>)x;
                         return new DeleteOneModel<TDocument>(CombineFilters(deleteOneModel.Filter))
                         {
-                            Collation = deleteOneModel.Collation,
-                            Hint = deleteOneModel.Hint
+                            Collation = deleteOneModel.Collation
                         };
                     case WriteModelType.InsertOne:
                         return x; // InsertOneModel has no filter
@@ -367,7 +306,6 @@ namespace MongoDB.Driver
                         return new ReplaceOneModel<TDocument>(CombineFilters(replaceOneModel.Filter), replaceOneModel.Replacement)
                         {
                             Collation = replaceOneModel.Collation,
-                            Hint = replaceOneModel.Hint,
                             IsUpsert = replaceOneModel.IsUpsert
                         };
                     case WriteModelType.UpdateMany:
@@ -376,7 +314,6 @@ namespace MongoDB.Driver
                         {
                             ArrayFilters = updateManyModel.ArrayFilters,
                             Collation = updateManyModel.Collation,
-                            Hint = updateManyModel.Hint,
                             IsUpsert = updateManyModel.IsUpsert
                         };
                     case WriteModelType.UpdateOne:
@@ -385,7 +322,6 @@ namespace MongoDB.Driver
                         {
                             ArrayFilters = updateOneModel.ArrayFilters,
                             Collation = updateOneModel.Collation,
-                            Hint = updateOneModel.Hint,
                             IsUpsert = updateOneModel.IsUpsert
                         };
                     default:

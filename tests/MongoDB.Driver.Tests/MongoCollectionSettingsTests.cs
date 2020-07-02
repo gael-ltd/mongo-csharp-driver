@@ -14,7 +14,6 @@
 */
 
 using System;
-using FluentAssertions;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Xunit;
@@ -29,24 +28,14 @@ namespace MongoDB.Driver.Tests
             var settings = new MongoCollectionSettings
             {
                 AssignIdOnInsert = true,
+                GuidRepresentation = GuidRepresentation.PythonLegacy,
                 ReadConcern = ReadConcern.Majority,
                 ReadPreference = ReadPreference.Primary,
                 WriteConcern = WriteConcern.Acknowledged
             };
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                settings.GuidRepresentation = GuidRepresentation.PythonLegacy;
-            }
-#pragma warning restore 618
 
             Assert.Equal(true, settings.AssignIdOnInsert);
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                Assert.Equal(GuidRepresentation.PythonLegacy, settings.GuidRepresentation);
-            }
-#pragma warning restore 618
+            Assert.Equal(GuidRepresentation.PythonLegacy, settings.GuidRepresentation);
             Assert.Equal(ReadConcern.Majority, settings.ReadConcern);
             Assert.Same(ReadPreference.Primary, settings.ReadPreference);
             Assert.Same(WriteConcern.Acknowledged, settings.WriteConcern);
@@ -74,16 +63,11 @@ namespace MongoDB.Driver.Tests
             var settings = new MongoCollectionSettings
             {
                 AssignIdOnInsert = !MongoDefaults.AssignIdOnInsert,
+                GuidRepresentation = GuidRepresentation.PythonLegacy,
                 ReadConcern = ReadConcern.Majority,
                 ReadPreference = ReadPreference.Secondary,
                 WriteConcern = WriteConcern.W2
             };
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                settings.GuidRepresentation = GuidRepresentation.PythonLegacy;
-            }
-#pragma warning restore 618
             var clone = settings.Clone();
             Assert.True(clone.Equals(settings));
         }
@@ -93,12 +77,7 @@ namespace MongoDB.Driver.Tests
         {
             var settings = new MongoCollectionSettings();
             Assert.Equal(false, settings.AssignIdOnInsert);
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                Assert.Equal(GuidRepresentation.Unspecified, settings.GuidRepresentation);
-            }
-#pragma warning restore 618
+            Assert.Equal(GuidRepresentation.Unspecified, settings.GuidRepresentation);
             Assert.Equal(null, settings.ReadConcern);
             Assert.Equal(null, settings.ReadPreference);
             Assert.Equal(null, settings.WriteConcern);
@@ -120,13 +99,8 @@ namespace MongoDB.Driver.Tests
             Assert.False(clone.Equals(settings));
 
             clone = settings.Clone();
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                clone.GuidRepresentation = GuidRepresentation.PythonLegacy;
-                Assert.False(clone.Equals(settings));
-            }
-#pragma warning restore 618
+            clone.GuidRepresentation = GuidRepresentation.PythonLegacy;
+            Assert.False(clone.Equals(settings));
 
             clone = settings.Clone();
             clone.ReadConcern = ReadConcern.Majority;
@@ -173,29 +147,16 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestGuidRepresentation()
         {
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                var settings = new MongoCollectionSettings();
-                Assert.Equal(GuidRepresentation.Unspecified, settings.GuidRepresentation);
+            var settings = new MongoCollectionSettings();
+            Assert.Equal(GuidRepresentation.Unspecified, settings.GuidRepresentation);
 
-                var guidRepresentation = GuidRepresentation.PythonLegacy;
-                settings.GuidRepresentation = guidRepresentation;
-                Assert.Equal(guidRepresentation, settings.GuidRepresentation);
+            var guidRepresentation = GuidRepresentation.PythonLegacy;
+            settings.GuidRepresentation = guidRepresentation;
+            Assert.Equal(guidRepresentation, settings.GuidRepresentation);
 
-                settings.Freeze();
-                Assert.Equal(guidRepresentation, settings.GuidRepresentation);
-                Assert.Throws<InvalidOperationException>(() => { settings.GuidRepresentation = guidRepresentation; });
-            }
-            else
-            {
-                var settings = new MongoCollectionSettings();
-                var exception = Record.Exception(() => settings.GuidRepresentation);
-                exception.Should().BeOfType<InvalidOperationException>();
-                exception = Record.Exception(() => { settings.GuidRepresentation = GuidRepresentation.CSharpLegacy; });
-                exception.Should().BeOfType<InvalidOperationException>();
-            }
-#pragma warning restore 618
+            settings.Freeze();
+            Assert.Equal(guidRepresentation, settings.GuidRepresentation);
+            Assert.Throws<InvalidOperationException>(() => { settings.GuidRepresentation = guidRepresentation; });
         }
 
         [Fact]

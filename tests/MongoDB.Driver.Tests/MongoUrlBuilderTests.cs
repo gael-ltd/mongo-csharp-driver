@@ -16,9 +16,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using FluentAssertions;
 using MongoDB.Bson;
-using MongoDB.Driver.Core.Compression;
+using MongoDB.Driver;
 using MongoDB.Driver.Core.Configuration;
 using Xunit;
 
@@ -38,20 +39,17 @@ namespace MongoDB.Driver.Tests
                 { "SERVICE_NAME", "other" },
                 { "CANONICALIZE_HOST_NAME", "true" }
             };
-            var zlibCompressor = new CompressorConfiguration(CompressorType.Zlib);
-            zlibCompressor.Properties.Add("Level", 4);
             var built = new MongoUrlBuilder()
             {
-                AllowInsecureTls = true,
                 ApplicationName = "app",
                 AuthenticationMechanism = "GSSAPI",
                 AuthenticationMechanismProperties = authMechanismProperties,
                 AuthenticationSource = "db",
-                Compressors = new[] { zlibCompressor },
                 ConnectionMode = ConnectionMode.ReplicaSet,
                 ConnectTimeout = TimeSpan.FromSeconds(1),
                 DatabaseName = "database",
                 FSync = true,
+                GuidRepresentation = GuidRepresentation.PythonLegacy,
                 HeartbeatInterval = TimeSpan.FromMinutes(1),
                 HeartbeatTimeout = TimeSpan.FromMinutes(2),
                 IPv6 = true,
@@ -64,33 +62,19 @@ namespace MongoDB.Driver.Tests
                 ReadConcernLevel = ReadConcernLevel.Majority,
                 ReadPreference = readPreference,
                 ReplicaSetName = "name",
-                RetryReads = false,
                 RetryWrites = true,
                 LocalThreshold = TimeSpan.FromSeconds(6),
                 Server = new MongoServerAddress("host"),
                 ServerSelectionTimeout = TimeSpan.FromSeconds(10),
                 SocketTimeout = TimeSpan.FromSeconds(7),
                 Username = "username",
-#pragma warning disable 618
                 UseSsl = true,
-#pragma warning restore 618
-                UseTls = true,
-#pragma warning disable 618
                 VerifySslCertificate = false,
-#pragma warning restore 618
                 W = 2,
-#pragma warning disable 618
                 WaitQueueSize = 123,
-#pragma warning restore 618
                 WaitQueueTimeout = TimeSpan.FromSeconds(8),
                 WTimeout = TimeSpan.FromSeconds(9)
             };
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                built.GuidRepresentation = GuidRepresentation.PythonLegacy;
-            }
-#pragma warning restore 618
 
             var connectionString = "mongodb://username:password@host/database?" + string.Join(";", new[] {
                 "authMechanism=GSSAPI",
@@ -98,10 +82,8 @@ namespace MongoDB.Driver.Tests
                 "authSource=db",
                 "appname=app",
                 "ipv6=true",
-                "tls=true", // UseTls
-                "tlsInsecure=true",
-                "compressors=zlib",
-                "zlibCompressionLevel=4",
+                "ssl=true", // UseSsl
+                "sslVerifyCertificate=false", // VerifySslCertificate
                 "connect=replicaSet",
                 "replicaSet=name",
                 "readConcernLevel=majority",
@@ -122,40 +104,22 @@ namespace MongoDB.Driver.Tests
                 "socketTimeout=7s",
                 "waitQueueSize=123",
                 "waitQueueTimeout=8s",
-                "retryReads=false",
+                "uuidRepresentation=pythonLegacy",
                 "retryWrites=true"
             });
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                var index = connectionString.IndexOf("retryReads=false;");
-                connectionString = connectionString.Insert(index, "uuidRepresentation=pythonLegacy;");
-            }
-#pragma warning restore 618
 
             foreach (var builder in EnumerateBuiltAndParsedBuilders(built, connectionString))
             {
-                Assert.Equal(true, builder.AllowInsecureTls);
                 Assert.Equal("app", builder.ApplicationName);
                 Assert.Equal("GSSAPI", builder.AuthenticationMechanism);
                 Assert.Equal(authMechanismProperties, builder.AuthenticationMechanismProperties);
                 Assert.Equal("db", builder.AuthenticationSource);
-#pragma warning disable 618
                 Assert.Equal(123, builder.ComputedWaitQueueSize);
-#pragma warning restore 618
-                Assert.Contains(
-                    builder.Compressors,
-                    x => x.Type == CompressorType.Zlib && x.Properties.ContainsKey("Level") && (int)x.Properties["Level"] == 4);
                 Assert.Equal(ConnectionMode.ReplicaSet, builder.ConnectionMode);
                 Assert.Equal(TimeSpan.FromSeconds(1), builder.ConnectTimeout);
                 Assert.Equal("database", builder.DatabaseName);
                 Assert.Equal(true, builder.FSync);
-#pragma warning disable 618
-                if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-                {
-                    Assert.Equal(GuidRepresentation.PythonLegacy, builder.GuidRepresentation);
-                }
-#pragma warning restore 618
+                Assert.Equal(GuidRepresentation.PythonLegacy, builder.GuidRepresentation);
                 Assert.Equal(TimeSpan.FromMinutes(1), builder.HeartbeatInterval);
                 Assert.Equal(TimeSpan.FromMinutes(2), builder.HeartbeatTimeout);
                 Assert.Equal(true, builder.IPv6);
@@ -168,7 +132,6 @@ namespace MongoDB.Driver.Tests
                 Assert.Equal(ReadConcernLevel.Majority, builder.ReadConcernLevel);
                 Assert.Equal(readPreference, builder.ReadPreference);
                 Assert.Equal("name", builder.ReplicaSetName);
-                Assert.Equal(false, builder.RetryReads);
                 Assert.Equal(true, builder.RetryWrites);
                 Assert.Equal(TimeSpan.FromSeconds(6), builder.LocalThreshold);
                 Assert.Equal(ConnectionStringScheme.MongoDB, builder.Scheme);
@@ -176,49 +139,14 @@ namespace MongoDB.Driver.Tests
                 Assert.Equal(TimeSpan.FromSeconds(10), builder.ServerSelectionTimeout);
                 Assert.Equal(TimeSpan.FromSeconds(7), builder.SocketTimeout);
                 Assert.Equal("username", builder.Username);
-#pragma warning disable 618
                 Assert.Equal(true, builder.UseSsl);
-#pragma warning restore 618
-                Assert.Equal(true, builder.UseTls);
-#pragma warning disable 618
                 Assert.Equal(false, builder.VerifySslCertificate);
-#pragma warning restore 618
                 Assert.Equal(2, ((WriteConcern.WCount)builder.W).Value);
-#pragma warning disable 618
                 Assert.Equal(0.0, builder.WaitQueueMultiple);
                 Assert.Equal(123, builder.WaitQueueSize);
-#pragma warning restore 618
                 Assert.Equal(TimeSpan.FromSeconds(8), builder.WaitQueueTimeout);
                 Assert.Equal(TimeSpan.FromSeconds(9), builder.WTimeout);
-                var expectedConnectionString = connectionString;
-#pragma warning disable 618
-                if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-                {
-                    var defaultGuidRepresentation = BsonDefaults.GuidRepresentation;
-                    if (builder.GuidRepresentation == defaultGuidRepresentation)
-                    {
-                        expectedConnectionString = expectedConnectionString.Replace("uuidRepresentation=pythonLegacy;", "");
-                    }
-                }
-#pragma warning restore 618
-                Assert.Equal(expectedConnectionString, builder.ToString());
-            }
-        }
-
-        [Theory]
-        [InlineData(null, "mongodb://localhost", new[] { "" })]
-        [InlineData(false, "mongodb://localhost/?tlsInsecure={0}", new[] { "false", "False" })]
-        [InlineData(true, "mongodb://localhost/?tlsInsecure={0}", new[] { "true", "True" })]
-        public void TestAllowInsecureTls(bool? allowInsecureTls, string formatString, string[] values)
-        {
-            var built = new MongoUrlBuilder { Server = _localhost };
-            if (allowInsecureTls != null) { built.AllowInsecureTls = allowInsecureTls.Value; }
-
-            var canonicalConnectionString = string.Format(formatString, values[0]).Replace("/?tlsInsecure=false", "");
-            foreach (var builder in EnumerateBuiltAndParsedBuilders(built, formatString, values))
-            {
-                Assert.Equal(allowInsecureTls ?? false, builder.AllowInsecureTls);
-                Assert.Equal(canonicalConnectionString, builder.ToString());
+                Assert.Equal(connectionString, builder.ToString());
             }
         }
 
@@ -282,7 +210,6 @@ namespace MongoDB.Driver.Tests
         [Fact]
         public void TestComputedWaitQueueSize_UsingMultiple()
         {
-#pragma warning disable 618
             var built = new MongoUrlBuilder { Server = _localhost, MaxConnectionPoolSize = 123, WaitQueueMultiple = 2.0 };
             var connectionString = "mongodb://localhost/?maxPoolSize=123;waitQueueMultiple=2";
 
@@ -294,13 +221,11 @@ namespace MongoDB.Driver.Tests
                 Assert.Equal(246, builder.ComputedWaitQueueSize);
                 Assert.Equal(connectionString, builder.ToString());
             }
-#pragma warning restore 618
         }
 
         [Fact]
         public void TestComputedWaitQueueSize_UsingSize()
         {
-#pragma warning disable 618
             var built = new MongoUrlBuilder { Server = _localhost, WaitQueueSize = 123 };
             var connectionString = "mongodb://localhost/?waitQueueSize=123";
 
@@ -311,43 +236,6 @@ namespace MongoDB.Driver.Tests
                 Assert.Equal(123, builder.ComputedWaitQueueSize);
                 Assert.Equal(connectionString, builder.ToString());
             }
-#pragma warning restore 618
-        }
-
-        [Theory]
-        [InlineData(null, null, "mongodb://localhost", null)]
-        [InlineData(new[] { CompressorType.Zlib }, null, "mongodb://localhost/?compressors={0}", new[] { CompressorType.Zlib })]
-        [InlineData(new[] { CompressorType.Zlib }, "Level;zlibCompressionLevel;1", "mongodb://localhost/?compressors={0}", new[] { CompressorType.Zlib })]
-        [InlineData(new[] { CompressorType.Snappy }, null, "mongodb://localhost/?compressors={0}", new[] { CompressorType.Snappy })]
-        [InlineData(new[] { CompressorType.Snappy, CompressorType.Zlib }, null, "mongodb://localhost/?compressors={0}", new[] { CompressorType.Snappy, CompressorType.Zlib })]
-        public void TestCompressors(CompressorType[] compressors, string compressionProperty, string formatString, CompressorType[] values)
-        {
-            var subject = new MongoUrlBuilder { Server = _localhost };
-            if (compressors != null)
-            {
-                subject.Compressors = compressors
-                    .Select(x =>
-                    {
-                        var compression = new CompressorConfiguration(x);
-                        if (!string.IsNullOrWhiteSpace(compressionProperty))
-                        {
-                            var @params = compressionProperty.Split(';');
-                            compression.Properties.Add(@params[0], @params[2]);
-                        }
-                        return compression;
-                    })
-                    .ToList();
-            }
-
-            Assert.Equal(compressors ?? new CompressorType[0], subject.Compressors.Select(x => x.Type));
-            var expectedValues = values == null ? string.Empty : string.Join(",", values.Select(c => c.ToString().ToLower()));
-            if (!string.IsNullOrWhiteSpace(compressionProperty))
-            {
-                var @params = compressionProperty.Split(';');
-                expectedValues += $";{@params[1]}={@params[2]}";
-            }
-            var canonicalConnectionString = string.Format(formatString, expectedValues);
-            Assert.Equal(canonicalConnectionString, subject.ToString());
         }
 
         [Theory]
@@ -440,25 +328,16 @@ namespace MongoDB.Driver.Tests
 
             foreach (var builder in EnumerateBuiltAndParsedBuilders(built, connectionString))
             {
-                Assert.Equal(false, builder.AllowInsecureTls);
                 Assert.Equal(null, builder.ApplicationName);
                 Assert.Equal(null, builder.AuthenticationMechanism);
                 Assert.Equal(0, builder.AuthenticationMechanismProperties.Count());
                 Assert.Equal(null, builder.AuthenticationSource);
-                Assert.Equal(new CompressorConfiguration[0], builder.Compressors);
-#pragma warning disable 618
                 Assert.Equal(MongoDefaults.ComputedWaitQueueSize, builder.ComputedWaitQueueSize);
-#pragma warning restore 618
                 Assert.Equal(ConnectionMode.Automatic, builder.ConnectionMode);
                 Assert.Equal(MongoDefaults.ConnectTimeout, builder.ConnectTimeout);
                 Assert.Equal(null, builder.DatabaseName);
                 Assert.Equal(null, builder.FSync);
-#pragma warning disable 618
-                if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-                {
-                    Assert.Equal(MongoDefaults.GuidRepresentation, builder.GuidRepresentation);
-                }
-#pragma warning restore 618
+                Assert.Equal(MongoDefaults.GuidRepresentation, builder.GuidRepresentation);
                 Assert.Equal(ServerSettings.DefaultHeartbeatInterval, builder.HeartbeatInterval);
                 Assert.Equal(ServerSettings.DefaultHeartbeatTimeout, builder.HeartbeatTimeout);
                 Assert.Equal(false, builder.IPv6);
@@ -470,24 +349,16 @@ namespace MongoDB.Driver.Tests
                 Assert.Equal(null, builder.Password);
                 Assert.Equal(null, builder.ReadPreference);
                 Assert.Equal(null, builder.ReplicaSetName);
-                Assert.Equal(null, builder.RetryReads);
                 Assert.Equal(null, builder.RetryWrites);
                 Assert.Equal(MongoDefaults.LocalThreshold, builder.LocalThreshold);
                 Assert.Equal(MongoDefaults.ServerSelectionTimeout, builder.ServerSelectionTimeout);
                 Assert.Equal(MongoDefaults.SocketTimeout, builder.SocketTimeout);
                 Assert.Equal(null, builder.Username);
-#pragma warning disable 618
                 Assert.Equal(false, builder.UseSsl);
-#pragma warning restore 618
-                Assert.Equal(false, builder.UseTls);
-#pragma warning disable 618
                 Assert.Equal(true, builder.VerifySslCertificate);
-#pragma warning restore 618
                 Assert.Equal(null, builder.W);
-#pragma warning disable 618
                 Assert.Equal(MongoDefaults.WaitQueueMultiple, builder.WaitQueueMultiple);
                 Assert.Equal(MongoDefaults.WaitQueueSize, builder.WaitQueueSize);
-#pragma warning restore 618
                 Assert.Equal(MongoDefaults.WaitQueueTimeout, builder.WaitQueueTimeout);
                 Assert.Equal(null, builder.WTimeout);
                 Assert.Equal(connectionString, builder.ToString());
@@ -598,26 +469,15 @@ namespace MongoDB.Driver.Tests
         [InlineData(GuidRepresentation.Unspecified, "mongodb://localhost/?{1}={0}", new[] { "unspecified", "Unspecified" }, new[] { "uuidRepresentation", "guids" })]
         public void TestGuidRepresentation(GuidRepresentation? guidRepresentation, string formatString, string[] values, string[] uuidAliases)
         {
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
+            var built = new MongoUrlBuilder { Server = _localhost };
+            if (guidRepresentation != null) { built.GuidRepresentation = guidRepresentation.Value; }
+
+            var canonicalConnectionString = string.Format(formatString, values[0], "uuidRepresentation").Replace("/?uuidRepresentation=csharpLegacy", "");
+            foreach (var builder in EnumerateBuiltAndParsedBuilders(built, formatString, values, uuidAliases))
             {
-                var built = new MongoUrlBuilder { Server = _localhost };
-                if (guidRepresentation != null) { built.GuidRepresentation = guidRepresentation.Value; }
-
-                var canonicalConnectionString = "mongodb://localhost";
-                var defaultGuidRepresentation = BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 ? BsonDefaults.GuidRepresentation : GuidRepresentation.Unspecified;
-                if (built.GuidRepresentation != defaultGuidRepresentation)
-                {
-                    canonicalConnectionString += $"/?uuidRepresentation={(guidRepresentation == GuidRepresentation.CSharpLegacy ? "csharpLegacy" : MongoUtils.ToCamelCase(guidRepresentation.ToString()))}";
-                }
-
-                foreach (var builder in EnumerateBuiltAndParsedBuilders(built, formatString, values, uuidAliases))
-                {
-                    Assert.Equal(guidRepresentation ?? MongoDefaults.GuidRepresentation, builder.GuidRepresentation);
-                    Assert.Equal(canonicalConnectionString, builder.ToString());
-                }
+                Assert.Equal(guidRepresentation ?? MongoDefaults.GuidRepresentation, builder.GuidRepresentation);
+                Assert.Equal(canonicalConnectionString, builder.ToString());
             }
-#pragma warning restore 618
         }
 
         [Theory]
@@ -678,7 +538,6 @@ namespace MongoDB.Driver.Tests
             Assert.Throws<ArgumentOutOfRangeException>(() => { builder.HeartbeatTimeout = TimeSpan.FromMilliseconds(-2); });
             builder.HeartbeatTimeout = TimeSpan.FromMilliseconds(0);
             builder.HeartbeatTimeout = TimeSpan.FromMilliseconds(1);
-            builder.HeartbeatTimeout = TimeSpan.FromMilliseconds(-1);
         }
 
         [Theory]
@@ -859,11 +718,8 @@ namespace MongoDB.Driver.Tests
         }
 
         [Theory]
-        [InlineData("mongodb://localhost/?readConcernLevel=available", ReadConcernLevel.Available)]
-        [InlineData("mongodb://localhost/?readConcernLevel=linearizable", ReadConcernLevel.Linearizable)]
         [InlineData("mongodb://localhost/?readConcernLevel=local", ReadConcernLevel.Local)]
         [InlineData("mongodb://localhost/?readConcernLevel=majority", ReadConcernLevel.Majority)]
-        [InlineData("mongodb://localhost/?readConcernLevel=snapshot", ReadConcernLevel.Snapshot)]
         public void TestReadConcernLevel(string connectionString, ReadConcernLevel readConcernLevel)
         {
             var built = new MongoUrlBuilder { ReadConcernLevel = readConcernLevel };
@@ -968,16 +824,6 @@ namespace MongoDB.Driver.Tests
                 Assert.Equal(name, builder.ReplicaSetName);
                 Assert.Equal(connectionString, builder.ToString());
             }
-        }
-
-        [Theory]
-        [InlineData("mongodb://localhost/", null)]
-        [InlineData("mongodb://localhost/?retryReads=true", true)]
-        [InlineData("mongodb://localhost/?retryReads=false", false)]
-        public void TestRetryReads(string url, bool? retryReads)
-        {
-            var builder = new MongoUrlBuilder(url);
-            Assert.Equal(retryReads, builder.RetryReads);
         }
 
         [Theory]
@@ -1180,17 +1026,34 @@ namespace MongoDB.Driver.Tests
 
         [Theory]
         [InlineData(null, "mongodb://localhost", new[] { "" })]
-        [InlineData(false, "mongodb://localhost/?tls={0}", new[] { "false", "False" })]
-        [InlineData(true, "mongodb://localhost/?tls={0}", new[] { "true", "True" })]
-        public void TestUseTls(bool? useTls, string formatString, string[] values)
+        [InlineData(false, "mongodb://localhost/?ssl={0}", new[] { "false", "False" })]
+        [InlineData(true, "mongodb://localhost/?ssl={0}", new[] { "true", "True" })]
+        public void TestUseSsl(bool? useSsl, string formatString, string[] values)
         {
             var built = new MongoUrlBuilder { Server = _localhost };
-            if (useTls != null) { built.UseTls = useTls.Value; }
+            if (useSsl != null) { built.UseSsl = useSsl.Value; }
 
-            var canonicalConnectionString = string.Format(formatString, values[0]).Replace("/?tls=false", "");
+            var canonicalConnectionString = string.Format(formatString, values[0]).Replace("/?ssl=false", "");
             foreach (var builder in EnumerateBuiltAndParsedBuilders(built, formatString, values))
             {
-                Assert.Equal(useTls ?? false, builder.UseTls);
+                Assert.Equal(useSsl ?? false, builder.UseSsl);
+                Assert.Equal(canonicalConnectionString, builder.ToString());
+            }
+        }
+
+        [Theory]
+        [InlineData(null, "mongodb://localhost", new[] { "" })]
+        [InlineData(false, "mongodb://localhost/?sslVerifyCertificate={0}", new[] { "false", "False" })]
+        [InlineData(true, "mongodb://localhost/?sslVerifyCertificate={0}", new[] { "true", "True" })]
+        public void TestVerifySslCertificate(bool? verifySslCertificate, string formatString, string[] values)
+        {
+            var built = new MongoUrlBuilder { Server = _localhost };
+            if (verifySslCertificate != null) { built.VerifySslCertificate = verifySslCertificate.Value; }
+
+            var canonicalConnectionString = string.Format(formatString, values[0]).Replace("/?sslVerifyCertificate=true", "");
+            foreach (var builder in EnumerateBuiltAndParsedBuilders(built, formatString, values))
+            {
+                Assert.Equal(verifySslCertificate ?? true, builder.VerifySslCertificate);
                 Assert.Equal(canonicalConnectionString, builder.ToString());
             }
         }
@@ -1237,7 +1100,6 @@ namespace MongoDB.Driver.Tests
         [InlineData(2.0, "mongodb://localhost/?waitQueueMultiple=2")]
         public void TestWaitQueueMultiple(double? multiple, string connectionString)
         {
-#pragma warning disable 618
             var built = new MongoUrlBuilder { Server = _localhost };
             if (multiple != null) { built.WaitQueueMultiple = multiple.Value; }
 
@@ -1247,18 +1109,15 @@ namespace MongoDB.Driver.Tests
                 Assert.Equal((multiple == null) ? MongoDefaults.WaitQueueSize : 0, builder.WaitQueueSize);
                 Assert.Equal(connectionString, builder.ToString());
             }
-#pragma warning restore 618
         }
 
         [Fact]
         public void TestWaitQueueMultiple_Range()
         {
-#pragma warning disable 618
             var builder = new MongoUrlBuilder { Server = _localhost };
             Assert.Throws<ArgumentOutOfRangeException>(() => { builder.WaitQueueMultiple = -1.0; });
             Assert.Throws<ArgumentOutOfRangeException>(() => { builder.WaitQueueMultiple = 0.0; });
             builder.WaitQueueMultiple = 1.0;
-#pragma warning restore 618
         }
 
         [Theory]
@@ -1266,7 +1125,6 @@ namespace MongoDB.Driver.Tests
         [InlineData(123, "mongodb://localhost/?waitQueueSize=123")]
         public void TestWaitQueueSize(int? size, string connectionString)
         {
-#pragma warning disable 618
             var built = new MongoUrlBuilder { Server = _localhost };
             if (size != null) { built.WaitQueueSize = size.Value; }
 
@@ -1276,18 +1134,15 @@ namespace MongoDB.Driver.Tests
                 Assert.Equal(size ?? MongoDefaults.WaitQueueSize, builder.WaitQueueSize);
                 Assert.Equal(connectionString, builder.ToString());
             }
-#pragma warning restore 618
         }
 
         [Fact]
         public void TestWaitQueueSize_Range()
         {
-#pragma warning disable 618
             var builder = new MongoUrlBuilder { Server = _localhost };
             Assert.Throws<ArgumentOutOfRangeException>(() => { builder.WaitQueueSize = -1; });
             Assert.Throws<ArgumentOutOfRangeException>(() => { builder.WaitQueueSize = 0; });
             builder.WaitQueueSize = 1;
-#pragma warning restore 618
         }
 
         [Theory]
@@ -1348,25 +1203,6 @@ namespace MongoDB.Driver.Tests
             Assert.Throws<ArgumentOutOfRangeException>(() => { builder.WTimeout = TimeSpan.FromSeconds(-1); });
             builder.WTimeout = TimeSpan.Zero;
             builder.WTimeout = TimeSpan.FromSeconds(1);
-        }
-
-        [Theory]
-        [InlineData("mongodb://localhost", "mongodb://localhost")]
-        [InlineData("mongodb://localhost/?ssl=false", "mongodb://localhost")]
-        [InlineData("mongodb://localhost/?ssl=true", "mongodb://localhost/?tls=true")]
-        [InlineData("mongodb://localhost:27018", "mongodb://localhost:27018")]
-        [InlineData("mongodb://localhost:27018/?ssl=false", "mongodb://localhost:27018")]
-        [InlineData("mongodb://localhost:27018/?ssl=true", "mongodb://localhost:27018/?tls=true")]
-        [InlineData("mongodb+srv://localhost", "mongodb+srv://localhost")]
-        [InlineData("mongodb+srv://localhost/?ssl=false", "mongodb+srv://localhost/?tls=false")]
-        [InlineData("mongodb+srv://localhost/?ssl=true", "mongodb+srv://localhost")]
-        public void ToString_should_return_expected_result_for_scheme_port_and_ssl(string connectionString, string expectedResult)
-        {
-            var subject = new MongoUrlBuilder(connectionString);
-
-            var result = subject.ToString();
-
-            result.Should().Be(expectedResult);
         }
 
         // private methods

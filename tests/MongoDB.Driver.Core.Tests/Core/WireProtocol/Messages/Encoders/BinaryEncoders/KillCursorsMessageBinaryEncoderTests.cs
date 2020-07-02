@@ -16,6 +16,9 @@
 using System;
 using System.IO;
 using FluentAssertions;
+using MongoDB.Bson.IO;
+using MongoDB.Driver.Core.WireProtocol.Messages;
+using MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders;
 using Xunit;
 
 namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
@@ -75,21 +78,6 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages.Encoders.BinaryEncoders
                 var message = subject.ReadMessage();
                 message.CursorIds.Should().Equal(__cursorIds);
                 message.RequestId.Should().Be(__testMessage.RequestId);
-            }
-        }
-
-        [Fact]
-        public void ReadMessage_should_throw_when_opcode_is_invalid()
-        {
-            var bytes = (byte[])__testMessageBytes.Clone();
-            bytes[12]++;
-
-            using (var stream = new MemoryStream(bytes))
-            {
-                var subject = new KillCursorsMessageBinaryEncoder(stream, __messageEncoderSettings);
-                var exception = Record.Exception(() => subject.ReadMessage());
-                exception.Should().BeOfType<FormatException>();
-                exception.Message.Should().Be("KillCursors message opcode is not OP_KILL_CURSORS.");
             }
         }
 

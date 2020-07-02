@@ -116,9 +116,15 @@ namespace MongoDB.Driver.Core.Operations
         public BulkWriteOperationResult Execute(RetryableWriteContext context, CancellationToken cancellationToken)
         {
             EnsureCollationIsSupportedIfAnyRequestHasCollation(context, _requests);
-            EnsureHintIsSupportedIfAnyRequestHasHint(context);
-
-            return ExecuteBatches(context, cancellationToken);
+            if (Feature.WriteCommands.IsSupported(context.Channel.ConnectionDescription.ServerVersion))
+            {
+                return ExecuteBatches(context, cancellationToken);
+            }
+            else
+            {
+                var emulator = CreateEmulator();
+                return emulator.Execute(context, cancellationToken);
+            }
         }
 
         public BulkWriteOperationResult Execute(IWriteBinding binding, CancellationToken cancellationToken)
@@ -134,9 +140,15 @@ namespace MongoDB.Driver.Core.Operations
         public Task<BulkWriteOperationResult> ExecuteAsync(RetryableWriteContext context, CancellationToken cancellationToken)
         {
             EnsureCollationIsSupportedIfAnyRequestHasCollation(context, _requests);
-            EnsureHintIsSupportedIfAnyRequestHasHint(context);
-
-            return ExecuteBatchesAsync(context, cancellationToken);
+            if (Feature.WriteCommands.IsSupported(context.Channel.ConnectionDescription.ServerVersion))
+            {
+                return ExecuteBatchesAsync(context, cancellationToken);
+            }
+            else
+            {
+                var emulator = CreateEmulator();
+                return emulator.ExecuteAsync(context, cancellationToken);
+            }
         }
 
         public async Task<BulkWriteOperationResult> ExecuteAsync(IWriteBinding binding, CancellationToken cancellationToken)
@@ -152,9 +164,9 @@ namespace MongoDB.Driver.Core.Operations
         // protected methods
         protected abstract IRetryableWriteOperation<BsonDocument> CreateBatchOperation(Batch batch);
 
-        protected abstract bool RequestHasCollation(TWriteRequest request);
+        protected abstract IExecutableInRetryableWriteContext<BulkWriteOperationResult> CreateEmulator();
 
-        protected abstract bool RequestHasHint(TWriteRequest request);
+        protected abstract bool RequestHasCollation(TWriteRequest request);
 
         // private methods
         private BulkWriteBatchResult CreateBatchResult(Batch batch, BsonDocument writeCommandResult)
@@ -183,46 +195,17 @@ namespace MongoDB.Driver.Core.Operations
                 }
             }
         }
-
-        private void EnsureHintIsSupportedIfAnyRequestHasHint(RetryableWriteContext context)
-        {
-            var serverVersion = context.Channel.ConnectionDescription.ServerVersion;
-            foreach (var request in _requests)
-            {
-                if (RequestHasHint(request) && !IsHintSupportedForRequestWithHint(request, serverVersion))
-                {
-                    throw new NotSupportedException($"Server version {serverVersion} does not support hints.");
-                }
-            }
-        }
-
         private BulkWriteBatchResult ExecuteBatch(RetryableWriteContext context, Batch batch, CancellationToken cancellationToken)
         {
             var operation = CreateBatchOperation(batch);
-            BsonDocument operationResult;
-            try
-            {
-                operationResult = RetryableWriteOperationExecutor.Execute(operation, context, cancellationToken);
-            }
-            catch (MongoWriteConcernException exception) when (exception.IsWriteConcernErrorOnly())
-            {
-                operationResult = exception.Result;
-            }
+            var operationResult = RetryableWriteOperationExecutor.Execute(operation, context, cancellationToken);
             return CreateBatchResult(batch, operationResult);
         }
 
         private async Task<BulkWriteBatchResult> ExecuteBatchAsync(RetryableWriteContext context, Batch batch, CancellationToken cancellationToken)
         {
             var operation = CreateBatchOperation(batch);
-            BsonDocument operationResult;
-            try
-            {
-                operationResult = await RetryableWriteOperationExecutor.ExecuteAsync(operation, context, cancellationToken).ConfigureAwait(false);
-            }
-            catch (MongoWriteConcernException exception) when (exception.IsWriteConcernErrorOnly())
-            {
-                operationResult = exception.Result;
-            }
+            var operationResult = await RetryableWriteOperationExecutor.ExecuteAsync(operation, context, cancellationToken).ConfigureAwait(false);
             return CreateBatchResult(batch, operationResult);
         }
 
@@ -244,21 +227,6 @@ namespace MongoDB.Driver.Core.Operations
                 batch.Result = await ExecuteBatchAsync(context, batch, cancellationToken).ConfigureAwait(false);
             }
             return helper.CreateFinalResultOrThrow(context.Channel);
-        }
-
-        private bool IsHintSupportedForRequestWithHint(WriteRequest request, SemanticVersion serverVersion)
-        {
-            if (request is DeleteRequest && (Feature.HintForDeleteOperations.DriverMustThrowIfNotSupported(serverVersion) || !_writeConcern.IsAcknowledged))
-            {
-                return false;
-            }
-
-            if (request is UpdateRequest && (Feature.HintForUpdateAndReplaceOperations.DriverMustThrowIfNotSupported(serverVersion) || !_writeConcern.IsAcknowledged))
-            {
-                return false;
-            }
-
-            return true;
         }
 
         // nested types
@@ -283,7 +251,7 @@ namespace MongoDB.Driver.Core.Operations
                 {
                     var batch = new Batch
                     {
-                        Requests = _requests
+                        Requests = _requests                      
                     };
 
                     yield return batch;

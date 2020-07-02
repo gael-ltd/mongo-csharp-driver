@@ -65,37 +65,32 @@ namespace MongoDB.Bson.Serialization.Serializers
         {
             var bsonWriter = context.Writer;
 
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
+            var subType = value.SubType;
+            if (subType == BsonBinarySubType.UuidStandard || subType == BsonBinarySubType.UuidLegacy)
             {
-                var subType = value.SubType;
-                if (subType == BsonBinarySubType.UuidStandard || subType == BsonBinarySubType.UuidLegacy)
+                var writerGuidRepresentation = bsonWriter.Settings.GuidRepresentation;
+                if (writerGuidRepresentation != GuidRepresentation.Unspecified)
                 {
-                    var writerGuidRepresentation = bsonWriter.Settings.GuidRepresentation;
-                    if (writerGuidRepresentation != GuidRepresentation.Unspecified)
-                    {
-                        var bytes = value.Bytes;
-                        var guidRepresentation = value.GuidRepresentation;
+                    var bytes = value.Bytes;
+                    var guidRepresentation = value.GuidRepresentation;
 
-                        if (guidRepresentation == GuidRepresentation.Unspecified)
-                        {
-                            var message = string.Format(
-                                "Cannot serialize BsonBinaryData with GuidRepresentation Unspecified to destination with GuidRepresentation {0}.",
-                                writerGuidRepresentation);
-                            throw new BsonSerializationException(message);
-                        }
-                        if (guidRepresentation != writerGuidRepresentation)
-                        {
-                            var guid = GuidConverter.FromBytes(bytes, guidRepresentation);
-                            bytes = GuidConverter.ToBytes(guid, writerGuidRepresentation);
-                            subType = GuidConverter.GetSubType(writerGuidRepresentation);
-                            guidRepresentation = writerGuidRepresentation;
-                            value = new BsonBinaryData(bytes, subType, guidRepresentation);
-                        }
+                    if (guidRepresentation == GuidRepresentation.Unspecified)
+                    {
+                        var message = string.Format(
+                            "Cannot serialize BsonBinaryData with GuidRepresentation Unspecified to destination with GuidRepresentation {0}.",
+                            writerGuidRepresentation);
+                        throw new BsonSerializationException(message);
+                    }
+                    if (guidRepresentation != writerGuidRepresentation)
+                    {
+                        var guid = GuidConverter.FromBytes(bytes, guidRepresentation);
+                        bytes = GuidConverter.ToBytes(guid, writerGuidRepresentation);
+                        subType = (writerGuidRepresentation == GuidRepresentation.Standard) ? BsonBinarySubType.UuidStandard : BsonBinarySubType.UuidLegacy;
+                        guidRepresentation = writerGuidRepresentation;
+                        value = new BsonBinaryData(bytes, subType, guidRepresentation);
                     }
                 }
             }
-#pragma warning restore 618
 
             bsonWriter.WriteBinaryData(value);
         }

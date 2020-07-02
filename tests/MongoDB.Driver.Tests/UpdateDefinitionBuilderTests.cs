@@ -239,31 +239,6 @@ namespace MongoDB.Driver.Tests
         }
 
         [Fact]
-        public void Incorrect_index_should_throw_expected_exception_with_set()
-        {
-            var subject = CreateSubject<Person>();
-            string expectedErrorMessage = "Array indexes must be greater than or equal to -1.";
-
-#pragma warning disable 251
-            AssertThrow<Person, IndexOutOfRangeException>(subject.Set(x => x.FavoriteColors[-2], "yellow"), expectedErrorMessage);
-#pragma warning restore
-            AssertThrow<Person, IndexOutOfRangeException>(subject.Set(x => x.Pets[-2].Name, "Fluffencutters"), expectedErrorMessage);
-            AssertThrow<Person, IndexOutOfRangeException>(subject.Set(x => x.Pets.ElementAt(-2).Name, "Fluffencutters"), expectedErrorMessage);
-        }
-
-        [Fact]
-        public void Indexed_Positional_Typed()
-        {
-            var subject = CreateSubject<Person>();
-
-#pragma warning disable
-            Assert(subject.Set(x => x.FavoriteColors[-1], "yellow"), "{$set: {'colors.$': 'yellow'}}");
-#pragma warning restore
-            Assert(subject.Set(x => x.Pets[-1].Name, "Fluffencutters"), "{$set: {'pets.$.name': 'Fluffencutters'}}");
-            Assert(subject.Set(x => x.Pets.ElementAt(-1).Name, "Fluffencutters"), "{$set: {'pets.$.name': 'Fluffencutters'}}");
-        }
-
-        [Fact]
         public void Indexed_Typed()
         {
             var subject = CreateSubject<Person>();
@@ -276,6 +251,18 @@ namespace MongoDB.Driver.Tests
             Assert(subject.Set(x => x.FavoriteColors[index], "yellow"), "{$set: {'colors.2': 'yellow'}}");
             Assert(subject.Set(x => x.Pets[index].Name, "Fluffencutters"), "{$set: {'pets.2.name': 'Fluffencutters'}}");
             Assert(subject.Set(x => x.Pets.ElementAt(index).Name, "Fluffencutters"), "{$set: {'pets.2.name': 'Fluffencutters'}}");
+        }
+
+        [Fact]
+        public void Indexed_Positional_Typed()
+        {
+            var subject = CreateSubject<Person>();
+
+#pragma warning disable
+            Assert(subject.Set(x => x.FavoriteColors[-1], "yellow"), "{$set: {'colors.$': 'yellow'}}");
+#pragma warning restore
+            Assert(subject.Set(x => x.Pets[-1].Name, "Fluffencutters"), "{$set: {'pets.$.name': 'Fluffencutters'}}");
+            Assert(subject.Set(x => x.Pets.ElementAt(-1).Name, "Fluffencutters"), "{$set: {'pets.$.name': 'Fluffencutters'}}");
         }
 
         [Fact]
@@ -327,16 +314,6 @@ namespace MongoDB.Driver.Tests
 
             Assert(subject.Mul(x => x.Age, 2), "{$mul: {age: 2}}");
             Assert(subject.Mul("Age", 2), "{$mul: {age: 2}}");
-        }
-
-        [Fact]
-        public void Pipeline()
-        {
-            var subject = CreateSubject<BsonDocument>();
-            var pipeline = new EmptyPipelineDefinition<BsonDocument>()
-                .AppendStage<BsonDocument, BsonDocument, BsonDocument>("{ $addFields : { x : 2 } }");
-
-            Assert(subject.Pipeline(pipeline), new[] { "{ \"$addFields\" : { \"x\" : 2 } }" });
         }
 
         [Fact]
@@ -649,17 +626,10 @@ namespace MongoDB.Driver.Tests
 
         private void Assert<TDocument>(UpdateDefinition<TDocument> update, BsonDocument expected)
         {
-            var renderedUpdate = Render(update).AsBsonDocument;
+            var documentSerializer = BsonSerializer.SerializerRegistry.GetSerializer<TDocument>();
+            var renderedUpdate = update.Render(documentSerializer, BsonSerializer.SerializerRegistry);
 
             renderedUpdate.Should().Be(expected);
-        }
-
-        private void Assert<TDocument>(UpdateDefinition<TDocument> update, string[] expectedArrayItems)
-        {
-            var renderedUpdate = Render(update).AsBsonArray;
-
-            var bsonArray = new BsonArray(expectedArrayItems.Select(BsonDocument.Parse));
-            renderedUpdate.Should().Be(bsonArray);
         }
 
         private void Assert<TDocument>(UpdateDefinition<TDocument> update, string expected)
@@ -667,22 +637,9 @@ namespace MongoDB.Driver.Tests
             Assert(update, BsonDocument.Parse(expected));
         }
 
-        private void AssertThrow<TDocument, TException>(UpdateDefinition<TDocument> update, string errorMessage) where TException : Exception
-        {
-            var exception = Record.Exception(() => { Render(update); });
-            exception.Should().BeOfType<TException>();
-            exception.Message.Should().Be(errorMessage);
-        }
-
         private UpdateDefinitionBuilder<TDocument> CreateSubject<TDocument>()
         {
             return new UpdateDefinitionBuilder<TDocument>();
-        }
-
-        private BsonValue Render<TDocument>(UpdateDefinition<TDocument> update)
-        {
-            var documentSerializer = BsonSerializer.SerializerRegistry.GetSerializer<TDocument>();
-            return update.Render(documentSerializer, BsonSerializer.SerializerRegistry);
         }
 
         private class Person

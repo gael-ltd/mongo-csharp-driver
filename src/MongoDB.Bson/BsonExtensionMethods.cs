@@ -43,7 +43,6 @@ namespace MongoDB.Bson
             BsonSerializationArgs args = default(BsonSerializationArgs)
             )
         {
-            args.SetOrValidateNominalType(typeof(TNominalType), "<TNominalType>");
             return ToBson(obj, typeof(TNominalType), writerSettings, serializer, configurator, args);
         }
 
@@ -71,7 +70,6 @@ namespace MongoDB.Bson
             {
                 throw new ArgumentNullException("nominalType");
             }
-            args.SetOrValidateNominalType(nominalType, "nominalType");
 
             if (serializer == null)
             {
@@ -88,6 +86,7 @@ namespace MongoDB.Bson
                 using (var bsonWriter = new BsonBinaryWriter(memoryStream, writerSettings ?? BsonBinaryWriterSettings.Defaults))
                 {
                     var context = BsonSerializationContext.CreateRoot(bsonWriter, configurator);
+                    args.NominalType = nominalType;
                     serializer.Serialize(context, args, obj);
                 }
                 return memoryStream.ToArray();
@@ -104,12 +103,11 @@ namespace MongoDB.Bson
         /// <param name="args">The serialization args.</param>
         /// <returns>A BsonDocument.</returns>
         public static BsonDocument ToBsonDocument<TNominalType>(
-            this TNominalType obj,
+            this TNominalType obj, 
             IBsonSerializer<TNominalType> serializer = null,
             Action<BsonSerializationContext.Builder> configurator = null,
             BsonSerializationArgs args = default(BsonSerializationArgs))
         {
-            args.SetOrValidateNominalType(typeof(TNominalType), "<TNominalType>");
             return ToBsonDocument(obj, typeof(TNominalType), serializer, configurator, args);
         }
 
@@ -135,7 +133,6 @@ namespace MongoDB.Bson
             {
                 throw new ArgumentNullException("nominalType");
             }
-            args.SetOrValidateNominalType(nominalType, "nominalType");
 
             if (obj == null)
             {
@@ -169,6 +166,7 @@ namespace MongoDB.Bson
             using (var bsonWriter = new BsonDocumentWriter(document))
             {
                 var context = BsonSerializationContext.CreateRoot(bsonWriter, configurator);
+                args.NominalType = nominalType;
                 serializer.Serialize(context, args, obj);
             }
             return document;
@@ -187,13 +185,12 @@ namespace MongoDB.Bson
         /// A JSON string.
         /// </returns>
         public static string ToJson<TNominalType>(
-            this TNominalType obj,
+            this TNominalType obj, 
             JsonWriterSettings writerSettings = null,
-            IBsonSerializer<TNominalType> serializer = null,
+            IBsonSerializer<TNominalType> serializer = null, 
             Action<BsonSerializationContext.Builder> configurator = null,
             BsonSerializationArgs args = default(BsonSerializationArgs))
         {
-            args.SetOrValidateNominalType(typeof(TNominalType), "<TNominalType>");
             return ToJson(obj, typeof(TNominalType), writerSettings, serializer, configurator, args);
         }
 
@@ -223,7 +220,6 @@ namespace MongoDB.Bson
             {
                 throw new ArgumentNullException("nominalType");
             }
-            args.SetOrValidateNominalType(nominalType, "nominalType");
 
             if (serializer == null)
             {
@@ -240,6 +236,7 @@ namespace MongoDB.Bson
                 using (var bsonWriter = new JsonWriter(stringWriter, writerSettings ?? JsonWriterSettings.Defaults))
                 {
                     var context = BsonSerializationContext.CreateRoot(bsonWriter, configurator);
+                    args.NominalType = nominalType;
                     serializer.Serialize(context, args, obj);
                 }
                 return stringWriter.ToString();

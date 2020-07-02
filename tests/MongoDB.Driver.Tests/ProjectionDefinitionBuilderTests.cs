@@ -128,23 +128,6 @@ namespace MongoDB.Driver.Tests
             Assert(subject.Include("FirstName"), "{fn: 1}");
         }
 
-        [Theory]
-        [InlineData("textScore")]
-        [InlineData("randVal")]
-        [InlineData("searchScore")]
-        [InlineData("searchHighlights")]
-        [InlineData("geoNearDistance")]
-        [InlineData("geoNearPoint")]
-        [InlineData("recordId")]
-        [InlineData("indexKey")]
-        [InlineData("sortKey")]
-        public void Meta(string metaFieldName)
-        {
-            var subject = CreateSubject<BsonDocument>();
-
-            Assert(subject.Meta("a", metaFieldName), $"{{ a : {{ $meta : '{metaFieldName}' }} }}");
-        }
-
         [Fact]
         public void MetaTextScore()
         {
@@ -204,7 +187,7 @@ namespace MongoDB.Driver.Tests
         {
             [BsonElement("fn")]
             public string FirstName { get; set; }
-
+        
             [BsonElement("pets")]
             public Pet[] Pets { get; set; }
         }
@@ -213,6 +196,6 @@ namespace MongoDB.Driver.Tests
         {
             [BsonElement("name")]
             public string Name { get; set; }
-        }
+        }    
     }
 }

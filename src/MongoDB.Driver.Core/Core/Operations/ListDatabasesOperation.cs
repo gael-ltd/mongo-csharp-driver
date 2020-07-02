@@ -13,6 +13,8 @@
 * limitations under the License.
 */
 
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,11 +32,9 @@ namespace MongoDB.Driver.Core.Operations
     public class ListDatabasesOperation : IReadOperation<IAsyncCursor<BsonDocument>>
     {
         // fields
-        private bool? _authorizedDatabases;
         private BsonDocument _filter;
         private MessageEncoderSettings _messageEncoderSettings;
         private bool? _nameOnly;
-        private bool _retryRequested;
 
         // constructors
         /// <summary>
@@ -47,18 +47,6 @@ namespace MongoDB.Driver.Core.Operations
         }
 
         // properties
-        /// <summary>
-        /// Gets or sets the AuthorizedDatabases flag.
-        /// </summary>
-        /// <value>
-        /// The AuthorizedDatabases flag.
-        /// </value>
-        public bool? AuthorizedDatabases
-        {
-            get { return _authorizedDatabases; }
-            set { _authorizedDatabases = value; }
-        }
-
         /// <summary>
         /// Gets or sets the filter.
         /// </summary>
@@ -94,18 +82,6 @@ namespace MongoDB.Driver.Core.Operations
             set { _nameOnly = value; }
         }
 
-        /// <summary>
-        /// Gets or sets whether or not retry was requested.
-        /// </summary>
-        /// <value>
-        /// Whether retry was requested.
-        /// </value>
-        public bool RetryRequested
-        {
-            get { return _retryRequested; }
-            set { _retryRequested = value; }
-        }
-
         // public methods
         /// <inheritdoc/>
         public IAsyncCursor<BsonDocument> Execute(IReadBinding binding, CancellationToken cancellationToken)
@@ -132,8 +108,7 @@ namespace MongoDB.Driver.Core.Operations
             {
                 { "listDatabases", 1 },
                 { "filter", _filter, _filter != null },
-                { "nameOnly", _nameOnly, _nameOnly != null },
-                { "authorizedDatabases", _authorizedDatabases, _authorizedDatabases != null }
+                { "nameOnly", _nameOnly, _nameOnly != null }
             };
         }
 
@@ -146,10 +121,7 @@ namespace MongoDB.Driver.Core.Operations
         private ReadCommandOperation<BsonDocument> CreateOperation()
         {
             var command = CreateCommand();
-            return new ReadCommandOperation<BsonDocument>(DatabaseNamespace.Admin, command, BsonDocumentSerializer.Instance, _messageEncoderSettings)
-            {
-                RetryRequested = _retryRequested
-            };
+            return new ReadCommandOperation<BsonDocument>(DatabaseNamespace.Admin, command, BsonDocumentSerializer.Instance, _messageEncoderSettings);
         }
     }
 }

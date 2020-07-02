@@ -20,7 +20,6 @@ using System.Text;
 using System.Threading.Tasks;
 using FluentAssertions;
 using MongoDB.Bson.TestHelpers.XunitExtensions;
-using MongoDB.Driver.Core.Tests;
 using Xunit;
 
 namespace MongoDB.Driver
@@ -57,17 +56,6 @@ namespace MongoDB.Driver
         }
 
         [Fact]
-        public void constructor_should_throw_when_hedge_is_not_null_and_mode_is_primary()
-        {
-            var hedge = new ReadPreferenceHedge(true);
-
-            var exception = Record.Exception(() => new ReadPreference(ReadPreferenceMode.Primary, hedge: hedge));
-
-            var argumentException = exception.Should().BeOfType<ArgumentException>().Subject;
-            argumentException.ParamName.Should().Be("hedge");
-        }
-
-        [Fact]
         public void constructor_with_mode_should_initialize_instance()
         {
             var mode = ReadPreferenceMode.Secondary; // use a value that is not the default
@@ -77,7 +65,6 @@ namespace MongoDB.Driver
             result.ReadPreferenceMode.Should().Be(mode);
             result.TagSets.Should().BeEmpty();
             result.MaxStaleness.Should().NotHaveValue();
-            result.Hedge.Should().BeNull();
         }
 
         [Fact]
@@ -92,7 +79,6 @@ namespace MongoDB.Driver
             result.TagSets.Should().NotBeSameAs(tagSets);
             result.TagSets.Should().Equal(tagSets);
             result.MaxStaleness.Should().NotHaveValue();
-            result.Hedge.Should().BeNull();
         }
 
         [Fact]
@@ -103,7 +89,6 @@ namespace MongoDB.Driver
             result.ReadPreferenceMode.Should().Be(ReadPreferenceMode.Secondary);
             result.TagSets.Should().BeEmpty();
             result.MaxStaleness.Should().NotHaveValue();
-            result.Hedge.Should().BeNull();
         }
 
         [Fact]
@@ -115,23 +100,6 @@ namespace MongoDB.Driver
             result.ReadPreferenceMode.Should().Be(ReadPreferenceMode.Secondary);
             result.TagSets.Should().BeEmpty();
             result.MaxStaleness.Should().Be(maxStaleness);
-            result.Hedge.Should().BeNull();
-        }
-
-        [Theory]
-        [ParameterAttributeData]
-        public void constructor_with_hedge_should_initialize_instance(
-            [Values(null, false, true)]
-            bool? isEnabled)
-        {
-            var hedge = isEnabled.HasValue ? new ReadPreferenceHedge(isEnabled.Value) : null;
-
-            var result = new ReadPreference(ReadPreferenceMode.Secondary, hedge: hedge);
-
-            result.ReadPreferenceMode.Should().Be(ReadPreferenceMode.Secondary);
-            result.TagSets.Should().BeEmpty();
-            result.MaxStaleness.Should().NotHaveValue();
-            result.Hedge.Should().BeSameAs(hedge);
         }
 
         [Fact]
@@ -142,7 +110,6 @@ namespace MongoDB.Driver
             result.ReadPreferenceMode.Should().Be(ReadPreferenceMode.Secondary);
             result.TagSets.Should().BeEmpty();
             result.MaxStaleness.Should().NotHaveValue();
-            result.Hedge.Should().BeNull();
         }
 
         [Theory]
@@ -159,24 +126,6 @@ namespace MongoDB.Driver
             var rhs = new ReadPreference(ReadPreferenceMode.Secondary, maxStaleness: rhsMaxStaleness);
 
             Equals_Act_and_Assert(lhs, rhs, lhsSeconds.Equals(rhsSeconds));
-        }
-
-        [Theory]
-        [InlineData(null, null, true)]
-        [InlineData(null, true, false)]
-        [InlineData(true, null, false)]
-        [InlineData(false, false, true)]
-        [InlineData(false, true, false)]
-        [InlineData(true, false, false)]
-        [InlineData(true, true, true)]
-        public void Equals_should_compare_hedge_fields(bool? lhsEnabled, bool? rhsEnabled, bool expectedResult)
-        {
-            var lhsHedge = lhsEnabled.HasValue ? new ReadPreferenceHedge(lhsEnabled.Value) : null;
-            var rhsHedge = rhsEnabled.HasValue ? new ReadPreferenceHedge(rhsEnabled.Value) : null;
-            var lhs = new ReadPreference(ReadPreferenceMode.Secondary, hedge: lhsHedge);
-            var rhs = new ReadPreference(ReadPreferenceMode.Secondary, hedge: rhsHedge);
-
-            Equals_Act_and_Assert(lhs, rhs, expectedResult);
         }
 
         [Theory]
@@ -217,7 +166,6 @@ namespace MongoDB.Driver
             result.ReadPreferenceMode.Should().Be(ReadPreferenceMode.Nearest);
             result.TagSets.Count.Should().Be(0);
             result.MaxStaleness.Should().NotHaveValue();
-            result.Hedge.Should().BeNull();
         }
 
         [Fact]
@@ -228,7 +176,6 @@ namespace MongoDB.Driver
             result.ReadPreferenceMode.Should().Be(ReadPreferenceMode.Primary);
             result.TagSets.Count.Should().Be(0);
             result.MaxStaleness.Should().NotHaveValue();
-            result.Hedge.Should().BeNull();
         }
 
         [Fact]
@@ -239,7 +186,6 @@ namespace MongoDB.Driver
             result.ReadPreferenceMode.Should().Be(ReadPreferenceMode.PrimaryPreferred);
             result.TagSets.Count.Should().Be(0);
             result.MaxStaleness.Should().NotHaveValue();
-            result.Hedge.Should().BeNull();
         }
 
         [Fact]
@@ -250,7 +196,6 @@ namespace MongoDB.Driver
             result.ReadPreferenceMode.Should().Be(ReadPreferenceMode.Secondary);
             result.TagSets.Count.Should().Be(0);
             result.MaxStaleness.Should().NotHaveValue();
-            result.Hedge.Should().BeNull();
         }
 
         [Fact]
@@ -261,7 +206,6 @@ namespace MongoDB.Driver
             result.ReadPreferenceMode.Should().Be(ReadPreferenceMode.SecondaryPreferred);
             result.TagSets.Count.Should().Be(0);
             result.MaxStaleness.Should().NotHaveValue();
-            result.Hedge.Should().BeNull();
         }
 
         [Theory]
@@ -313,43 +257,11 @@ namespace MongoDB.Driver
             int seconds)
         {
             var maxStaleness = TimeSpan.FromSeconds(seconds);
-            var subject = new ReadPreference(ReadPreferenceMode.Secondary, maxStaleness: maxStaleness);
+            var subject = new ReadPreference(ReadPreferenceMode.Secondary, maxStaleness: maxStaleness );
 
             var result = subject.ToString();
 
             result.Should().Be($"{{ Mode : Secondary, MaxStaleness : {seconds}s }}");
-        }
-
-        [Theory]
-        [InlineData(null, "{ Mode : Secondary }")]
-        [InlineData(false, "{ Mode : Secondary, Hedge : { \"enabled\" : false } }")]
-        [InlineData(true, "{ Mode : Secondary, Hedge : { \"enabled\" : true } }")]
-        public void ToString_should_return_expected_result_when_hedge_is_set(bool? isEnabled, string expectedResult)
-        {
-            var hedge = isEnabled.HasValue ? new ReadPreferenceHedge(isEnabled.Value) : null;
-            var subject = new ReadPreference(ReadPreferenceMode.Secondary, hedge: hedge);
-
-            var result = subject.ToString();
-
-            result.Should().Be(expectedResult);
-        }
-
-        [Theory]
-        [ParameterAttributeData]
-        public void With_hedge_should_return_expected_result(
-            [Values(false, true)]
-            bool originalIsEnabled,
-            [Values(false, true)]
-            bool isEnabled)
-        {
-            var originalHedge = new ReadPreferenceHedge(isEnabled: originalIsEnabled);
-            var hedge = new ReadPreferenceHedge(isEnabled: isEnabled);
-            var subject = new ReadPreference(ReadPreferenceMode.Secondary, hedge: originalHedge);
-
-            var result = subject.With(hedge);
-
-            result.Hedge.Should().Be(hedge);
-            result.With(originalHedge).Should().Be(subject);
         }
 
         [Theory]

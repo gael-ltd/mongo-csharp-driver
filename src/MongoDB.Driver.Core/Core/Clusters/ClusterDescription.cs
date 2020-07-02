@@ -77,7 +77,6 @@ namespace MongoDB.Driver.Core.Clusters
         // fields
         private readonly ClusterId _clusterId;
         private readonly ClusterConnectionMode _connectionMode;
-        private readonly Exception _dnsMonitorException;
         private readonly TimeSpan? _logicalSessionTimeout;
         private readonly IReadOnlyList<ServerDescription> _servers;
         private readonly ClusterType _type;
@@ -95,28 +94,9 @@ namespace MongoDB.Driver.Core.Clusters
             ClusterConnectionMode connectionMode,
             ClusterType type,
             IEnumerable<ServerDescription> servers)
-            : this(clusterId, connectionMode, dnsMonitorException: null, type, servers)
-        {
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="ClusterDescription" /> class.
-        /// </summary>
-        /// <param name="clusterId">The cluster identifier.</param>
-        /// <param name="connectionMode">The connection mode.</param>
-        /// <param name="dnsMonitorException">The last DNS monitor exception (null if there was none).</param>
-        /// <param name="type">The type.</param>
-        /// <param name="servers">The servers.</param>
-        public ClusterDescription(
-            ClusterId clusterId,
-            ClusterConnectionMode connectionMode,
-            Exception dnsMonitorException,
-            ClusterType type,
-            IEnumerable<ServerDescription> servers)
         {
             _clusterId = Ensure.IsNotNull(clusterId, nameof(clusterId));
             _connectionMode = connectionMode;
-            _dnsMonitorException = dnsMonitorException; // can be null
             _type = type;
             _servers = (servers ?? new ServerDescription[0]).OrderBy(n => n.EndPoint, new ToStringComparer<EndPoint>()).ToList();
             _logicalSessionTimeout = CalculateLogicalSessionTimeout(_connectionMode, _servers);
@@ -137,14 +117,6 @@ namespace MongoDB.Driver.Core.Clusters
         public ClusterConnectionMode ConnectionMode
         {
             get { return _connectionMode; }
-        }
-
-        /// <summary>
-        /// Gets the last DNS monitor exception (null if there was none).
-        /// </summary>
-        public Exception DnsMonitorException
-        {
-            get { return _dnsMonitorException; }
         }
 
         /// <summary>
@@ -205,7 +177,6 @@ namespace MongoDB.Driver.Core.Clusters
             return
                 _clusterId.Equals(other._clusterId) &&
                 _connectionMode == other._connectionMode &&
-                object.Equals(_dnsMonitorException, other._dnsMonitorException) &&
                 _servers.SequenceEqual(other._servers) &&
                 _type == other._type;
         }
@@ -223,7 +194,6 @@ namespace MongoDB.Driver.Core.Clusters
             return new Hasher()
                 .Hash(_clusterId)
                 .Hash(_connectionMode)
-                .Hash(_dnsMonitorException)
                 .HashElements(_servers)
                 .Hash(_type)
                 .GetHashCode();
@@ -233,38 +203,13 @@ namespace MongoDB.Driver.Core.Clusters
         public override string ToString()
         {
             var servers = string.Join(", ", _servers.Select(n => n.ToString()).ToArray());
-            var value = string.Format(
+            return string.Format(
                 "{{ ClusterId : \"{0}\", ConnectionMode : \"{1}\", Type : \"{2}\", State : \"{3}\", Servers : [{4}] }}",
                 _clusterId,
                 _connectionMode,
                 _type,
                 State,
                 servers);
-            if (_dnsMonitorException != null)
-            {
-                value = value.Substring(0, value.Length - 2) + string.Format(", DnsMonitorException : \"{0}\" }}", _dnsMonitorException);
-            }
-            return value;
-        }
-
-        /// <summary>
-        /// Returns a new ClusterDescription with a changed DnsMonitorException.
-        /// </summary>
-        /// <param name="value">The exception.</param>
-        /// <returns>A ClusterDescription.</returns>
-        public ClusterDescription WithDnsMonitorException(Exception value)
-        {
-            if (value != _dnsMonitorException)
-            {
-                return new ClusterDescription(
-                    _clusterId,
-                    _connectionMode,
-                    value,
-                    _type,
-                    _servers);
-            }
-
-            return this;
         }
 
         /// <summary>
@@ -296,7 +241,6 @@ namespace MongoDB.Driver.Core.Clusters
             return new ClusterDescription(
                 _clusterId,
                 _connectionMode,
-                _dnsMonitorException,
                 _type,
                 replacementServers);
         }
@@ -317,7 +261,6 @@ namespace MongoDB.Driver.Core.Clusters
             return new ClusterDescription(
                 _clusterId,
                 _connectionMode,
-                _dnsMonitorException,
                 _type,
                 _servers.Where(s => !EndPointHelper.Equals(s.EndPoint, endPoint)));
         }
@@ -329,7 +272,7 @@ namespace MongoDB.Driver.Core.Clusters
         /// <returns>A ClusterDescription.</returns>
         public ClusterDescription WithType(ClusterType value)
         {
-            return _type == value ? this : new ClusterDescription(_clusterId, _connectionMode, _dnsMonitorException, value, _servers);
+            return _type == value ? this : new ClusterDescription(_clusterId, _connectionMode, value, _servers);
         }
     }
 }

@@ -35,43 +35,32 @@ namespace MongoDB.Driver.Tests.Jira.CSharp714
         private MongoCollection<C> _collection;
         private IIdGenerator _generator = new AscendingGuidGenerator();
         private static int __maxNoOfDocuments = 100;
-
+        
         public CSharp714Tests()
         {
             _database = LegacyTestConfiguration.Database;
-            var collectionSettings = new MongoCollectionSettings();
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                collectionSettings.GuidRepresentation = GuidRepresentation.Standard;
-            }
-#pragma warning restore 618
+            var collectionSettings = new MongoCollectionSettings() { GuidRepresentation = GuidRepresentation.Standard };
             _collection = _database.GetCollection<C>("csharp714", collectionSettings);
             _collection.Drop();
         }
-
+        
         [Fact]
         public void TestGuidsAreAscending()
         {
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
+            _collection.RemoveAll();
+            CreateTestData();
+            // sort descending just so we are not retrieving in insertion order
+            var cursor = _collection.FindAll().SetSortOrder(SortBy.Descending("Guid"));
+            var id = __maxNoOfDocuments - 1;
+            foreach (var c in cursor) 
             {
-                _collection.RemoveAll();
-                CreateTestData();
-                // sort descending just so we are not retrieving in insertion order
-                var cursor = _collection.FindAll().SetSortOrder(SortBy.Descending("Guid"));
-                var id = __maxNoOfDocuments - 1;
-                foreach (var c in cursor)
-                {
-                    Assert.Equal(id--, c.Id);
-                }
+                Assert.Equal(id--, c.Id);
             }
-#pragma warning restore 618
         }
 
         private void CreateTestData()
         {
-            for (var i = 0; i < __maxNoOfDocuments; i++)
+            for (var i=0; i<__maxNoOfDocuments; i++) 
             {
                 _collection.Insert(new C { Id = i, Guid = (Guid)_generator.GenerateId(null, null) });
             }

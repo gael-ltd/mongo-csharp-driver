@@ -637,14 +637,12 @@ namespace MongoDB.Driver.GridFS
                 _fileInfoSerializer,
                 messageEncoderSettings)
             {
-                AllowDiskUse = options.AllowDiskUse,
                 BatchSize = options.BatchSize,
                 Filter = renderedFilter,
                 Limit = options.Limit,
                 MaxTime = options.MaxTime,
                 NoCursorTimeout = options.NoCursorTimeout ?? false,
                 ReadConcern = GetReadConcern(),
-                RetryRequested = _database.Client.Settings.RetryReads,
                 Skip = options.Skip,
                 Sort = renderedSort
             };
@@ -667,7 +665,6 @@ namespace MongoDB.Driver.GridFS
                 Filter = filter,
                 Limit = limit,
                 ReadConcern = GetReadConcern(),
-                RetryRequested = _database.Client.Settings.RetryReads,
                 Skip = skip,
                 Sort = sort
             };
@@ -687,7 +684,6 @@ namespace MongoDB.Driver.GridFS
                 Filter = filter,
                 Limit = 1,
                 ReadConcern = GetReadConcern(),
-                RetryRequested = _database.Client.Settings.RetryReads,
                 SingleBatch = true
             };
         }
@@ -701,18 +697,14 @@ namespace MongoDB.Driver.GridFS
                 Limit = 1,
                 ReadConcern = GetReadConcern(),
                 SingleBatch = true,
-                Projection = new BsonDocument("_id", 1),
-                RetryRequested = _database.Client.Settings.RetryReads
+                Projection = new BsonDocument("_id", 1)
             };
         }
 
         private ListIndexesOperation CreateListIndexesOperation(CollectionNamespace collectionNamespace)
         {
             var messageEncoderSettings = this.GetMessageEncoderSettings();
-            return new ListIndexesOperation(collectionNamespace, messageEncoderSettings)
-            {
-                RetryRequested = _database.Client.Settings.RetryReads
-            };
+            return new ListIndexesOperation(collectionNamespace, messageEncoderSettings);
         }
 
         private BulkMixedWriteOperation CreateRenameOperation(TFileId id, string newFilename)
@@ -779,8 +771,7 @@ namespace MongoDB.Driver.GridFS
         {
             var checkMD5 = options.CheckMD5 ?? false;
 
-            var retryReads = _database.Client.Settings.RetryReads;
-            using (var source = new GridFSForwardOnlyDownloadStream<TFileId>(this, binding.Fork(), fileInfo, checkMD5) { RetryReads = retryReads })
+            using (var source = new GridFSForwardOnlyDownloadStream<TFileId>(this, binding.Fork(), fileInfo, checkMD5))
             {
                 var count = source.Length;
                 var buffer = new byte[fileInfo.ChunkSizeBytes];
@@ -800,8 +791,7 @@ namespace MongoDB.Driver.GridFS
         {
             var checkMD5 = options.CheckMD5 ?? false;
 
-            var retryReads = _database.Client.Settings.RetryReads;
-            using (var source = new GridFSForwardOnlyDownloadStream<TFileId>(this, binding.Fork(), fileInfo, checkMD5) { RetryReads = retryReads })
+            using (var source = new GridFSForwardOnlyDownloadStream<TFileId>(this, binding.Fork(), fileInfo, checkMD5))
             {
                 var count = source.Length;
                 var buffer = new byte[fileInfo.ChunkSizeBytes];

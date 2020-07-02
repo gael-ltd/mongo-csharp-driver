@@ -54,8 +54,7 @@ namespace MongoDB.Bson.Serialization.Attributes
         public bool SerializeDefaultValue
         {
             get { return _serializeDefaultValue; }
-            set
-            {
+            set {
                 _serializeDefaultValue = value;
                 _serializeDefaultValueWasSet = true;
             }

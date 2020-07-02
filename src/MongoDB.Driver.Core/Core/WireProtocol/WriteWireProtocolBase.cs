@@ -70,7 +70,6 @@ namespace MongoDB.Driver.Core.WireProtocol
 
         private QueryMessage CreateGetLastErrorMessage(BsonDocument getLastErrorCommand)
         {
-#pragma warning disable 618
             return new QueryMessage(
                RequestMessage.GetNextRequestId(),
                _collectionNamespace.DatabaseNamespace.CommandCollection,
@@ -86,7 +85,6 @@ namespace MongoDB.Driver.Core.WireProtocol
                false,
                false,
                _shouldSendGetLastError);
-#pragma warning restore 618
         }
 
         private List<RequestMessage> CreateMessages(IConnection connection, out QueryMessage getLastErrorMessage)
@@ -162,7 +160,7 @@ namespace MongoDB.Driver.Core.WireProtocol
 
             var response = reply.Documents.Single();
 
-            var notPrimaryOrNodeIsRecoveringException = ExceptionMapper.MapNotPrimaryOrNodeIsRecovering(connectionId, getLastErrorCommand, response, "err");
+            var notPrimaryOrNodeIsRecoveringException = ExceptionMapper.MapNotPrimaryOrNodeIsRecovering(connectionId, response, "err");
             if (notPrimaryOrNodeIsRecoveringException != null)
             {
                 throw notPrimaryOrNodeIsRecoveringException;

@@ -43,11 +43,7 @@ namespace MongoDB.Driver.Core.Servers
             _clusterConnectionMode = ClusterConnectionMode.Standalone;
             _connectionPoolFactory = new Mock<IConnectionPoolFactory>().Object;
             _endPoint = new DnsEndPoint("localhost", 27017);
-            var mockServerMonitor = new Mock<IServerMonitor>();
-            mockServerMonitor.Setup(m => m.Description).Returns(new ServerDescription(new ServerId(_clusterId, _endPoint), _endPoint));
-            var mockServerMonitorFactory = new Mock<IServerMonitorFactory>();
-            mockServerMonitorFactory.Setup(f => f.Create(It.IsAny<ServerId>(), _endPoint)).Returns(mockServerMonitor.Object);
-            _serverMonitorFactory = mockServerMonitorFactory.Object;
+            _serverMonitorFactory = new Mock<IServerMonitorFactory>().Object;
             _eventSubscriber = new Mock<IEventSubscriber>().Object;
             _settings = new ServerSettings();
         }

@@ -114,6 +114,7 @@ namespace MongoDB.Driver.Core.Operations
         {
             Ensure.IsNotNull(binding, nameof(binding));
 
+            using (EventContext.BeginOperation())
             using (var context = RetryableWriteContext.Create(binding, false, cancellationToken))
             {
                 return Execute(context, cancellationToken);
@@ -125,17 +126,14 @@ namespace MongoDB.Driver.Core.Operations
         {
             Ensure.IsNotNull(context, nameof(context));
 
-            using (EventContext.BeginOperation())
+            if (Feature.WriteCommands.IsSupported(context.Channel.ConnectionDescription.ServerVersion) && _writeConcern.IsAcknowledged)
             {
-                if (_writeConcern.IsAcknowledged)
-                {
-                    var emulator = CreateEmulator();
-                    return emulator.Execute(context, cancellationToken);
-                }
-                else
-                {
-                    return ExecuteProtocol(context.Channel, cancellationToken);
-                }
+                var emulator = CreateEmulator();
+                return emulator.Execute(context, cancellationToken);
+            }
+            else
+            {
+                return ExecuteProtocol(context.Channel, cancellationToken);
             }
         }
 
@@ -144,6 +142,7 @@ namespace MongoDB.Driver.Core.Operations
         {
             Ensure.IsNotNull(binding, nameof(binding));
 
+            using (EventContext.BeginOperation())
             using (var context = await RetryableWriteContext.CreateAsync(binding, false, cancellationToken).ConfigureAwait(false))
             {
                 return await ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
@@ -151,22 +150,19 @@ namespace MongoDB.Driver.Core.Operations
         }
 
         /// <inheritdoc/>
-        public async Task<WriteConcernResult> ExecuteAsync(RetryableWriteContext context, CancellationToken cancellationToken)
+        public Task<WriteConcernResult> ExecuteAsync(RetryableWriteContext context, CancellationToken cancellationToken)
         {
             Ensure.IsNotNull(context, nameof(context));
 
-            using (EventContext.BeginOperation())
+            if (Feature.WriteCommands.IsSupported(context.Channel.ConnectionDescription.ServerVersion) && _writeConcern.IsAcknowledged)
             {
-                if (_writeConcern.IsAcknowledged)
-                {
-                    var emulator = CreateEmulator();
-                    return await emulator.ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
+                var emulator = CreateEmulator();
+                return emulator.ExecuteAsync(context, cancellationToken);
 
-                }
-                else
-                {
-                    return await ExecuteProtocolAsync(context.Channel, cancellationToken).ConfigureAwait(false);
-                }
+            }
+            else
+            {
+                return ExecuteProtocolAsync(context.Channel, cancellationToken);
             }
         }
 
@@ -186,10 +182,6 @@ namespace MongoDB.Driver.Core.Operations
             {
                 throw new NotSupportedException("OP_DELETE does not support collations.");
             }
-            if (_request.Hint != null)
-            {
-                throw new NotSupportedException("OP_DELETE does not support hints.");
-            }
 
             return channel.Delete(
                 _collectionNamespace,
@@ -205,10 +197,6 @@ namespace MongoDB.Driver.Core.Operations
             if (_request.Collation != null)
             {
                 throw new NotSupportedException("OP_DELETE does not support collations.");
-            }
-            if (_request.Hint != null)
-            {
-                throw new NotSupportedException("OP_DELETE does not support hints.");
             }
 
             return channel.DeleteAsync(

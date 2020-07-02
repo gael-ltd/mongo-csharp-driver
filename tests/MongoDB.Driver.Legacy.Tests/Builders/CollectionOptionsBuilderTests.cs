@@ -24,13 +24,11 @@ namespace MongoDB.Driver.Tests.Builders
         [Fact]
         public void TestSetAll()
         {
-#pragma warning disable 618
             var options = CollectionOptions
                 .SetAutoIndexId(true)
                 .SetCapped(true)
                 .SetMaxDocuments(100)
                 .SetMaxSize(2000);
-#pragma warning restore
             var expected = "{ 'autoIndexId' : true, 'capped' : true, 'max' : NumberLong(100), 'size' : NumberLong(2000) }".Replace("'", "\"");
             Assert.Equal(expected, options.ToJson());
         }
@@ -38,9 +36,7 @@ namespace MongoDB.Driver.Tests.Builders
         [Fact]
         public void TestSetAutoIndexIdFalse()
         {
-#pragma warning disable 618
             var options = CollectionOptions.SetAutoIndexId(false);
-#pragma warning restore
             var expected = "{ 'autoIndexId' : false }".Replace("'", "\"");
             Assert.Equal(expected, options.ToJson());
         }
@@ -48,9 +44,7 @@ namespace MongoDB.Driver.Tests.Builders
         [Fact]
         public void TestSetAutoIndexIdTrue()
         {
-#pragma warning disable 618
             var options = CollectionOptions.SetAutoIndexId(true);
-#pragma warning restore
             var expected = "{ 'autoIndexId' : true }".Replace("'", "\"");
             Assert.Equal(expected, options.ToJson());
         }

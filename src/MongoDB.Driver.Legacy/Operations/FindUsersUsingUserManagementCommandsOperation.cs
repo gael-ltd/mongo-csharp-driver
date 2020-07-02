@@ -49,10 +49,7 @@ namespace MongoDB.Driver.Operations
         {
             var filter = _username == null ? (BsonValue)1 : _username;
             var command = new BsonDocument("usersInfo", filter);
-            var operation = new ReadCommandOperation<BsonDocument>(_databaseNamespace, command, BsonDocumentSerializer.Instance, _messageEncoderSettings)
-            {
-                RetryRequested = false
-            };
+            var operation = new ReadCommandOperation<BsonDocument>(_databaseNamespace, command, BsonDocumentSerializer.Instance, _messageEncoderSettings);
             var result = operation.Execute(binding, cancellationToken);
 
             BsonValue users;

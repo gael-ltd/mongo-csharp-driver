@@ -138,10 +138,7 @@ namespace MongoDB.Driver.Core.Operations
             var command = CreateCommand(session, connectionDescription);
             var resultArraySerializer = new ArraySerializer<TResult>(_resultSerializer);
             var resultSerializer = new ElementDeserializer<TResult[]>("results", resultArraySerializer);
-            return new ReadCommandOperation<TResult[]>(CollectionNamespace.DatabaseNamespace, command, resultSerializer, MessageEncoderSettings)
-            {
-                RetryRequested = false
-            };
+            return new ReadCommandOperation<TResult[]>(CollectionNamespace.DatabaseNamespace, command, resultSerializer, MessageEncoderSettings);
         }
     }
 }

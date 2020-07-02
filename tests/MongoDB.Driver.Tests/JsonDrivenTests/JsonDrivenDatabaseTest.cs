@@ -15,27 +15,49 @@
 
 using System.Collections.Generic;
 using MongoDB.Bson;
-using MongoDB.Bson.TestHelpers.JsonDrivenTests;
 
 namespace MongoDB.Driver.Tests.JsonDrivenTests
 {
-    public abstract class JsonDrivenDatabaseTest : JsonDrivenCommandTest
+    public abstract class JsonDrivenDatabaseTest : JsonDrivenClientTest
     {
         // protected fields
         protected IMongoDatabase _database;
 
-        // constructors
-        protected JsonDrivenDatabaseTest(IMongoDatabase database, Dictionary<string, object> objectMap)
-            : base(objectMap)
+        // protected constructors
+        protected JsonDrivenDatabaseTest(IMongoClient client, IMongoDatabase database, Dictionary<string, IClientSessionHandle> sessionMap)
+            : base(client, sessionMap)
         {
             _database = database;
         }
 
-        // public methods
-        public override void Arrange(BsonDocument document)
+        // public properties
+        public IMongoDatabase Database => _database;
+
+        // protected methods
+        protected override void SetArgument(string name, BsonValue value)
         {
-            JsonDrivenHelper.EnsureFieldEquals(document, "object", "database");
-            base.Arrange(document);
+            switch (name)
+            {
+                case "readPreference":
+                    SetReadPreference(ReadPreference.FromBsonDocument(value.AsBsonDocument));
+                    return;
+
+                case "writeConcern":
+                    SetWriteConcern(WriteConcern.FromBsonDocument(value.AsBsonDocument));
+                    return;
+            }
+
+            base.SetArgument(name, value);
+        }
+
+        protected virtual void SetReadPreference(ReadPreference value)
+        {
+            _database = _database.WithReadPreference(value);
+        }
+
+        protected virtual void SetWriteConcern(WriteConcern value)
+        {
+            _database = _database.WithWriteConcern(value);
         }
     }
 }

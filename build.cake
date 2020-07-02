@@ -1,8 +1,9 @@
-#addin "nuget:?package=Cake.FileHelpers&version=3.1.0"
-#addin "nuget:?package=Cake.Git&version=0.19.0"
-#addin "nuget:?package=Cake.Incubator&version=3.1.0"
-#tool "nuget:?package=GitVersion.CommandLine&version=4.0.0"
+#addin "nuget:?package=Cake.FileHelpers"
+#addin "nuget:?package=Cake.Git"
+#addin "nuget:?package=Cake.Incubator&version=2.0.0"
+#tool "nuget:?package=GitVersion.CommandLine"
 #tool "nuget:?package=xunit.runner.console"
+#load buildhelpers.cake
 
 using System.Text.RegularExpressions;
 using System.Linq;
@@ -15,6 +16,8 @@ var gitVersion = GitVersion();
 var solutionDirectory = MakeAbsolute(Directory("./"));
 var artifactsDirectory = solutionDirectory.Combine("artifacts");
 var artifactsBinDirectory = artifactsDirectory.Combine("bin");
+var artifactsBinNet45Directory = artifactsBinDirectory.Combine("net45");
+var artifactsBinNetStandard15Directory = artifactsBinDirectory.Combine("netstandard1.5");
 var artifactsDocsDirectory = artifactsDirectory.Combine("docs");
 var artifactsDocsApiDocsDirectory = artifactsDocsDirectory.Combine("ApiDocs-" + gitVersion.LegacySemVer);
 var artifactsDocsRefDocsDirectory = artifactsDocsDirectory.Combine("RefDocs-" + gitVersion.LegacySemVer);
@@ -27,7 +30,6 @@ var toolsDirectory = solutionDirectory.Combine("Tools");
 var toolsHugoDirectory = toolsDirectory.Combine("Hugo");
 
 var solutionFile = solutionDirectory.CombineWithFilePath("CSharpDriver.sln");
-var solutionFullPath = solutionFile.FullPath;
 var srcProjectNames = new[]
 {
     "MongoDB.Bson",
@@ -38,330 +40,115 @@ var srcProjectNames = new[]
 };
 
 Task("Default")
-    .IsDependentOn("Test");
-
-Task("Release")
     .IsDependentOn("Build")
-    .IsDependentOn("Test")
-    .IsDependentOn("Docs")
-    .IsDependentOn("Package");
-
-Task("Restore")
-    .Does(() =>
-    {
-        DotNetCoreRestore(solutionFullPath);
-    });
+	.IsDependentOn("Package");
 
 Task("Build")
-    .IsDependentOn("Restore")
+    .IsDependentOn("BuildNet45")
+    .IsDependentOn("BuildNetStandard15");
+	
+Task("BuildNet45")
     .Does(() =>
     {
-       var settings = new DotNetCoreBuildSettings
-       {
-           NoRestore = true,
-           Configuration = configuration,
-           EnvironmentVariables = new Dictionary<string, string>
-           {
-               { "Version", gitVersion.LegacySemVer },
-               { "SourceRevisionId", gitVersion.Sha }
-           }
-        };
-        DotNetCoreBuild(solutionFullPath, settings);
-    });
+        NuGetRestore(solutionFile);
+        GlobalAssemblyInfo.OverwriteGlobalAssemblyInfoFile(Context, solutionDirectory, configuration, gitVersion);
+        DotNetBuild(solutionFile, settings => settings
+            .SetConfiguration(configuration)
+            .SetVerbosity(Verbosity.Minimal)
+            .WithProperty("TargetFrameworkVersion", "v4.5"));
 
-Task("BuildArtifacts")
-    .IsDependentOn("Build")
-    .Does(() =>
-    {
-        foreach (var targetFramework in new[] { "net452", "netstandard1.5", "netstandard2.0" })
+        EnsureDirectoryExists(artifactsBinNet45Directory);
+        foreach (var projectName in srcProjectNames)
         {
-            var toDirectory = artifactsBinDirectory.Combine(targetFramework);
-            CleanDirectory(toDirectory);
-
-            var projects = new[] { "MongoDB.Bson", "MongoDB.Driver.Core", "MongoDB.Driver", "MongoDB.Driver.Legacy", "MongoDB.Driver.GridFS" };
-            foreach (var project in projects)
+            var projectDirectory = srcDirectory.Combine(projectName);
+            var outputDirectory = projectDirectory.Combine("bin").Combine(configuration);
+            foreach (var extension in new [] { ".dll", ".pdb", ".xml" })
             {
-                var fromDirectory = srcDirectory.Combine(project).Combine("bin").Combine(configuration).Combine(targetFramework);
-
-                var fileNames = new List<string>();
-                foreach (var extension in new[] { "dll", "pdb", "xml" })
-                {
-                    var fileName = $"{project}.{extension}";
-                    fileNames.Add(fileName);
-                }
-
-                // add additional files needed by Sandcastle
-                if (targetFramework == "net452" && project == "MongoDB.Driver.Core")
-                {
-                    fileNames.Add("DnsClient.dll");
-                    fileNames.Add("MongoDB.Libmongocrypt.dll");
-                    fileNames.Add("SharpCompress.dll");
-                }
-
-                foreach (var fileName in fileNames)
-                {
-                    var fromFile = fromDirectory.CombineWithFilePath(fileName);
-                    var toFile = toDirectory.CombineWithFilePath(fileName);
-                    CopyFile(fromFile, toFile);
-                }
+                var outputFileName = projectName + extension;
+                var outputFile = outputDirectory.CombineWithFilePath(outputFileName);
+                var artifactFile = artifactsBinNet45Directory.CombineWithFilePath(outputFileName);
+                CopyFile(outputFile, artifactFile);
             }
         }
-    });
 
-Task("Test")
-    .IsDependentOn("Build")
-    .DoesForEach(
-        GetFiles("./**/*.Tests.csproj")
-        .Where(name => !name.ToString().Contains("Atlas")),
-        testProject =>
+        foreach (var dnsClientFileName in new[] { "DnsClient.dll", "DnsClient.xml"})
+        {
+            var sourceDirectory = srcDirectory.Combine("MongoDB.Driver.Core").Combine("bin").Combine("Release");
+            var sourceFile = sourceDirectory.CombineWithFilePath(dnsClientFileName);
+            var destinationFile = artifactsBinNet45Directory.CombineWithFilePath(dnsClientFileName);
+            CopyFile(sourceFile, destinationFile);
+        }
+    })
+    .Finally(() =>
     {
-        var testWithDefaultGuidRepresentationMode = Environment.GetEnvironmentVariable("TEST_WITH_DEFAULT_GUID_REPRESENTATION_MODE");
-        if (testWithDefaultGuidRepresentationMode != null)
-        {
-            Console.WriteLine($"TEST_WITH_DEFAULT_GUID_REPRESENTATION_MODE={testWithDefaultGuidRepresentationMode}");
-        }
-        var testWithDefaultGuidRepresentation = Environment.GetEnvironmentVariable("TEST_WITH_DEFAULT_GUID_REPRESENTATION");
-        if (testWithDefaultGuidRepresentation != null)
-        {
-            Console.WriteLine($"TEST_WITH_DEFAULT_GUID_REPRESENTATION={testWithDefaultGuidRepresentation}");
-        }
-        var mongoX509ClientCertificatePath = Environment.GetEnvironmentVariable("MONGO_X509_CLIENT_CERTIFICATE_PATH");
-        if (mongoX509ClientCertificatePath != null)
-        {
-            Console.WriteLine($"MONGO_X509_CLIENT_CERTIFICATE_PATH={mongoX509ClientCertificatePath}");
-        }
-        var mongoX509ClientCertificatePassword = Environment.GetEnvironmentVariable("MONGO_X509_CLIENT_CERTIFICATE_PASSWORD");
-        if (mongoX509ClientCertificatePassword != null)
-        {
-            Console.WriteLine($"MONGO_X509_CLIENT_CERTIFICATE_PASSWORD={mongoX509ClientCertificatePassword}");
-        }
-
-        var settings = new DotNetCoreTestSettings
-        {
-            NoBuild = true,
-            NoRestore = true,
-            Configuration = configuration,
-            ArgumentCustomization = args => args.Append("-- RunConfiguration.TargetPlatform=x64")
-        };
-        switch (target.ToLowerInvariant())
-        {
-            case "testnet452": settings.Framework = "net452"; break;
-            case "testnetstandard15": settings.Framework = "netcoreapp1.1"; break;
-            case "testnetstandard20": settings.Framework = "netcoreapp2.1"; break;
-        }
-        DotNetCoreTest(
-            testProject.FullPath,
-            settings
-        );
+        GlobalAssemblyInfo.RestoreGlobalAssemblyInfoFile(Context, solutionDirectory);
     });
 
-Task("TestNet452").IsDependentOn("Test");
-Task("TestNetStandard15").IsDependentOn("Test");
-Task("TestNetStandard20").IsDependentOn("Test");
-
-Task("TestAwsAuthentication")
-    .IsDependentOn("Build")
-    .DoesForEach(
-        GetFiles("./**/MongoDB.Driver.Tests.csproj"),
-        testProject =>
-        {
-            DotNetCoreTest(
-                testProject.FullPath,
-                new DotNetCoreTestSettings {
-                    NoBuild = true,
-                    NoRestore = true,
-                    Configuration = configuration,
-                    ArgumentCustomization = args => args.Append("-- RunConfiguration.TargetPlatform=x64"),
-                    Filter = "Category=\"AwsMechanism\""
-                }
-            );
-        });
-
-// currently we are not running this Task on Evergreen (only locally occassionally)
-Task("TestAllGuidRepresentations")
-    .IsDependentOn("Build")
-    .DoesForEach(
-        GetFiles("./**/*.Tests.csproj")
-        // .Where(name => name.ToString().Contains("Bson.Tests")) // uncomment to only test Bson
-        .Where(name => !name.ToString().Contains("Atlas")),
-        testProject =>
-    {
-        var modes = new string[][]
-        {
-            new[] { "V2", "Unspecified" },
-            new[] { "V2", "JavaLegacy" },
-            new[] { "V2", "Standard" },
-            new[] { "V2", "PythonLegacy" },
-            new[] { "V2", "CSharpLegacy" },
-            new[] { "V3", "Unspecified" }
-        };
-
-        foreach (var mode in modes)
-        {
-            var testWithGuidRepresentationMode = mode[0];
-            var testWithGuidRepresentation = mode[1];
-            Console.WriteLine($"TEST_WITH_DEFAULT_GUID_REPRESENTATION_MODE={testWithGuidRepresentationMode}");
-            Console.WriteLine($"TEST_WITH_DEFAULT_GUID_REPRESENTATION={testWithGuidRepresentation}");
-
-            DotNetCoreTest(
-                testProject.FullPath,
-                new DotNetCoreTestSettings {
-                    NoBuild = true,
-                    NoRestore = true,
-                    Configuration = configuration,
-                    ArgumentCustomization = args => args.Append("-- RunConfiguration.TargetPlatform=x64"),
-                    EnvironmentVariables = new Dictionary<string, string>
-                    {
-                        { "TEST_WITH_DEFAULT_GUID_REPRESENTATION_MODE", testWithGuidRepresentationMode },
-                        { "TEST_WITH_DEFAULT_GUID_REPRESENTATION", testWithGuidRepresentation }
-                    }
-                }
-            );
-        }
-    });
-
-Task("TestAtlasConnectivity")
-    .IsDependentOn("Build")
-    .DoesForEach(
-        GetFiles("./**/AtlasConnectivity.Tests.csproj"),
-        testProject =>
-{
-    DotNetCoreTest(
-        testProject.FullPath,
-        new DotNetCoreTestSettings {
-            NoBuild = true,
-            NoRestore = true,
-            Configuration = configuration,
-            ArgumentCustomization = args => args.Append("-- RunConfiguration.TargetPlatform=x64")
-        }
-    );
-});
-
-Task("TestOcsp")
-    .IsDependentOn("Build")
-    .DoesForEach(
-        GetFiles("./**/MongoDB.Driver.Tests.csproj"),
-        testProject =>
-{
-    DotNetCoreTest(
-        testProject.FullPath,
-        new DotNetCoreTestSettings {
-            NoBuild = true,
-            NoRestore = true,
-            Configuration = configuration,
-
-            ArgumentCustomization = args => args
-                .Append("--filter FullyQualifiedName~OcspIntegrationTests")
-                .Append("-- RunConfiguration.TargetPlatform=x64")
-        }
-    );
-});
-
-Task("Docs")
-    .IsDependentOn("ApiDocs")
-    .IsDependentOn("RefDocs");
-
-Task("ApiDocs")
-    .IsDependentOn("BuildArtifacts")
+Task("BuildNetStandard15")
     .Does(() =>
     {
-        EnsureDirectoryExists(artifactsDocsApiDocsDirectory);
-        CleanDirectory(artifactsDocsApiDocsDirectory);
+        var dotNetProjectDirectories = srcProjectNames.Select(
+            projectName=>srcDirectory.Combine(projectName+".Dotnet"));
 
-        var shfbprojFile = docsApiDirectory.CombineWithFilePath("CSharpDriverDocs.shfbproj");
-        var preliminary = false; // TODO: compute
-        MSBuild(shfbprojFile, new MSBuildSettings
+        foreach (var directory in dotNetProjectDirectories) 
+        {
+            DotNetCoreRestore(directory.ToString());
+        }
+        GlobalAssemblyInfo.OverwriteGlobalAssemblyInfoFile(Context, solutionDirectory, configuration, gitVersion);
+        var settings= new DotNetCoreBuildSettings { Configuration = configuration };
+        foreach (var directory in dotNetProjectDirectories) 
+        {
+            DotNetCoreBuild(directory.ToString(), settings);
+        }
+        EnsureDirectoryExists(artifactsBinNetStandard15Directory);
+        foreach (var projectName in srcProjectNames)
+        {
+            var projectDirectory = srcDirectory.Combine(projectName + ".Dotnet");
+            var outputDirectory = projectDirectory.Combine("bin").Combine(configuration).Combine("netstandard1.5");
+            foreach (var extension in new [] { ".dll", ".pdb", ".xml" })
             {
-                Configuration = "Release"
+                var outputFileName = projectName + extension;
+                var outputFile = outputDirectory.CombineWithFilePath(outputFileName);
+                var artifactFile = artifactsBinNetStandard15Directory.CombineWithFilePath(outputFileName);
+                CopyFile(outputFile, artifactFile);
             }
-            .WithProperty("OutputPath", artifactsDocsApiDocsDirectory.ToString())
-            .WithProperty("CleanIntermediate", "True")
-            .WithProperty("Preliminary", preliminary ? "True" : "False")
-            .WithProperty("HelpFileVersion", gitVersion.LegacySemVer)
-        );
-
-        var lowerCaseIndexFile = artifactsDocsApiDocsDirectory.CombineWithFilePath("index.html");
-        var upperCaseIndexFile = artifactsDocsApiDocsDirectory.CombineWithFilePath("Index.html");
-        MoveFile(upperCaseIndexFile, lowerCaseIndexFile);
-
-        var chmFile = artifactsDocsApiDocsDirectory.CombineWithFilePath("CSharpDriverDocs.chm");
-        var artifactsDocsChmFile = artifactsDocsDirectory.CombineWithFilePath("CSharpDriverDocs.chm");
-        CopyFile(chmFile, artifactsDocsChmFile);
-    });
-
-Task("RefDocs")
-    .Does(() =>
+        }
+    })
+    .Finally(() =>
     {
-        EnsureDirectoryExists(toolsHugoDirectory);
-        CleanDirectory(toolsHugoDirectory);
-
-        var url = "https://github.com/spf13/hugo/releases/download/v0.13/hugo_0.13_windows_amd64.zip";
-        var hugoZipFile = toolsHugoDirectory.CombineWithFilePath("hugo_0.13_windows_amd64.zip");
-        DownloadFile(url, hugoZipFile);
-        Unzip(hugoZipFile, toolsHugoDirectory);
-        var hugoExe = toolsHugoDirectory.CombineWithFilePath("hugo_0.13_windows_amd64.exe");
-
-        var landingDirectory = docsDirectory.Combine("landing");
-        var landingPublicDirectory = landingDirectory.Combine("public");
-        CleanDirectory(landingPublicDirectory);
-
-        var processSettings = new ProcessSettings
-        {
-            WorkingDirectory = landingDirectory
-        };
-        StartProcess(hugoExe, processSettings);
-
-        var referenceDirectory = docsDirectory.Combine("reference");
-        var referencePublicDirectory = referenceDirectory.Combine("public");
-        CleanDirectory(referencePublicDirectory);
-
-        processSettings = new ProcessSettings
-        {
-            WorkingDirectory = referenceDirectory
-        };
-        StartProcess(hugoExe, processSettings);
-
-        EnsureDirectoryExists(artifactsDocsRefDocsDirectory);
-        CleanDirectory(artifactsDocsRefDocsDirectory);
-
-        CopyDirectory(landingPublicDirectory, artifactsDocsRefDocsDirectory);
-
-        var artifactsReferencePublicDirectory = artifactsDocsRefDocsDirectory.Combine(gitVersion.Major + "." + gitVersion.Minor);
-        CopyDirectory(referencePublicDirectory, artifactsReferencePublicDirectory);
+        GlobalAssemblyInfo.RestoreGlobalAssemblyInfoFile(Context, solutionDirectory);
     });
 
 Task("Package")
     .IsDependentOn("PackageNugetPackages");
 
 Task("PackageNugetPackages")
-    .IsDependentOn("Build")
+    .IsDependentOn("BuildNet45")
+    .IsDependentOn("BuildNetStandard15")
     .Does(() =>
     {
         EnsureDirectoryExists(artifactsPackagesDirectory);
         CleanDirectory(artifactsPackagesDirectory);
 
-        var projects = new[]
-        {
-            "MongoDB.Bson",
-            "MongoDB.Driver.Core",
-            "MongoDB.Driver",
-            "MongoDB.Driver.GridFS",
-            "MongoDB.Driver.Legacy"
-        };
+        var packageVersion = gitVersion.NuGetVersion;
 
-        foreach (var project in projects)
+        var nuspecFiles = GetFiles("./Build/*.nuspec");
+        foreach (var nuspecFile in nuspecFiles)
         {
-            var projectPath = $"{srcDirectory}\\{project}\\{project}.csproj";
-            var settings = new DotNetCorePackSettings
+            var tempNuspecFilename = nuspecFile.GetFilenameWithoutExtension().ToString() + "." + packageVersion + ".nuspec";
+            var tempNuspecFile = artifactsPackagesDirectory.CombineWithFilePath(tempNuspecFilename);
+
+            CopyFile(nuspecFile, tempNuspecFile);
+            ReplaceTextInFiles(tempNuspecFile.ToString(), "@driverPackageVersion@", packageVersion);
+            ReplaceTextInFiles(tempNuspecFile.ToString(), "@solutionDirectory@", solutionDirectory.FullPath);
+
+            NuGetPack(tempNuspecFile, new NuGetPackSettings
             {
-                Configuration = configuration,
                 OutputDirectory = artifactsPackagesDirectory,
-                NoBuild = true,
-                IncludeSymbols = true,
-                MSBuildSettings = new DotNetCoreMSBuildSettings()
-                    .WithProperty("PackageVersion", gitVersion.LegacySemVer)
-            };
-            DotNetCorePack(projectPath, settings);
+                Symbols = true
+            });
+
+            // DeleteFile(tempNuspecFile);
         }
     });
 
@@ -376,18 +163,10 @@ Task("PushToMyget")
 
         var packageFiles = new List<FilePath>();
 
-        var projects = new[]
+        var nuspecFiles = GetFiles("./artifacts/packages/*.nuspec");
+        foreach (var nuspecFile in nuspecFiles)
         {
-            "MongoDB.Bson",
-            "MongoDB.Driver.Core",
-            "MongoDB.Driver",
-            "MongoDB.Driver.GridFS",
-            "mongocsharpdriver" // the Nuget package name for MongoDB.Driver.Legacy
-        };
-
-        foreach (var project in projects)
-        {
-            var packageFileName = $"{project}.{gitVersion.LegacySemVer}.nupkg";
+            var packageFileName = nuspecFile.GetFilenameWithoutExtension() + ".nupkg";
             var packageFile = artifactsPackagesDirectory.CombineWithFilePath(packageFileName);
             packageFiles.Add(packageFile);
         }

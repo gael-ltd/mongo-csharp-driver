@@ -26,10 +26,6 @@ namespace MongoDB.Driver.Core.WireProtocol.Messages
         /// </summary>
         Command,
         /// <summary>
-        /// OP_COMPRESSED
-        /// </summary>
-        Compressed,
-        /// <summary>
         /// OP_DELETE
         /// </summary>
         Delete,

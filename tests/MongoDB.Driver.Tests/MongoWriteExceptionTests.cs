@@ -17,7 +17,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
-#if NET452
+#if NET45
 using System.Runtime.Serialization.Formatters.Binary;
 #endif
 using FluentAssertions;
@@ -88,7 +88,7 @@ namespace MongoDB.Driver.Tests
             result.WriteError.Should().Be(writeErrors[0]);
         }
 
-#if NET452
+#if NET45
         [Fact]
         public void Serialization_should_work()
         {

@@ -267,10 +267,7 @@ namespace MongoDB.Driver.Core.Operations
             var resultSerializer = _resultSerializer ?? BsonSerializer.LookupSerializer<TResult>();
             var resultArraySerializer = new ArraySerializer<TResult>(resultSerializer);
             var commandResultSerializer = new ElementDeserializer<TResult[]>("retval", resultArraySerializer);
-            return new ReadCommandOperation<TResult[]>(_collectionNamespace.DatabaseNamespace, command, commandResultSerializer, _messageEncoderSettings)
-            {
-                RetryRequested = false
-            };
+            return new ReadCommandOperation<TResult[]>(_collectionNamespace.DatabaseNamespace, command, commandResultSerializer, _messageEncoderSettings);
         }
     }
 }

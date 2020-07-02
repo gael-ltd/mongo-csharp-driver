@@ -18,6 +18,7 @@ using MongoDB.Driver.Core.Clusters.ServerSelectors;
 
 namespace MongoDB.Driver.Core.Events
 {
+    /// <preliminary/>
     /// <summary>
     /// Occurs before a server is selected.
     /// </summary>

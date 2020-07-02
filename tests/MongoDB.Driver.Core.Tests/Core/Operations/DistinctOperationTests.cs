@@ -52,7 +52,6 @@ namespace MongoDB.Driver.Core.Operations
             subject.Filter.Should().BeNull();
             subject.MaxTime.Should().NotHaveValue();
             subject.ReadConcern.Should().BeSameAs(ReadConcern.Default);
-            subject.RetryRequested.Should().BeFalse();
         }
 
         [Fact]
@@ -162,20 +161,6 @@ namespace MongoDB.Driver.Core.Operations
             var result = subject.ReadConcern;
 
             result.Should().BeSameAs(value);
-        }
-
-        [Theory]
-        [ParameterAttributeData]
-        public void RetryRequested_get_and_set_should_work(
-            [Values(false, true)]
-            bool value)
-        {
-            var subject = new DistinctOperation<int>(_collectionNamespace, _valueSerializer, _fieldName, _messageEncoderSettings);
-
-            subject.RetryRequested = value;
-            var result = subject.RetryRequested;
-
-            result.Should().Be(value);
         }
 
         [Fact]
@@ -489,7 +474,7 @@ namespace MongoDB.Driver.Core.Operations
         public void Execute_should_throw_when_maxTime_is_exceeded(
             [Values(false, true)] bool async)
         {
-            RequireServer.Check().ClusterTypes(ClusterType.Standalone, ClusterType.ReplicaSet);
+            RequireServer.Check().Supports(Feature.FailPoints).ClusterTypes(ClusterType.Standalone, ClusterType.ReplicaSet);
             var subject = new DistinctOperation<int>(_collectionNamespace, _valueSerializer, _fieldName, _messageEncoderSettings) { MaxTime = TimeSpan.FromSeconds(9001) };
 
             using (var failPoint = FailPoint.ConfigureAlwaysOn(_cluster, _session, FailPointName.MaxTimeAlwaysTimeout))

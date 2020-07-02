@@ -214,7 +214,6 @@ namespace MongoDB.Driver.Core.Operations
             using (var context = RetryableWriteContext.Create(binding, _retryRequested, cancellationToken))
             {
                 EnsureCollationIsSupportedIfAnyRequestHasCollation(context);
-                EnsureHintIsSupportedIfAnyRequestHasHint(context);
                 context.DisableRetriesIfAnyWriteRequestIsNotRetryable(_requests);
                 var helper = new BatchHelper(_requests, _isOrdered, _writeConcern);
                 foreach (var batch in helper.GetBatches())
@@ -232,7 +231,6 @@ namespace MongoDB.Driver.Core.Operations
             using (var context = await RetryableWriteContext.CreateAsync(binding, _retryRequested, cancellationToken).ConfigureAwait(false))
             {
                 EnsureCollationIsSupportedIfAnyRequestHasCollation(context);
-                EnsureHintIsSupportedIfAnyRequestHasHint(context);
                 context.DisableRetriesIfAnyWriteRequestIsNotRetryable(_requests);
                 var helper = new BatchHelper(_requests, _isOrdered, _writeConcern);
                 foreach (var batch in helper.GetBatches())
@@ -311,18 +309,6 @@ namespace MongoDB.Driver.Core.Operations
             }
         }
 
-        private void EnsureHintIsSupportedIfAnyRequestHasHint(RetryableWriteContext context)
-        {
-            var serverVersion = context.Channel.ConnectionDescription.ServerVersion;
-            foreach (var request in _requests)
-            {
-                if (RequestHasHint(request) && !IsHintSupportedForRequestWithHint(request, serverVersion))
-                {
-                    throw new NotSupportedException($"Server version {serverVersion} does not support hints.");
-                }
-            }
-        }
-
         private BulkWriteBatchResult ExecuteBatch(RetryableWriteContext context, Batch batch, CancellationToken cancellationToken)
         {
             BulkWriteOperationResult result;
@@ -359,21 +345,6 @@ namespace MongoDB.Driver.Core.Operations
             return BulkWriteBatchResult.Create(result, exception, batch.IndexMap);
         }
 
-        private bool IsHintSupportedForRequestWithHint(WriteRequest request, SemanticVersion serverVersion)
-        {
-            if (request is DeleteRequest && (Feature.HintForDeleteOperations.DriverMustThrowIfNotSupported(serverVersion) || !_writeConcern.IsAcknowledged))
-            {
-                return false;
-            }
-
-            if (request is UpdateRequest && (Feature.HintForUpdateAndReplaceOperations.DriverMustThrowIfNotSupported(serverVersion) || !_writeConcern.IsAcknowledged))
-            {
-                return false;
-            }
-
-            return true;
-        }
-
         private bool RequestHasCollation(WriteRequest request)
         {
             DeleteRequest deleteRequest;
@@ -386,21 +357,6 @@ namespace MongoDB.Driver.Core.Operations
             if ((updateRequest = request as UpdateRequest) != null)
             {
                 return updateRequest.Collation != null;
-            }
-
-            return false;
-        }
-
-        private bool RequestHasHint(WriteRequest request)
-        {
-            if (request is DeleteRequest deleteRequest)
-            {
-                return deleteRequest.Hint != null;
-            }
-
-            if (request is UpdateRequest updateRequest)
-            {
-                return updateRequest.Hint != null;
             }
 
             return false;
@@ -489,7 +445,7 @@ namespace MongoDB.Driver.Core.Operations
                     {
                         indexMap.Add(i, matching[i].Index);
                     }
-                    _unprocessed = _unprocessed.Where(r => r.Request.RequestType != batchType).ToList();
+                    _unprocessed = _unprocessed.Where(r => r.Request.RequestType != batchType).ToList();                 
                 }
 
                 var writeConcern = _writeConcern;

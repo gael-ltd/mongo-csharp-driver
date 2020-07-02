@@ -27,7 +27,6 @@ namespace MongoDB.Driver.Core.Operations
         // fields
         private Collation _collation;
         private readonly BsonDocument _filter;
-        private BsonValue _hint;
         private int _limit;
 
         // constructors
@@ -58,15 +57,6 @@ namespace MongoDB.Driver.Core.Operations
         public BsonDocument Filter
         {
             get { return _filter; }
-        }
-
-        /// <summary>
-        /// Gets or sets the hint.
-        /// </summary>
-        public BsonValue Hint
-        {
-            get { return _hint; }
-            set { _hint = value; }
         }
 
         /// <summary>

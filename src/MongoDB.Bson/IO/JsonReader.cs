@@ -18,7 +18,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
-using MongoDB.Shared;
 
 namespace MongoDB.Bson.IO
 {
@@ -924,14 +923,6 @@ namespace MongoDB.Bson.IO
             }
         }
 
-        private bool IsValidBinaryDataSubTypeString(string value)
-        {
-            return
-                value.Length >= 1 &&
-                value.Length <= 2 &&
-                HexUtils.IsValidHexString(value);
-        }
-
         private BsonValue ParseBinDataConstructor()
         {
             VerifyToken("(");
@@ -951,149 +942,33 @@ namespace MongoDB.Bson.IO
             VerifyToken(")");
             var bytes = Convert.FromBase64String(bytesToken.StringValue);
             var subType = (BsonBinarySubType)subTypeToken.Int32Value;
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
+            GuidRepresentation guidRepresentation;
+            switch (subType)
             {
-                GuidRepresentation guidRepresentation;
-                switch (subType)
-                {
-                    case BsonBinarySubType.UuidLegacy: guidRepresentation = _jsonReaderSettings.GuidRepresentation; break;
-                    case BsonBinarySubType.UuidStandard: guidRepresentation = GuidRepresentation.Standard; break;
-                    default: guidRepresentation = GuidRepresentation.Unspecified; break;
-                }
-                return new BsonBinaryData(bytes, subType, guidRepresentation);
+                case BsonBinarySubType.UuidLegacy: guidRepresentation = _jsonReaderSettings.GuidRepresentation; break;
+                case BsonBinarySubType.UuidStandard: guidRepresentation = GuidRepresentation.Standard; break;
+                default: guidRepresentation = GuidRepresentation.Unspecified; break;
             }
-            else
-            {
-                return new BsonBinaryData(bytes, subType);
-            }
-#pragma warning restore 618
+            return new BsonBinaryData(bytes, subType, guidRepresentation);
         }
 
         private BsonValue ParseBinDataExtendedJson()
         {
             VerifyToken(":");
 
-            byte[] bytes;
-            BsonBinarySubType subType;
-
-            var nextToken = PopToken();
-            if (nextToken.Type == JsonTokenType.BeginObject)
+            var bytesToken = PopToken();
+            if (bytesToken.Type != JsonTokenType.String)
             {
-                ParseBinDataExtendedJsonCanonical(out bytes, out subType);
-            }
-            else
-            {
-                ParseBinDataExtendedJsonLegacy(nextToken, out bytes, out subType);
-            }
-
-            VerifyToken("}");
-
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                GuidRepresentation guidRepresentation;
-                switch (subType)
-                {
-                    case BsonBinarySubType.UuidLegacy: guidRepresentation = _jsonReaderSettings.GuidRepresentation; break;
-                    case BsonBinarySubType.UuidStandard: guidRepresentation = GuidRepresentation.Standard; break;
-                    default: guidRepresentation = GuidRepresentation.Unspecified; break;
-                }
-
-                return new BsonBinaryData(bytes, subType, guidRepresentation);
-            }
-            else
-            {
-                return new BsonBinaryData(bytes, subType);
-            }
-#pragma warning restore 618
-        }
-
-        private void ParseBinDataExtendedJsonCanonical(out byte[] bytes, out BsonBinarySubType subType)
-        {
-            string base64String = null;
-            string subTypeString = null;
-
-            var nextToken = PopToken();
-            while (nextToken.Type != JsonTokenType.EndObject)
-            {
-                if (nextToken.Type != JsonTokenType.String && nextToken.Type != JsonTokenType.UnquotedString)
-                {
-                    var message = string.Format("JSON reader expected a string but found '{0}'.", nextToken.Lexeme);
-                    throw new FormatException(message);
-                }
-                var name = nextToken.StringValue;
-
-                nextToken = PopToken();
-                if (nextToken.Type != JsonTokenType.Colon)
-                {
-                    var message = string.Format("JSON reader expected ':' but found '{0}'.", nextToken.Lexeme);
-                    throw new FormatException(message);
-                }
-
-                nextToken = PopToken();
-                if (nextToken.Type != JsonTokenType.String)
-                {
-                    var message = string.Format("JSON reader expected a string but found '{0}'.", nextToken.Lexeme);
-                    throw new FormatException(message);
-                }
-                var value = nextToken.StringValue;
-
-                switch (name)
-                {
-                    case "base64": base64String = value; break;
-                    case "subType": subTypeString = value; break;
-                    default:
-                        var message = string.Format("JSON reader expected 'base64' or 'subType', but found '{0}'.", name);
-                        throw new FormatException(message);
-                }
-
-                nextToken = PopToken();
-                if (nextToken.Type != JsonTokenType.Comma && nextToken.Type != JsonTokenType.EndObject)
-                {
-                    var message = string.Format("JSON reader expected ',' or '}}' but found '{0}'.", nextToken.Lexeme);
-                    throw new FormatException(message);
-                }
-
-                if (nextToken.Type == JsonTokenType.Comma)
-                {
-                    nextToken = PopToken();
-                }
-            }
-
-            if (base64String == null)
-            {
-                var message = "JSON reader expected $binary to contain a 'base64' element.";
+                var message = string.Format("JSON reader expected a string but found '{0}'.", bytesToken.Lexeme);
                 throw new FormatException(message);
             }
-            if (subTypeString == null)
-            {
-                var message = "JSON reader expected $binary to contain a 'subType' element.";
-                throw new FormatException(message);
-            }
-            if (!IsValidBinaryDataSubTypeString(subTypeString))
-            {
-                var message = string.Format("JSON reader expected subType to be a one or two digit hex string, but found '{0}'.", subTypeString);
-                throw new FormatException(message);
-            }
-
-            bytes = Convert.FromBase64String(base64String);
-            subType = (BsonBinarySubType)HexUtils.ParseInt32(subTypeString);
-        }
-
-        private void ParseBinDataExtendedJsonLegacy(JsonToken nextToken, out byte[] bytes, out BsonBinarySubType subType)
-        {
-            if (nextToken.Type != JsonTokenType.String)
-            {
-                var message = string.Format("JSON reader expected a string but found '{0}'.", nextToken.Lexeme);
-                throw new FormatException(message);
-            }
-            bytes = Convert.FromBase64String(nextToken.StringValue);
+            var bytes = Convert.FromBase64String(bytesToken.StringValue);
 
             VerifyToken(",");
             VerifyString("$type");
             VerifyToken(":");
 
+            BsonBinarySubType subType;
             var subTypeToken = PopToken();
             if (subTypeToken.Type == JsonTokenType.String)
             {
@@ -1108,6 +983,18 @@ namespace MongoDB.Bson.IO
                 var message = string.Format("JSON reader expected a string or integer but found '{0}'.", subTypeToken.Lexeme);
                 throw new FormatException(message);
             }
+
+            VerifyToken("}");
+
+            GuidRepresentation guidRepresentation;
+            switch (subType)
+            {
+                case BsonBinarySubType.UuidLegacy: guidRepresentation = _jsonReaderSettings.GuidRepresentation; break;
+                case BsonBinarySubType.UuidStandard: guidRepresentation = GuidRepresentation.Standard; break;
+                default: guidRepresentation = GuidRepresentation.Unspecified; break;
+            }
+
+            return new BsonBinaryData(bytes, subType, guidRepresentation);
         }
 
         private BsonValue ParseHexDataConstructor()
@@ -1129,24 +1016,14 @@ namespace MongoDB.Bson.IO
             VerifyToken(")");
             var bytes = BsonUtils.ParseHexString(bytesToken.StringValue);
             var subType = (BsonBinarySubType)subTypeToken.Int32Value;
-
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
+            GuidRepresentation guidRepresentation;
+            switch (subType)
             {
-                GuidRepresentation guidRepresentation;
-                switch (subType)
-                {
-                    case BsonBinarySubType.UuidLegacy: guidRepresentation = _jsonReaderSettings.GuidRepresentation; break;
-                    case BsonBinarySubType.UuidStandard: guidRepresentation = GuidRepresentation.Standard; break;
-                    default: guidRepresentation = GuidRepresentation.Unspecified; break;
-                }
-                return new BsonBinaryData(bytes, subType, guidRepresentation);
+                case BsonBinarySubType.UuidLegacy: guidRepresentation = _jsonReaderSettings.GuidRepresentation; break;
+                case BsonBinarySubType.UuidStandard: guidRepresentation = GuidRepresentation.Standard; break;
+                default: guidRepresentation = GuidRepresentation.Unspecified; break;
             }
-            else
-            {
-                return new BsonBinaryData(bytes, subType);
-            }
-#pragma warning restore 618
+            return new BsonBinaryData(bytes, subType, guidRepresentation);
         }
 
         private BsonType ParseJavaScriptExtendedJson(out BsonValue value)
@@ -1223,7 +1100,7 @@ namespace MongoDB.Bson.IO
             }
             else if (valueToken.Type == JsonTokenType.BeginObject)
             {
-                VerifyString("$numberLong");
+                VerifyToken("$numberLong");
                 VerifyToken(":");
                 var millisecondsSinceEpochToken = PopToken();
                 if (millisecondsSinceEpochToken.Type == JsonTokenType.String)
@@ -1330,9 +1207,7 @@ namespace MongoDB.Bson.IO
 
         private BsonType ParseExtendedJson()
         {
-            var bookmark = GetBookmark();
             var nameToken = PopToken();
-
             if (nameToken.Type == JsonTokenType.String || nameToken.Type == JsonTokenType.UnquotedString)
             {
                 switch (nameToken.StringValue)
@@ -1343,24 +1218,15 @@ namespace MongoDB.Bson.IO
                     case "$maxkey": case "$maxKey": _currentValue = ParseMaxKeyExtendedJson(); return BsonType.MaxKey;
                     case "$minkey": case "$minKey": _currentValue = ParseMinKeyExtendedJson(); return BsonType.MinKey;
                     case "$numberDecimal": _currentValue = ParseNumberDecimalExtendedJson(); return BsonType.Decimal128;
-                    case "$numberDouble": _currentValue = ParseNumberDoubleExtendedJson(); return BsonType.Double;
-                    case "$numberInt": _currentValue = ParseNumberIntExtendedJson(); return BsonType.Int32;
                     case "$numberLong": _currentValue = ParseNumberLongExtendedJson(); return BsonType.Int64;
                     case "$oid": _currentValue = ParseObjectIdExtendedJson(); return BsonType.ObjectId;
-                    case "$regex":
-                        if (TryParseRegularExpressionExtendedJsonLegacy(out _currentValue))
-                        {
-                            return BsonType.RegularExpression;
-                        }
-                        break;
-                    case "$regularExpression": _currentValue = ParseRegularExpressionExtendedJsonCanonical(); return BsonType.RegularExpression;
+                    case "$regex": _currentValue = ParseRegularExpressionExtendedJson(); return BsonType.RegularExpression;
                     case "$symbol": _currentValue = ParseSymbolExtendedJson(); return BsonType.Symbol;
                     case "$timestamp": _currentValue = ParseTimestampExtendedJson(); return BsonType.Timestamp;
                     case "$undefined": _currentValue = ParseUndefinedExtendedJson(); return BsonType.Undefined;
                 }
             }
-            ReturnToBookmark(bookmark);
-
+            PushToken(nameToken);
             return BsonType.Document;
         }
 
@@ -1682,55 +1548,6 @@ namespace MongoDB.Bson.IO
             return (BsonDecimal128)value;
         }
 
-        private BsonValue ParseNumberDoubleExtendedJson()
-        {
-            VerifyToken(":");
-
-            double value;
-            var valueToken = PopToken();
-            if (valueToken.IsNumber)
-            {
-                value = valueToken.DoubleValue;
-            }
-            else if (valueToken.Type == JsonTokenType.String)
-            {
-                value = JsonConvert.ToDouble(valueToken.StringValue);
-            }
-            else
-            {
-                var message = string.Format("JSON reader expected a number or numeric string but found '{0}'.", valueToken.Lexeme);
-                throw new FormatException(message);
-            }
-
-            VerifyToken("}");
-
-            return (BsonDouble)value;
-        }
-
-        private BsonValue ParseNumberIntExtendedJson()
-        {
-            VerifyToken(":");
-
-            int value;
-            var valueToken = PopToken();
-            if (valueToken.Type == JsonTokenType.Int32)
-            {
-                value = valueToken.Int32Value;
-            }
-            else if (valueToken.Type == JsonTokenType.String)
-            {
-                value = JsonConvert.ToInt32(valueToken.StringValue);
-            }
-            else
-            {
-                var message = string.Format("JSON reader expected an integer but found '{0}'.", valueToken.Lexeme);
-                throw new FormatException(message);
-            }
-
-            VerifyToken("}");
-            return (BsonInt32)value;
-        }
-
         private BsonValue ParseNumberLongExtendedJson()
         {
             VerifyToken(":");
@@ -1781,77 +1598,6 @@ namespace MongoDB.Bson.IO
             return new BsonObjectId(ObjectId.Parse(valueToken.StringValue));
         }
 
-        private BsonValue ParseRegularExpressionExtendedJsonCanonical()
-        {
-            VerifyToken(":");
-            VerifyToken("{");
-
-            string pattern = null;
-            string options = null;
-
-            var nextToken = PopToken();
-            while (nextToken.Type != JsonTokenType.EndObject)
-            {
-                if (nextToken.Type != JsonTokenType.String && nextToken.Type != JsonTokenType.UnquotedString)
-                {
-                    var message = string.Format("JSON reader expected a string but found '{0}'.", nextToken.Lexeme);
-                    throw new FormatException(message);
-                }
-                var name = nextToken.StringValue;
-
-                VerifyToken(":");
-
-                nextToken = PopToken();
-                if (nextToken.Type != JsonTokenType.String)
-                {
-                    var message = string.Format("JSON reader expected a string but found '{0}'.", nextToken.Lexeme);
-                    throw new FormatException(message);
-                }
-                var value = nextToken.StringValue;
-
-                switch (name)
-                {
-                    case "pattern":
-                        pattern = value;
-                        break;
-                    case "options":
-                        options = value;
-                        break;
-                    default:
-                        var message = string.Format("JSON reader expected 'pattern' or 'options' but found '{0}'.", nextToken.Lexeme);
-                        throw new FormatException(message);
-                }
-
-                nextToken = PopToken();
-                if (nextToken.Type != JsonTokenType.Comma && nextToken.Type != JsonTokenType.EndObject)
-                {
-                    var message = string.Format("JSON reader expected ',' or '}}' but found '{0}'.", nextToken.Lexeme);
-                    throw new FormatException(message);
-                }
-
-                if (nextToken.Type == JsonTokenType.Comma)
-                {
-                    nextToken = PopToken();
-                }
-            }
-
-            VerifyToken("}");
-
-            if (pattern == null)
-            {
-                var message = "JSON reader expected $regularExpression to contain a 'pattern' element.";
-                throw new FormatException(message);
-            }
-
-            if (options == null)
-            {
-                var message = "JSON reader expected $regularExpression to contain an 'options' element.";
-                throw new FormatException(message);
-            }
-
-            return new BsonRegularExpression(pattern, options);
-        }
-
         private BsonValue ParseRegularExpressionConstructor()
         {
             VerifyToken("(");
@@ -1881,23 +1627,15 @@ namespace MongoDB.Bson.IO
             return new BsonRegularExpression(patternToken.StringValue, options);
         }
 
-        private bool TryParseRegularExpressionExtendedJsonLegacy(out BsonValue value)
+        private BsonValue ParseRegularExpressionExtendedJson()
         {
             VerifyToken(":");
             var patternToken = PopToken();
-
-            if (patternToken.Type == JsonTokenType.BeginObject)
-            {
-                value = null;
-                return false;
-            }
-
             if (patternToken.Type != JsonTokenType.String)
             {
                 var message = string.Format("JSON reader expected a string but found '{0}'.", patternToken.Lexeme);
                 throw new FormatException(message);
             }
-
             var options = "";
             var commaToken = PopToken();
             if (commaToken.Lexeme == ",")
@@ -1917,10 +1655,7 @@ namespace MongoDB.Bson.IO
                 PushToken(commaToken);
             }
             VerifyToken("}");
-
-            value = new BsonRegularExpression(patternToken.StringValue, options);
-
-            return true;
+            return new BsonRegularExpression(patternToken.StringValue, options);
         }
 
         private BsonValue ParseSymbolExtendedJson()
@@ -1982,71 +1717,36 @@ namespace MongoDB.Bson.IO
 
         private BsonValue ParseTimestampExtendedJsonNewRepresentation()
         {
-            int? timestamp = null;
-            int? increment = null;
-
-            while (true)
+            VerifyString("t");
+            VerifyToken(":");
+            var secondsSinceEpochToken = PopToken();
+            int secondsSinceEpoch;
+            if (secondsSinceEpochToken.IsNumber)
             {
-                var token = PopToken();
-                if (token.Type != JsonTokenType.String && token.Type != JsonTokenType.UnquotedString)
-                {
-                    throw new FormatException($"JSON reader expected an element name but found '{token.Lexeme}'.");
-                }
-                var name = token.StringValue;
-
-                token = PopToken();
-                if (token.Type != JsonTokenType.Colon)
-                {
-                    throw new FormatException($"JSON reader expected ':' but found '{name}'.");
-                }
-
-                token = PopToken();
-                if (token.Type != JsonTokenType.Int64 && token.Type != JsonTokenType.Int32)
-                {
-                    throw new FormatException($"JSON reader expected an integer but found '{token.Lexeme}'.");
-                }
-                var value = token.Int64Value;
-
-                switch (name)
-                {
-                    case "t":
-                        timestamp = (int)value;
-                        break;
-
-                    case "i":
-                        increment = (int)value;
-                        break;
-
-                    default:
-                        throw new FormatException($"JSON reader expected 't' or 'i' element names but found '{name}'.");
-                }
-
-                token = PopToken();
-                if (token.Type == JsonTokenType.Comma)
-                {
-                    continue;
-                }
-                else if (token.Type == JsonTokenType.EndObject)
-                {
-                    break;
-                }
-                else
-                {
-                    throw new FormatException($"JSON reader expected ',' or '}}'  but found '{token.Lexeme}'.");
-                }
+                secondsSinceEpoch = secondsSinceEpochToken.Int32Value;
+            }
+            else
+            {
+                var message = string.Format("JSON reader expected an integer but found '{0}'.", secondsSinceEpochToken.Lexeme);
+                throw new FormatException(message);
+            }
+            VerifyToken(",");
+            VerifyString("i");
+            VerifyToken(":");
+            var incrementToken = PopToken();
+            int increment;
+            if (incrementToken.IsNumber)
+            {
+                increment = incrementToken.Int32Value;
+            }
+            else
+            {
+                var message = string.Format("JSON reader expected an integer but found '{0}'.", incrementToken.Lexeme);
+                throw new FormatException(message);
             }
             VerifyToken("}");
-
-            if (!timestamp.HasValue)
-            {
-                throw new FormatException("JSON reader did not find the required \"t\" element.");
-            }
-            if (!increment.HasValue)
-            {
-                throw new FormatException("JSON reader did not find the required \"i\" element.");
-            }
-
-            return new BsonTimestamp(timestamp.Value, increment.Value);
+            VerifyToken("}");
+            return new BsonTimestamp(secondsSinceEpoch, increment);
         }
 
         private BsonValue ParseTimestampExtendedJsonOldRepresentation(JsonToken valueToken)
@@ -2113,18 +1813,8 @@ namespace MongoDB.Bson.IO
                     throw new BsonInternalException("Unexpected uuidConstructorName");
             }
             bytes = GuidConverter.ToBytes(guid, guidRepresentation);
-            var subType = GuidConverter.GetSubType(guidRepresentation);
-
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                return new BsonBinaryData(bytes, subType, guidRepresentation);
-            }
-            else
-            {
-                return new BsonBinaryData(bytes, subType);
-            }
-#pragma warning restore 618
+            var subType = (guidRepresentation == GuidRepresentation.Standard) ? BsonBinarySubType.UuidStandard : BsonBinarySubType.UuidLegacy;
+            return new BsonBinaryData(bytes, subType, guidRepresentation);
         }
 
         private JsonToken PopToken()
@@ -2158,7 +1848,7 @@ namespace MongoDB.Bson.IO
             var token = PopToken();
             if ((token.Type != JsonTokenType.String && token.Type != JsonTokenType.UnquotedString) || token.StringValue != expectedString)
             {
-                var message = string.Format("JSON reader expected string '{0}' but found '{1}'.", expectedString, token.Lexeme);
+                var message = string.Format("JSON reader expected '{0}' but found '{1}'.", expectedString, token.StringValue);
                 throw new FormatException(message);
             }
         }

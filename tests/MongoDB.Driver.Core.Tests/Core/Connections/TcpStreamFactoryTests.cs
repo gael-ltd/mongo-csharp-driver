@@ -18,50 +18,22 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using FluentAssertions;
+using MongoDB.Driver.Core.Clusters;
 using MongoDB.Driver.Core.Configuration;
+using MongoDB.Driver.Core.Connections;
+using MongoDB.Driver.Core.Servers;
 using Xunit;
 using System.Threading.Tasks;
 using System.Reflection;
 using System.IO;
+using MongoDB.Driver.Core.TestHelpers;
 using MongoDB.Bson.TestHelpers.XunitExtensions;
 using MongoDB.Driver.Core.TestHelpers.XunitExtensions;
-using MongoDB.Bson.TestHelpers;
 
 namespace MongoDB.Driver.Core.Connections
 {
     public class TcpStreamFactoryTests
     {
-        [Theory]
-        [ParameterAttributeData]
-        public void Connect_should_dispose_socket_if_socket_fails([Values(false, true)] bool async)
-        {
-            RequireServer.Check();
-
-            var subject = new TcpStreamFactory();
-            var endpoint = new DnsEndPoint("test", 80); // not existed endpoint which will fail when we call socket.Connect
-
-            using (var testSocket = new TestSocket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
-            {
-                Exception exception;
-                if (async)
-                {
-                    exception = Record.Exception(
-                        () =>
-                            subject
-                                .ConnectAsync(testSocket, endpoint, CancellationToken.None)
-                                .GetAwaiter()
-                                .GetResult());
-                }
-                else
-                {
-                    exception = Record.Exception(() => subject.Connect(testSocket, endpoint, CancellationToken.None));
-                }
-
-                exception.Should().NotBeNull();
-                testSocket.DisposeAttempts.Should().Be(1);
-            }
-        }
-
         [Fact]
         public void Constructor_should_throw_an_ArgumentNullException_when_tcpStreamSettings_is_null()
         {
@@ -152,7 +124,7 @@ namespace MongoDB.Driver.Core.Connections
 
             if (async)
             {
-                subject.CreateStreamAsync(endPoint, CancellationToken.None).GetAwaiter().GetResult();
+                 subject.CreateStreamAsync(endPoint, CancellationToken.None).GetAwaiter().GetResult();
             }
             else
             {
@@ -211,47 +183,6 @@ namespace MongoDB.Driver.Core.Connections
             var socket = (Socket)socketProperty.GetValue(stream);
             var keepAlive = (int)socket.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive);
             keepAlive.Should().NotBe(0); // .NET returns 1 but Mono returns 8
-        }
-
-        // nested types
-        private class TestSocket : Socket
-        {
-            public int DisposeAttempts { get; set; } = 0;
-
-            public TestSocket(AddressFamily addressFamily, SocketType socketType, ProtocolType protocolType) : base(addressFamily, socketType, protocolType)
-            {
-            }
-
-            public TestSocket(SocketType socketType, ProtocolType protocolType) : base(socketType, protocolType)
-            {
-            }
-
-#if !NETCOREAPP1_1
-            public TestSocket(SocketInformation socketInformation) : base(socketInformation)
-            {
-            }
-#endif
-
-            protected override void Dispose(bool disposing)
-            {
-                base.Dispose(disposing);
-                DisposeAttempts++;
-            }
-        }
-    }
-
-    internal static class TcpStreamFactoryReflector
-    {
-        internal static TcpStreamSettings _settings(this TcpStreamFactory obj) => (TcpStreamSettings)Reflector.GetFieldValue(obj, nameof(_settings));
-
-        internal static void Connect(this TcpStreamFactory obj, Socket socket, EndPoint endPoint, CancellationToken cancellationToken)
-        {
-            Reflector.Invoke(obj, nameof(Connect), socket, endPoint, cancellationToken);
-        }
-
-        internal static Task ConnectAsync(this TcpStreamFactory obj, Socket socket, EndPoint endPoint, CancellationToken cancellationToken)
-        {
-            return (Task)Reflector.Invoke(obj, nameof(ConnectAsync), socket, endPoint, cancellationToken);
         }
     }
 }

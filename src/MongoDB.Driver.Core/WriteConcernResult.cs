@@ -23,7 +23,7 @@ namespace MongoDB.Driver
     /// <summary>
     /// Represents the results of an operation performed with an acknowledged WriteConcern.
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     public class WriteConcernResult

@@ -37,7 +37,6 @@ namespace MongoDB.Driver.Core.TestHelpers
             return new ServerDescription(
                 serverId,
                 endPoint,
-                "Test",
                 logicalSessionTimeout: logicalSessionTimeout,
                 state: state,
                 type: serverType);

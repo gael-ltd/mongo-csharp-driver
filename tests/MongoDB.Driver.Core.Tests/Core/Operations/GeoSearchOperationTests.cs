@@ -15,6 +15,8 @@
 
 using System;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using FluentAssertions;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Serializers;
@@ -27,7 +29,6 @@ using Xunit;
 
 namespace MongoDB.Driver.Core.Operations
 {
-#pragma warning disable 618
     public class GeoSearchOperationTests : OperationTestBase
     {
         [Fact]
@@ -218,7 +219,7 @@ namespace MongoDB.Driver.Core.Operations
         public void Execute_should_throw_when_maxTime_is_exceeded(
             [Values(false, true)] bool async)
         {
-            RequireServer.Check().ClusterTypes(ClusterType.Standalone, ClusterType.ReplicaSet);
+            RequireServer.Check().Supports(Feature.FailPoints).ClusterTypes(ClusterType.Standalone, ClusterType.ReplicaSet);
             var subject = new GeoSearchOperation<BsonDocument>(
                 _collectionNamespace,
                 new BsonArray { 1, 2 },
@@ -237,7 +238,7 @@ namespace MongoDB.Driver.Core.Operations
                 exception.Should().BeOfType<MongoExecutionTimeoutException>();
             }
         }
-
+        
         // helper methods
         private void EnsureTestData()
         {
@@ -257,5 +258,4 @@ namespace MongoDB.Driver.Core.Operations
             });
         }
     }
-#pragma warning restore 618
 }

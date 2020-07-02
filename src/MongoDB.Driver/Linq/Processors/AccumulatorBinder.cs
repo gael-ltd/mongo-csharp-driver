@@ -134,7 +134,7 @@ namespace MongoDB.Driver.Linq.Processors
             if (resultOperator is CountResultOperator)
             {
                 accumulatorType = AccumulatorType.Sum;
-                argument = GetCountAccumulatorArgument(node.Source);
+                argument = Expression.Constant(1);
                 return true;
             }
             if (resultOperator is FirstResultOperator)
@@ -196,29 +196,6 @@ namespace MongoDB.Driver.Linq.Processors
             accumulatorType = 0;
             argument = null;
             return false;
-        }
-
-        private Expression GetCountAccumulatorArgument(Expression node)
-        {
-            var where = node as WhereExpression;
-            if (where != null)
-            {
-                return Expression.IfThenElse(where.Predicate, Expression.Constant(1), Expression.Constant(0));
-            }
-
-            var document = node as DocumentExpression;
-            if (document != null)
-            {
-                return Expression.Constant(1);
-            }
-
-            var select = node as SelectExpression;
-            if (select != null)
-            {
-                return Expression.Constant(1);
-            }
-
-            throw new NotSupportedException();
         }
 
         private Expression GetAccumulatorArgument(Expression node)

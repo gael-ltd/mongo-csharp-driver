@@ -52,24 +52,12 @@ namespace MongoDB.Driver
         /// <summary>
         /// Gets or sets the representation to use for Guids.
         /// </summary>
-        [Obsolete("Configure serializers instead.")]
         public GuidRepresentation GuidRepresentation
         {
-            get
-            {
-                if (BsonDefaults.GuidRepresentationMode != GuidRepresentationMode.V2)
-                {
-                    throw new InvalidOperationException("MongoDatabaseSettings.GuidRepresentation can only be used when BsonDefaults.GuidRepresentationMode is V2.");
-                }
-                return _guidRepresentation.Value;
-            }
+            get { return _guidRepresentation.Value; }
             set
             {
                 if (_isFrozen) { throw new InvalidOperationException("MongoDatabaseSettings is frozen."); }
-                if (BsonDefaults.GuidRepresentationMode != GuidRepresentationMode.V2)
-                {
-                    throw new InvalidOperationException("MongoDatabaseSettings.GuidRepresentation can only be used when BsonDefaults.GuidRepresentationMode is V2.");
-                }
                 _guidRepresentation.Value = value;
             }
         }
@@ -294,12 +282,10 @@ namespace MongoDB.Driver
         // internal methods
         internal void ApplyDefaultValues(IInheritableMongoClientSettings clientSettings)
         {
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 && !_guidRepresentation.HasBeenSet)
+            if (!_guidRepresentation.HasBeenSet)
             {
                 GuidRepresentation = clientSettings.GuidRepresentation;
             }
-#pragma warning restore 618
             if (!_readConcern.HasBeenSet)
             {
                 ReadConcern = clientSettings.ReadConcern;

@@ -13,8 +13,13 @@
 * limitations under the License.
 */
 
+using System;
 using System.Collections.Generic;
-using MongoDB.Bson;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using MongoDB.Driver.Core.Misc;
+using MongoDB.Driver.Core.Operations;
 
 namespace MongoDB.Driver
 {
@@ -27,7 +32,6 @@ namespace MongoDB.Driver
         private IEnumerable<ArrayFilterDefinition> _arrayFilters;
         private bool? _bypassDocumentValidation;
         private Collation _collation;
-        private BsonValue _hint;
         private bool _isUpsert;
 
         // properties
@@ -59,15 +63,6 @@ namespace MongoDB.Driver
         {
             get { return _collation; }
             set { _collation = value; }
-        }
-
-        /// <summary>
-        /// Gets or sets the hint.
-        /// </summary>
-        public BsonValue Hint
-        {
-            get { return _hint; }
-            set { _hint = value; }
         }
 
         /// <summary>

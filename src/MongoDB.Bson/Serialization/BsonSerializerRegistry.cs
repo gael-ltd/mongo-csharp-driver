@@ -34,7 +34,7 @@ namespace MongoDB.Bson.Serialization
         /// </summary>
         public BsonSerializerRegistry()
         {
-            _cache = new ConcurrentDictionary<Type, IBsonSerializer>();
+            _cache = new ConcurrentDictionary<Type,IBsonSerializer>();
             _serializationProviders = new ConcurrentStack<IBsonSerializationProvider>();
         }
 
@@ -65,7 +65,7 @@ namespace MongoDB.Bson.Serialization
         /// <summary>
         /// Gets the serializer for the specified <typeparamref name="T" />.
         /// </summary>
-        /// <typeparam name="T">The value type of the serializer.</typeparam>
+        /// <typeparam name="T"></typeparam>
         /// <returns>
         /// The serializer.
         /// </returns>
@@ -119,7 +119,7 @@ namespace MongoDB.Bson.Serialization
             {
                 throw new ArgumentNullException("serializationProvider");
             }
-
+            
             _serializationProviders.Push(serializationProvider);
         }
 

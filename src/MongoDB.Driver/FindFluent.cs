@@ -59,58 +59,16 @@ namespace MongoDB.Driver
             return Project(projection);
         }
 
-        [Obsolete("Use CountDocuments instead.")]
         public override long Count(CancellationToken cancellationToken)
         {
             var options = CreateCountOptions();
-            if (_session == null)
-            {
-                return _collection.Count(_filter, options, cancellationToken);
-            }
-            else
-            {
-                return _collection.Count(_session, _filter, options, cancellationToken);
-            }
+            return _collection.Count(_filter, options, cancellationToken);
         }
 
-        [Obsolete("Use CountDocumentsAsync instead.")]
         public override Task<long> CountAsync(CancellationToken cancellationToken)
         {
             var options = CreateCountOptions();
-            if (_session == null)
-            {
-                return _collection.CountAsync(_filter, options, cancellationToken);
-            }
-            else
-            {
-                return _collection.CountAsync(_session, _filter, options, cancellationToken);
-            }
-        }
-
-        public override long CountDocuments(CancellationToken cancellationToken)
-        {
-            var options = CreateCountOptions();
-            if (_session == null)
-            {
-                return _collection.CountDocuments(_filter, options, cancellationToken);
-            }
-            else
-            {
-                return _collection.CountDocuments(_session, _filter, options, cancellationToken);
-            }
-        }
-
-        public override Task<long> CountDocumentsAsync(CancellationToken cancellationToken)
-        {
-            var options = CreateCountOptions();
-            if (_session == null)
-            {
-                return _collection.CountDocumentsAsync(_filter, options, cancellationToken);
-            }
-            else
-            {
-                return _collection.CountDocumentsAsync(_session, _filter, options, cancellationToken);
-            }
+            return _collection.CountAsync(_filter, options, cancellationToken);
         }
 
         public override IFindFluent<TDocument, TProjection> Limit(int? limit)
@@ -123,28 +81,18 @@ namespace MongoDB.Driver
         {
             var newOptions = new FindOptions<TDocument, TNewProjection>
             {
-                AllowDiskUse = _options.AllowDiskUse,
                 AllowPartialResults = _options.AllowPartialResults,
                 BatchSize = _options.BatchSize,
                 Collation = _options.Collation,
                 Comment = _options.Comment,
                 CursorType = _options.CursorType,
-                Hint = _options.Hint,
                 Limit = _options.Limit,
-                Max = _options.Max,
                 MaxAwaitTime = _options.MaxAwaitTime,
                 MaxTime = _options.MaxTime,
-                Min = _options.Min,
-#pragma warning disable 618
                 Modifiers = _options.Modifiers,
-#pragma warning restore 618
                 NoCursorTimeout = _options.NoCursorTimeout,
-#pragma warning disable 618
                 OplogReplay = _options.OplogReplay,
-#pragma warning restore 618
                 Projection = projection,
-                ReturnKey = _options.ReturnKey,
-                ShowRecordId = _options.ShowRecordId,
                 Skip = _options.Skip,
                 Sort = _options.Sort,
             };
@@ -229,41 +177,14 @@ namespace MongoDB.Driver
                 sb.Append(".maxTime(" + _options.MaxTime.Value.TotalMilliseconds + ")");
             }
 
-            if (_options.Hint != null)
-            {
-                sb.Append(".hint(" + _options.Hint + ")");
-            }
-
-            if (_options.Max != null)
-            {
-                sb.Append(".max(" + _options.Max + ")");
-            }
-
-            if (_options.Min != null)
-            {
-                sb.Append(".min(" + _options.Min + ")");
-            }
-
-            if (_options.ReturnKey.HasValue)
-            {
-                sb.Append(".returnKey(" + _options.ReturnKey.Value.ToString().ToLower() + ")");
-            }
-
-            if (_options.ShowRecordId.HasValue)
-            {
-                sb.Append(".showRecordId(" + _options.ShowRecordId.Value.ToString().ToLower() + ")");
-            }
-
             if (_options.Comment != null)
             {
                 sb.Append("._addSpecial(\"$comment\", \"" + _options.Comment + "\")");
             }
 
-#pragma warning disable 618
             if (_options.Modifiers != null)
             {
                 foreach (var modifier in _options.Modifiers)
-#pragma warning restore 618
                 {
                     sb.Append("._addSpecial(\"" + modifier.Name + "\", ");
                     if (modifier.Value.BsonType == BsonType.String)
@@ -284,12 +205,15 @@ namespace MongoDB.Driver
         // private methods
         private CountOptions CreateCountOptions()
         {
+            BsonValue hint = null;
+            if (_options.Modifiers != null)
+            {
+                _options.Modifiers.TryGetValue("$hint", out hint);
+            }
             return new CountOptions
             {
                 Collation = _options.Collation,
-#pragma warning disable 618
-                Hint = _options.Hint ?? _options.Modifiers?.GetValue("$hint", null),
-#pragma warning restore 618
+                Hint = hint,
                 Limit = _options.Limit,
                 MaxTime = _options.MaxTime,
                 Skip = _options.Skip

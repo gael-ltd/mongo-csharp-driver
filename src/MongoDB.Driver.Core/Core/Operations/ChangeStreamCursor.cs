@@ -20,6 +20,7 @@ using MongoDB.Driver.Core.Bindings;
 using MongoDB.Driver.Core.Misc;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -30,7 +31,7 @@ namespace MongoDB.Driver.Core.Operations
     /// </summary>
     /// <typeparam name="TDocument">The type of the output documents.</typeparam>
     /// <seealso cref="MongoDB.Driver.IAsyncCursor{TOutput}" />
-    internal sealed class ChangeStreamCursor<TDocument> : IChangeStreamCursor<TDocument>
+    internal sealed class ChangeStreamCursor<TDocument> : IAsyncCursor<TDocument>
     {
         // private fields
         private readonly IReadBinding _binding;
@@ -38,14 +39,8 @@ namespace MongoDB.Driver.Core.Operations
         private IEnumerable<TDocument> _current;
         private IAsyncCursor<RawBsonDocument> _cursor;
         private bool _disposed;
-        private BsonDocument _documentResumeToken;
-        private readonly IBsonSerializer<TDocument> _documentSerializer;
-        private readonly BsonTimestamp _initialOperationTime;
-        private BsonDocument _postBatchResumeToken;
-        private readonly BsonDocument _initialResumeAfter;
-        private readonly BsonDocument _initialStartAfter;
-        private readonly BsonTimestamp _initialStartAtOperationTime;
-        private readonly SemanticVersion _serverVersion;
+        private IBsonSerializer<TDocument> _documentSerializer;
+        private BsonDocument _resumeToken;
 
         // public properties
         /// <inheritdoc />
@@ -59,35 +54,16 @@ namespace MongoDB.Driver.Core.Operations
         /// <param name="documentSerializer">The document serializer.</param>
         /// <param name="binding">The binding.</param>
         /// <param name="changeStreamOperation">The change stream operation.</param>
-        /// <param name="aggregatePostBatchResumeToken">The post batch resume token from an aggregate command.</param>
-        /// <param name="initialOperationTime">The initial operation time.</param>
-        /// <param name="initialStartAfter">The start after value.</param>
-        /// <param name="initialResumeAfter">The resume after value.</param>
-        /// <param name="initialStartAtOperationTime">The start at operation time value.</param>
-        /// <param name="serverVersion">The server version.</param>
         public ChangeStreamCursor(
             IAsyncCursor<RawBsonDocument> cursor,
             IBsonSerializer<TDocument> documentSerializer,
             IReadBinding binding,
-            IChangeStreamOperation<TDocument> changeStreamOperation,
-            BsonDocument aggregatePostBatchResumeToken,
-            BsonTimestamp initialOperationTime,
-            BsonDocument initialStartAfter,
-            BsonDocument initialResumeAfter,
-            BsonTimestamp initialStartAtOperationTime,
-            SemanticVersion serverVersion)
+            IChangeStreamOperation<TDocument> changeStreamOperation)
         {
             _cursor = Ensure.IsNotNull(cursor, nameof(cursor));
             _documentSerializer = Ensure.IsNotNull(documentSerializer, nameof(documentSerializer));
             _binding = Ensure.IsNotNull(binding, nameof(binding));
             _changeStreamOperation = Ensure.IsNotNull(changeStreamOperation, nameof(changeStreamOperation));
-            _postBatchResumeToken = aggregatePostBatchResumeToken;
-            _initialOperationTime = initialOperationTime;
-
-            _initialStartAfter = initialStartAfter;
-            _initialResumeAfter = initialResumeAfter;
-            _initialStartAtOperationTime = initialStartAtOperationTime;
-            _serverVersion = Ensure.IsNotNull(serverVersion, nameof(serverVersion));
         }
 
         // public methods
@@ -103,31 +79,23 @@ namespace MongoDB.Driver.Core.Operations
         }
 
         /// <inheritdoc/>
-        public BsonDocument GetResumeToken()
-        {
-            return
-                _postBatchResumeToken ??
-                _documentResumeToken ??
-                _initialStartAfter ??
-                _initialResumeAfter;
-        }
-
-        /// <inheritdoc/>
         public bool MoveNext(CancellationToken cancellationToken = default(CancellationToken))
         {
             bool hasMore;
-            while (true)
+            try
             {
-                try
+                hasMore = _cursor.MoveNext(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                if (RetryabilityHelper.IsResumableChangeStreamException(ex))
                 {
+                    _cursor = _changeStreamOperation.Resume(_binding, _resumeToken, cancellationToken);
                     hasMore = _cursor.MoveNext(cancellationToken);
-                    break;
                 }
-                catch (Exception ex) when (RetryabilityHelper.IsResumableChangeStreamException(ex, _serverVersion))
+                else
                 {
-                    var newCursor = Resume(cancellationToken);
-                    _cursor.Dispose();
-                    _cursor = newCursor;
+                    throw;
                 }
             }
 
@@ -139,18 +107,20 @@ namespace MongoDB.Driver.Core.Operations
         public async Task<bool> MoveNextAsync(CancellationToken cancellationToken = default(CancellationToken))
         {
             bool hasMore;
-            while (true)
+            try
             {
-                try
+                hasMore = await _cursor.MoveNextAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                if (RetryabilityHelper.IsResumableChangeStreamException(ex))
                 {
+                    _cursor = await _changeStreamOperation.ResumeAsync(_binding, _resumeToken, cancellationToken).ConfigureAwait(false);
                     hasMore = await _cursor.MoveNextAsync(cancellationToken).ConfigureAwait(false);
-                    break;
                 }
-                catch (Exception ex) when (RetryabilityHelper.IsResumableChangeStreamException(ex, _serverVersion))
+                else
                 {
-                    var newCursor = await ResumeAsync(cancellationToken).ConfigureAwait(false);
-                    _cursor.Dispose();
-                    _cursor = newCursor;
+                    throw;
                 }
             }
 
@@ -175,8 +145,6 @@ namespace MongoDB.Driver.Core.Operations
             var documents = new List<TDocument>();
             RawBsonDocument lastRawDocument = null;
 
-            _postBatchResumeToken = ((ICursorBatchInfo)_cursor).PostBatchResumeToken;
-
             foreach (var rawDocument in rawDocuments)
             {
                 if (!rawDocument.Contains("_id"))
@@ -192,40 +160,10 @@ namespace MongoDB.Driver.Core.Operations
 
             if (lastRawDocument != null)
             {
-                _documentResumeToken = lastRawDocument["_id"].DeepClone().AsBsonDocument;
+                _resumeToken = lastRawDocument["_id"].DeepClone().AsBsonDocument;
             }
 
             return documents;
-        }
-
-        private ResumeValues GetResumeValues()
-        {
-            if (_postBatchResumeToken != null)
-            {
-                return new ResumeValues { ResumeAfter = _postBatchResumeToken };
-            }
-
-            if (_documentResumeToken != null)
-            {
-                return new ResumeValues { ResumeAfter = _documentResumeToken };
-            }
-
-            if (_initialStartAfter != null)
-            {
-                return new ResumeValues { ResumeAfter = _initialStartAfter };
-            }
-
-            if (_initialResumeAfter != null)
-            {
-                return new ResumeValues { ResumeAfter = _initialResumeAfter };
-            }
-
-            if (_initialStartAtOperationTime != null || _initialOperationTime != null)
-            {
-                return new ResumeValues { StartAtOperationTime = _initialStartAtOperationTime ?? _initialOperationTime };
-            }
-
-            return new ResumeValues { ResumeAfter = _initialResumeAfter, StartAfter = _initialStartAfter, StartAtOperationTime = _initialStartAtOperationTime };
         }
 
         private void ProcessBatch(bool hasMore)
@@ -248,33 +186,6 @@ namespace MongoDB.Driver.Core.Operations
             {
                 _current = null;
             }
-        }
-
-        private void ReconfigureOperationResumeValues()
-        {
-            var resumeValues = GetResumeValues();
-            _changeStreamOperation.ResumeAfter = resumeValues.ResumeAfter;
-            _changeStreamOperation.StartAfter = resumeValues.StartAfter;
-            _changeStreamOperation.StartAtOperationTime = resumeValues.StartAtOperationTime;
-        }
-
-        private IAsyncCursor<RawBsonDocument> Resume(CancellationToken cancellationToken)
-        {
-            ReconfigureOperationResumeValues();
-            return _changeStreamOperation.Resume(_binding, cancellationToken);
-        }
-
-        private async Task<IAsyncCursor<RawBsonDocument>> ResumeAsync(CancellationToken cancellationToken)
-        {
-            ReconfigureOperationResumeValues();
-            return await _changeStreamOperation.ResumeAsync(_binding, cancellationToken).ConfigureAwait(false);
-        }
-
-        internal struct ResumeValues
-        {
-            public BsonDocument ResumeAfter { get; set; }
-            public BsonDocument StartAfter { get; set; }
-            public BsonTimestamp StartAtOperationTime { get; set; }
         }
     }
 }

@@ -299,7 +299,6 @@ namespace MongoDB.Driver
                 }
             }
 
-#pragma warning disable 618
             var operation = new CreateCollectionOperation(collectionNamespace, messageEncoderSettings)
             {
                 AutoIndexId = autoIndexId,
@@ -316,7 +315,6 @@ namespace MongoDB.Driver
                 Validator = validator,
                 WriteConcern = _settings.WriteConcern
             };
-#pragma warning restore
 
             var response = ExecuteWriteOperation(session, operation);
             return new CommandResult(response);
@@ -676,10 +674,7 @@ namespace MongoDB.Driver
 
         private IEnumerable<string> GetCollectionNames(IClientSessionHandle session)
         {
-            var operation = new ListCollectionsOperation(_namespace, GetMessageEncoderSettings())
-            {
-                RetryRequested = _server.Settings.RetryReads
-            };
+            var operation = new ListCollectionsOperation(_namespace, GetMessageEncoderSettings());
             var cursor = ExecuteReadOperation(session, operation, ReadPreference.Primary);
             var list = cursor.ToList();
             return list.Select(c => c["name"].AsString).OrderBy(n => n).ToList();
@@ -1064,18 +1059,12 @@ namespace MongoDB.Driver
 
         private MessageEncoderSettings GetMessageEncoderSettings()
         {
-            var messageEncoderSettings = new MessageEncoderSettings
+            return new MessageEncoderSettings
             {
+                { MessageEncoderSettingsName.GuidRepresentation, _settings.GuidRepresentation },
                 { MessageEncoderSettingsName.ReadEncoding, _settings.ReadEncoding ?? Utf8Encodings.Strict },
                 { MessageEncoderSettingsName.WriteEncoding, _settings.WriteEncoding ?? Utf8Encodings.Strict }
             };
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2)
-            {
-                messageEncoderSettings.Add(MessageEncoderSettingsName.GuidRepresentation, _settings.GuidRepresentation);
-            }
-#pragma warning restore 618
-            return messageEncoderSettings;
         }
 
         internal TCommandResult RunCommandAs<TCommandResult>(
@@ -1095,10 +1084,7 @@ namespace MongoDB.Driver
             }
             else
             {
-                var operation = new ReadCommandOperation<TCommandResult>(_namespace, commandDocument, resultSerializer, messageEncoderSettings)
-                {
-                    RetryRequested = false
-                };
+                var operation = new ReadCommandOperation<TCommandResult>(_namespace, commandDocument, resultSerializer, messageEncoderSettings);
                 return ExecuteReadOperation(session, operation, readPreference);
             }
         }

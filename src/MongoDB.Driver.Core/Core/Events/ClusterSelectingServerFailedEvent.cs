@@ -19,6 +19,7 @@ using MongoDB.Driver.Core.Clusters.ServerSelectors;
 
 namespace MongoDB.Driver.Core.Events
 {
+    /// <preliminary/>
     /// <summary>
     /// Occurs when selecting a server fails.
     /// </summary>

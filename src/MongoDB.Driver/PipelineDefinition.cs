@@ -332,25 +332,29 @@ namespace MongoDB.Driver
 
         private static List<IPipelineStageDefinition> VerifyStages(List<IPipelineStageDefinition> stages)
         {
-            var expectedInputType = typeof(TInput);
+            var nextInputType = typeof(TInput);
             for (int i = 0; i < stages.Count; i++)
             {
-                if (stages[i].InputType != expectedInputType)
+                if (stages[i].InputType != nextInputType)
                 {
-                    var message =
-                        $"The input type to stage[{i}] was expected to be {expectedInputType}, but was {stages[i].InputType}.";
-                    throw new ArgumentException(message, nameof(stages));
+                    var message = string.Format(
+                        "The input type to stage[{0}] was expected to be {1}, but was {2}.",
+                        i,
+                        nextInputType,
+                        stages[i].InputType);
+                    throw new ArgumentException(message, "stages");
                 }
 
-                expectedInputType = stages[i].OutputType;
+                nextInputType = stages[i].OutputType;
             }
-            var lastStageOutputType = expectedInputType;
 
-            if (lastStageOutputType != typeof(TOutput))
+            if (nextInputType != typeof(TOutput))
             {
-                var message =
-                    $"The output type to the last stage was expected to be {typeof(TOutput)}, but was {lastStageOutputType}.";
-                throw new ArgumentException(message, nameof(stages));
+                var message = string.Format(
+                    "The output type to the last stage was expected to be {0}, but was {1}.",
+                    nextInputType,
+                    stages.Last().OutputType);
+                throw new ArgumentException(message, "stages");
             }
 
             return stages;
@@ -376,7 +380,7 @@ namespace MongoDB.Driver
         {
             var rendered = _wrapped.Render(inputSerializer, serializerRegistry);
 
-            // do some combining of $match documents if possible. This is optimized for the
+            // do some combining of $match documents if possible. This is optimized for the 
             // OfType case where we've added a discriminator as a match at the beginning of the pipeline.
             if (rendered.Documents.Count > 1)
             {

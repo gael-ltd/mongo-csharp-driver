@@ -40,22 +40,13 @@ namespace MongoDB.Driver
         {
             _documentSerializer = Ensure.IsNotNull(documentSerializer, nameof(documentSerializer));
 
-            RegisterMember("ClusterTime", "clusterTime", BsonTimestampSerializer.Instance);
+            RegisterMember("ClusterTime", "clusterTime", BsonDocumentSerializer.Instance);
             RegisterMember("CollectionNamespace", "ns", ChangeStreamDocumentCollectionNamespaceSerializer.Instance);
             RegisterMember("DocumentKey", "documentKey", BsonDocumentSerializer.Instance);
             RegisterMember("FullDocument", "fullDocument", _documentSerializer);
             RegisterMember("OperationType", "operationType", ChangeStreamOperationTypeSerializer.Instance);
-            RegisterMember("RenameTo", "to", ChangeStreamDocumentCollectionNamespaceSerializer.Instance);
             RegisterMember("ResumeToken", "_id", BsonDocumentSerializer.Instance);
             RegisterMember("UpdateDescription", "updateDescription", ChangeStreamUpdateDescriptionSerializer.Instance);
-        }
-
-        // public methods
-        /// <inheritdoc />
-        public override ChangeStreamDocument<TDocument> Deserialize(BsonDeserializationContext context, BsonDeserializationArgs args)
-        {
-            context = context.With(b => b.AllowDuplicateElementNames = true);
-            return base.Deserialize(context, args);
         }
 
         // protected methods

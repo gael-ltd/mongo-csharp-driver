@@ -30,13 +30,12 @@ namespace MongoDB.Driver.Core.Operations
     /// <summary>
     /// Represents a list collections operation.
     /// </summary>
-    public class ListCollectionsUsingQueryOperation : IReadOperation<IAsyncCursor<BsonDocument>>, IExecutableInRetryableReadContext<IAsyncCursor<BsonDocument>>
+    public class ListCollectionsUsingQueryOperation : IReadOperation<IAsyncCursor<BsonDocument>>
     {
         // fields
         private BsonDocument _filter;
         private readonly DatabaseNamespace _databaseNamespace;
         private readonly MessageEncoderSettings _messageEncoderSettings;
-        private bool _retryRequested;
 
         // constructors
         /// <summary>
@@ -87,39 +86,16 @@ namespace MongoDB.Driver.Core.Operations
             get { return _messageEncoderSettings; }
         }
 
-        /// <summary>
-        /// Gets or sets whether or not retry was requested.
-        /// </summary>
-        /// <value>
-        /// Whether retry was requested.
-        /// </value>
-        public bool RetryRequested
-        {
-            get { return _retryRequested; }
-            set { _retryRequested = value; }
-        }
-
         // public methods
         /// <inheritdoc/>
         public IAsyncCursor<BsonDocument> Execute(IReadBinding binding, CancellationToken cancellationToken)
         {
             Ensure.IsNotNull(binding, nameof(binding));
 
-            using (var context = RetryableReadContext.Create(binding, retryRequested: false, cancellationToken))
-            {
-                return Execute(context, cancellationToken);
-            }
-        }
-
-        /// <inheritdoc/>
-        public IAsyncCursor<BsonDocument> Execute(RetryableReadContext context, CancellationToken cancellationToken)
-        {
-            Ensure.IsNotNull(context, nameof(context));
-
             using (EventContext.BeginOperation())
             {
                 var operation = CreateOperation();
-                var cursor = operation.Execute(context, cancellationToken);
+                var cursor = operation.Execute(binding, cancellationToken);
                 return new BatchTransformingAsyncCursor<BsonDocument, BsonDocument>(cursor, NormalizeQueryResponse);
             }
         }
@@ -129,21 +105,10 @@ namespace MongoDB.Driver.Core.Operations
         {
             Ensure.IsNotNull(binding, nameof(binding));
 
-            using (var context = await RetryableReadContext.CreateAsync(binding, retryRequested: false, cancellationToken).ConfigureAwait(false))
-            {
-                return await ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
-            }
-        }
-
-        /// <inheritdoc/>
-        public async Task<IAsyncCursor<BsonDocument>> ExecuteAsync(RetryableReadContext context, CancellationToken cancellationToken)
-        {
-            Ensure.IsNotNull(context, nameof(context));
-
             using (EventContext.BeginOperation())
             {
                 var operation = CreateOperation();
-                var cursor = await operation.ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
+                var cursor = await operation.ExecuteAsync(binding, cancellationToken).ConfigureAwait(false);
                 return new BatchTransformingAsyncCursor<BsonDocument, BsonDocument>(cursor, NormalizeQueryResponse);
             }
         }
@@ -166,8 +131,7 @@ namespace MongoDB.Driver.Core.Operations
 
             return new FindOperation<BsonDocument>(_databaseNamespace.SystemNamespacesCollection, BsonDocumentSerializer.Instance, _messageEncoderSettings)
             {
-                Filter = filter,
-                RetryRequested = _retryRequested
+                Filter = filter
             };
         }
 
@@ -177,7 +141,7 @@ namespace MongoDB.Driver.Core.Operations
             foreach (var collection in collections)
             {
                 var name = (string)collection["name"];
-                if (name.StartsWith(prefix, StringComparison.Ordinal))
+                if (name.StartsWith(prefix))
                 {
                     var collectionName = name.Substring(prefix.Length);
                     if (!collectionName.Contains('$'))

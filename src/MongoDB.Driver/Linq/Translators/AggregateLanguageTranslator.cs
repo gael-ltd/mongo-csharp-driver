@@ -242,7 +242,7 @@ namespace MongoDB.Driver.Linq.Translators
         {
             var value = BsonValue.Create(((ConstantExpression)node).Value);
             var stringValue = value as BsonString;
-            if (stringValue != null && stringValue.Value.StartsWith("$", StringComparison.Ordinal))
+            if (stringValue != null && stringValue.Value.StartsWith("$"))
             {
                 value = new BsonDocument("$literal", value);
             }
@@ -393,26 +393,6 @@ namespace MongoDB.Driver.Linq.Translators
                     return result;
                 }
 
-                if (node.Object.Type == typeof(ObjectId)
-                    && TryTranslateObjectIdCall(node, out result))
-                {
-                    return result;
-                }
-
-                Type[] supportedSimpleTypes =
-                {
-                    typeof(bool),
-                    typeof(int),
-                    typeof(long),
-                    typeof(double),
-                    typeof(decimal)
-                };
-                if (supportedSimpleTypes.Contains(node.Object.Type)
-                    && TryTranslateSimpleTypeCall(node, out result))
-                {
-                    return result;
-                }
-
                 if (node.Object.Type.GetTypeInfo().IsGenericType
                     && node.Object.Type.GetGenericTypeDefinition() == typeof(HashSet<>)
                     && TryTranslateHashSetMethodCall(node, out result))
@@ -499,7 +479,7 @@ namespace MongoDB.Driver.Linq.Translators
             }
 
             if (year == null)
-            {
+            { 
                 throw new NotSupportedException($"The DateTime constructor {node} is not supported.");
             }
 
@@ -843,10 +823,7 @@ namespace MongoDB.Driver.Linq.Translators
                         });
                         return true;
                     }
-                    else
-                    {
-                        return TryTranslateViaToString(node, field, out result);
-                    }
+                    break;
             }
 
             return false;
@@ -995,24 +972,6 @@ namespace MongoDB.Driver.Linq.Translators
             }
 
             result = null;
-            return false;
-        }
-
-        private bool TryTranslateObjectIdCall(MethodCallExpression node, out BsonValue result)
-        {
-            var field = TranslateValue(node.Object);
-            return TryTranslateViaToString(node, field, out result); // supports only ToString for now
-        }
-
-        private bool TryTranslateSimpleTypeCall(MethodCallExpression node, out BsonValue result)
-        {
-            result = null;
-            var field = TranslateValue(node.Object);
-            switch (node.Method.Name)
-            {
-                case "ToString":
-                    return TryTranslateViaToString(node, field, out result);
-            }
             return false;
         }
 
@@ -1286,8 +1245,6 @@ namespace MongoDB.Driver.Linq.Translators
                         return true;
                     }
                     break;
-                case "ToString":
-                    return TryTranslateViaToString(node, field, out result);
             }
 
             return false;
@@ -1318,20 +1275,6 @@ namespace MongoDB.Driver.Linq.Translators
 
             result = null;
             return false;
-        }
-
-        private bool TryTranslateViaToString(MethodCallExpression node, BsonValue field, out BsonValue result)
-        {
-            result = null;
-            if (node.Arguments.Count == 0)
-            {
-                result = new BsonDocument("$toString", field);
-                return true;
-            }
-            else
-            {
-                return false;
-            }
         }
     }
 }

@@ -13,18 +13,18 @@
 * limitations under the License.
 */
 
+using System.Threading.Tasks;
 using FluentAssertions;
 using MongoDB.Bson;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace MongoDB.Driver.Tests.Specifications.crud
 {
     public class UpdateManyTest : CrudOperationWithResultTestBase<UpdateResult>
     {
         private BsonDocument _filter;
+        private BsonDocument _update;
         private UpdateOptions _options = new UpdateOptions();
-        private BsonValue _update;
 
         protected override bool TrySetArgument(string name, BsonValue value)
         {
@@ -34,7 +34,7 @@ namespace MongoDB.Driver.Tests.Specifications.crud
                     _filter = (BsonDocument)value;
                     return true;
                 case "update":
-                    _update = value;
+                    _update = (BsonDocument)value;
                     return true;
                 case "upsert":
                     _options.IsUpsert = value.ToBoolean();
@@ -50,9 +50,6 @@ namespace MongoDB.Driver.Tests.Specifications.crud
                         arrayFilters.Add(arrayFilter);
                     }
                     _options.ArrayFilters = arrayFilters;
-                    return true;
-                case "hint":
-                    _options.Hint = value;
                     return true;
             }
 
@@ -72,29 +69,15 @@ namespace MongoDB.Driver.Tests.Specifications.crud
             return new UpdateResult.Acknowledged(expectedResult["matchedCount"].ToInt64(), modifiedCount, upsertedId);
         }
 
-        protected override UpdateResult ExecuteAndGetResult(IMongoDatabase database, IMongoCollection<BsonDocument> collection, bool async)
+        protected override UpdateResult ExecuteAndGetResult(IMongoCollection<BsonDocument> collection, bool async)
         {
-            UpdateDefinition<BsonDocument> updateDefinition = null;
-            if (_update is BsonDocument updateDocument)
-            {
-                updateDefinition = new BsonDocumentUpdateDefinition<BsonDocument>(updateDocument);
-            }
-            else if (_update is BsonArray stages)
-            {
-                var pipeline = new BsonDocumentStagePipelineDefinition<BsonDocument, BsonDocument>(stages.Cast<BsonDocument>());
-                updateDefinition = new PipelineUpdateDefinition<BsonDocument>(pipeline);
-            }
-
             if (async)
             {
-                return collection
-                    .UpdateManyAsync(_filter, updateDefinition, _options)
-                    .GetAwaiter()
-                    .GetResult();
+                return collection.UpdateManyAsync(_filter, _update, _options).GetAwaiter().GetResult();
             }
             else
             {
-                return collection.UpdateMany(_filter, updateDefinition, _options);
+                return collection.UpdateMany(_filter, _update, _options);
             }
         }
 

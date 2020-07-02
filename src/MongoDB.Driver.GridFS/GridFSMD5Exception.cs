@@ -14,7 +14,7 @@
 */
 
 using System;
-#if NET452
+#if NET45
 using System.Runtime.Serialization;
 #endif
 using MongoDB.Bson;
@@ -25,18 +25,18 @@ namespace MongoDB.Driver.GridFS
     /// <summary>
     /// Represents a GridFSMD5 exception.
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
     public class GridFSMD5Exception : GridFSException
     {
-        #region static
+#region static
         private static string FormatMessage(BsonValue id)
         {
             Ensure.IsNotNull(id, nameof(id));
             return string.Format("GridFS MD5 check failed: file id {0}.", id);
         }
-        #endregion
+#endregion
 
         // constructors
         /// <summary>
@@ -48,7 +48,7 @@ namespace MongoDB.Driver.GridFS
         {
         }
 
-#if NET452
+#if NET45
         /// <summary>
         /// Initializes a new instance of the <see cref="GridFSMD5Exception"/> class.
         /// </summary>

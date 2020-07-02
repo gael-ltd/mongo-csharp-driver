@@ -25,7 +25,6 @@ namespace MongoDB.Driver.GridFS
     public class GridFSFindOptions<TFileId>
     {
         // fields
-        private bool? _allowDiskUse;
         private int? _batchSize;
         private int? _limit;
         private TimeSpan? _maxTime;
@@ -34,15 +33,6 @@ namespace MongoDB.Driver.GridFS
         private SortDefinition<GridFSFileInfo<TFileId>> _sort;
 
         // properties
-        /// <summary>
-        /// Gets or sets a value indicating whether the server is allowed to write to disk while executing the Find operation.
-        /// </summary>
-        public bool? AllowDiskUse
-        {
-            get { return _allowDiskUse; }
-            set { _allowDiskUse = value; }
-        }
-
         /// <summary>
         /// Gets or sets the batch size.
         /// </summary>

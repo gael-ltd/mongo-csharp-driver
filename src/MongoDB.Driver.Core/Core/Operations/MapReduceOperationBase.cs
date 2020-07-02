@@ -14,6 +14,9 @@
 */
 
 using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using MongoDB.Bson;
 using MongoDB.Driver.Core.Bindings;
 using MongoDB.Driver.Core.Connections;
@@ -117,7 +120,6 @@ namespace MongoDB.Driver.Core.Operations
         /// </remarks>
         ///   <c>true</c> if objects emitted by the map function remain as JavaScript objects; otherwise, <c>false</c>.
         /// </value>
-        [Obsolete("JavaScriptMode is ignored by server versions 4.4.0 and newer.")]
         public bool? JavaScriptMode
         {
             get { return _javaScriptMode; }
@@ -236,7 +238,7 @@ namespace MongoDB.Driver.Core.Operations
 
             return new BsonDocument
             {
-                { "mapReduce", _collectionNamespace.CollectionName },
+                { "mapreduce", _collectionNamespace.CollectionName }, // all lowercase command name for backwards compatibility
                 { "map", _mapFunction },
                 { "reduce", _reduceFunction },
                 { "out" , CreateOutputOptions() },

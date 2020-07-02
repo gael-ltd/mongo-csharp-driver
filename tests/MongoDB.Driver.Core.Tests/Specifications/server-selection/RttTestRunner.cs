@@ -51,7 +51,11 @@ namespace MongoDB.Driver.Specifications.server_selection
         {
             public IEnumerator<object[]> GetEnumerator()
             {
-                const string prefix = "MongoDB.Driver.Core.Tests.Specifications.server_selection.tests.rtt.";
+#if NET45
+                const string prefix = "MongoDB.Driver.Specifications.server_selection.tests.rtt.";
+#else
+                const string prefix = "MongoDB.Driver.Core.Tests.Dotnet.Specifications.server_selection.tests.rtt.";
+#endif
                 var executingAssembly = typeof(TestCaseFactory).GetTypeInfo().Assembly;
                 var enumerable = executingAssembly
                     .GetManifestResourceNames()

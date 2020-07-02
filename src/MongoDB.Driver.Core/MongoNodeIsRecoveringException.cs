@@ -14,21 +14,23 @@
 */
 
 using System;
-#if NET452
+#if NET45
 using System.Runtime.Serialization;
 #endif
 using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
 using MongoDB.Driver.Core.Connections;
+using MongoDB.Driver.Core.Misc;
 
 namespace MongoDB.Driver
 {
     /// <summary>
     /// Represents a MongoDB node is recovering exception.
     /// </summary>
-#if NET452
+#if NET45
     [Serializable]
 #endif
-    public class MongoNodeIsRecoveringException : MongoCommandException
+    public class MongoNodeIsRecoveringException : MongoServerException
     {
         #region static
         // private static methods
@@ -48,19 +50,22 @@ namespace MongoDB.Driver
         }
         #endregion
 
+        // fields
+        private readonly BsonDocument _result;
+
         // constructors
         /// <summary>
         /// Initializes a new instance of the <see cref="MongoNodeIsRecoveringException"/> class.
         /// </summary>
         /// <param name="connectionId">The connection identifier.</param>
-        /// <param name="command">The command.</param>
         /// <param name="result">The result.</param>
-        public MongoNodeIsRecoveringException(ConnectionId connectionId, BsonDocument command, BsonDocument result)
-            : base(connectionId, CreateMessage(result), command, result)
+        public MongoNodeIsRecoveringException(ConnectionId connectionId, BsonDocument result)
+            : base(connectionId, CreateMessage(result))
         {
+            _result = Ensure.IsNotNull(result, nameof(result));
         }
 
-#if NET452
+#if NET45
         /// <summary>
         /// Initializes a new instance of the <see cref="MongoNodeIsRecoveringException"/> class.
         /// </summary>
@@ -69,6 +74,29 @@ namespace MongoDB.Driver
         protected MongoNodeIsRecoveringException(SerializationInfo info, StreamingContext context)
             : base(info, context)
         {
+            _result = (BsonDocument)info.GetValue("_result", typeof(BsonDocument));
+        }
+#endif
+
+        // properties
+        /// <summary>
+        /// Gets the result from the server.
+        /// </summary>
+        /// <value>
+        /// The result from the server.
+        /// </value>
+        public BsonDocument Result
+        {
+            get { return _result; }
+        }
+
+        // methods
+#if NET45
+        /// <inheritdoc/>
+        public override void GetObjectData(SerializationInfo info, StreamingContext context)
+        {
+            base.GetObjectData(info, context);
+            info.AddValue("_result", _result);
         }
 #endif
     }

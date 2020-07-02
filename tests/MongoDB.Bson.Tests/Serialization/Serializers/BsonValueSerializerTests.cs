@@ -14,15 +14,11 @@
 */
 
 using System;
-using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using FluentAssertions;
-using MongoDB.Bson.IO;
+using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Attributes;
-using MongoDB.Bson.Serialization.IdGenerators;
-using MongoDB.Bson.Serialization.Serializers;
-using MongoDB.Bson.TestHelpers;
 using MongoDB.Bson.TestHelpers.XunitExtensions;
 using Xunit;
 
@@ -117,85 +113,31 @@ namespace MongoDB.Bson.Tests.Serialization
             Assert.True(bson.SequenceEqual(rehydrated.ToBson()));
         }
 
-        [Theory]
-        [ParameterAttributeData]
-        [ResetGuidModeAfterTest]
-        public void TestEmpty(
-            [ClassValues(typeof(GuidModeValues))] GuidMode mode)
+        [Fact]
+        public void TestEmpty()
         {
-            mode.Set();
+            var obj = new TestClass(Guid.Empty);
+            var json = obj.ToJson();
+            var expected = "{ 'B' : #, 'V' : # }".Replace("#", "CSUUID('00000000-0000-0000-0000-000000000000')").Replace("'", "\"");
+            Assert.Equal(expected, json);
 
-#pragma warning disable 618
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 && BsonDefaults.GuidRepresentation != GuidRepresentation.Unspecified)
-            {
-                var obj = new TestClass(Guid.Empty);
-
-                string expectedGuidJson;
-                var guidRepresentation = BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 ? BsonDefaults.GuidRepresentation : GuidRepresentation.Unspecified;
-                switch (guidRepresentation)
-                {
-                    case GuidRepresentation.CSharpLegacy: expectedGuidJson = "CSUUID('00000000-0000-0000-0000-000000000000')"; break;
-                    case GuidRepresentation.JavaLegacy: expectedGuidJson = "JUUID('00000000-0000-0000-0000-000000000000')"; break;
-                    case GuidRepresentation.PythonLegacy: expectedGuidJson = "PYUUID('00000000-0000-0000-0000-000000000000')"; break;
-                    case GuidRepresentation.Standard: expectedGuidJson = "UUID('00000000-0000-0000-0000-000000000000')"; break;
-                    default: throw new Exception("Unexpected GuidRepresentation.");
-                }
-
-                var json = obj.ToJson(new JsonWriterSettings());
-                var expected = "{ 'B' : #, 'V' : # }".Replace("#", expectedGuidJson).Replace("'", "\"");
-                Assert.Equal(expected, json);
-
-                var bson = obj.ToBson();
-                var rehydrated = BsonSerializer.Deserialize<TestClass>(bson);
-                Assert.True(bson.SequenceEqual(rehydrated.ToBson()));
-            }
-            else
-            {
-                var exception = Record.Exception(() => new TestClass(Guid.Empty));
-                exception.Should().BeOfType<InvalidOperationException>();
-            }
-#pragma warning disable 618
+            var bson = obj.ToBson();
+            var rehydrated = BsonSerializer.Deserialize<TestClass>(bson);
+            Assert.True(bson.SequenceEqual(rehydrated.ToBson()));
         }
 
-        [Theory]
-        [ParameterAttributeData]
-        [ResetGuidModeAfterTest]
-        public void TestNew(
-            [ClassValues(typeof(GuidModeValues))] GuidMode mode)
+        [Fact]
+        public void TestNew()
         {
-            mode.Set();
-
-#pragma warning disable 618
             var guid = Guid.NewGuid();
-            if (BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 && BsonDefaults.GuidRepresentation != GuidRepresentation.Unspecified)
-            {
-                var obj = new TestClass(guid);
+            var obj = new TestClass(guid);
+            var json = obj.ToJson();
+            var expected = "{ 'B' : #, 'V' : # }".Replace("#", "CSUUID('" + guid.ToString() + "')").Replace("'", "\"");
+            Assert.Equal(expected, json);
 
-                string expectedGuidJson;
-                var guidRepresentation = BsonDefaults.GuidRepresentationMode == GuidRepresentationMode.V2 ? BsonDefaults.GuidRepresentation : GuidRepresentation.Unspecified;
-                switch (guidRepresentation)
-                {
-                    case GuidRepresentation.CSharpLegacy: expectedGuidJson = $"CSUUID('{guid.ToString()}')"; break;
-                    case GuidRepresentation.JavaLegacy: expectedGuidJson = $"JUUID('{guid.ToString()}')"; break;
-                    case GuidRepresentation.PythonLegacy: expectedGuidJson = $"PYUUID('{guid.ToString()}')"; break;
-                    case GuidRepresentation.Standard: expectedGuidJson = $"UUID('{guid.ToString()}')"; break;
-                    default: throw new Exception("Unexpected GuidRepresentation.");
-                }
-
-                var json = obj.ToJson(new JsonWriterSettings());
-                var expected = "{ 'B' : #, 'V' : # }".Replace("#", expectedGuidJson).Replace("'", "\"");
-                Assert.Equal(expected, json);
-
-                var bson = obj.ToBson();
-                var rehydrated = BsonSerializer.Deserialize<TestClass>(bson);
-                Assert.True(bson.SequenceEqual(rehydrated.ToBson()));
-            }
-            else
-            {
-                var exception = Record.Exception(() => new TestClass(guid));
-                exception.Should().BeOfType<InvalidOperationException>();
-            }
-#pragma warning disable 618
+            var bson = obj.ToBson();
+            var rehydrated = BsonSerializer.Deserialize<TestClass>(bson);
+            Assert.True(bson.SequenceEqual(rehydrated.ToBson()));
         }
     }
 
@@ -494,106 +436,6 @@ namespace MongoDB.Bson.Tests.Serialization
             var bson = obj.ToBson();
             var rehydrated = BsonSerializer.Deserialize<TestClass>(bson);
             Assert.True(bson.SequenceEqual(rehydrated.ToBson()));
-        }
-
-        [Fact]
-        public void GetDocumentId_should_return_expected_result_when_id_is_missing()
-        {
-            var subject = new BsonDocumentSerializer();
-            var document = new BsonDocument();
-
-            var result = subject.GetDocumentId(document, out var id, out var idNominalType, out var idGenerator);
-
-            result.Should().BeTrue();
-            id.Should().BeNull();
-            idNominalType.Should().Be(typeof(BsonValue));
-            idGenerator.Should().Be(BsonObjectIdGenerator.Instance);
-        }
-
-        [Fact]
-        public void GetDocumentId_should_return_expected_result_when_id_is_ObjectId()
-        {
-            var subject = new BsonDocumentSerializer();
-            var document = new BsonDocument("_id", ObjectId.GenerateNewId());
-
-            var result = subject.GetDocumentId(document, out var id, out var idNominalType, out var idGenerator);
-
-            result.Should().BeTrue();
-            id.Should().Be(document["_id"]);
-            idNominalType.Should().Be(typeof(BsonValue));
-            idGenerator.Should().Be(BsonObjectIdGenerator.Instance);
-        }
-
-        [Fact]
-        public void GetDocumentId_should_return_expected_result_when_id_is_int32()
-        {
-            var subject = new BsonDocumentSerializer();
-            var document = new BsonDocument("_id", 1);
-
-            var result = subject.GetDocumentId(document, out var id, out var idNominalType, out var idGenerator);
-
-            result.Should().BeTrue();
-            id.Should().Be(document["_id"]);
-            idNominalType.Should().Be(typeof(BsonValue));
-            idGenerator.Should().BeNull();
-        }
-
-        public static IEnumerable<object[]> GetDocumentId_should_return_expected_result_when_id_is_binary_data_guid_MemberData()
-        {
-            var data = new TheoryData<GuidRepresentationMode, GuidRepresentation, GuidRepresentation>();
-
-            foreach (var defaultGuidRepresentationMode in EnumHelper.GetValues<GuidRepresentationMode>())
-            {
-                foreach (var defaultGuidRepresentation in EnumHelper.GetValues<GuidRepresentation>())
-                {
-                    if (defaultGuidRepresentationMode == GuidRepresentationMode.V3 && defaultGuidRepresentation != GuidRepresentation.Unspecified)
-                    {
-                        continue;
-                    }
-
-                    foreach (var idGuidRepresentation in EnumHelper.GetValues<GuidRepresentation>())
-                    {
-                        if (idGuidRepresentation == GuidRepresentation.Unspecified)
-                        {
-                            continue;
-                        }
-
-                        data.Add(defaultGuidRepresentationMode, defaultGuidRepresentation, idGuidRepresentation);
-                    }
-                }
-            }
-
-            return data;
-        }
-
-        [Theory]
-        [MemberData(nameof(GetDocumentId_should_return_expected_result_when_id_is_binary_data_guid_MemberData))]
-        [ResetGuidModeAfterTest]
-        public void GetDocumentId_should_return_expected_result_when_id_is_binary_data_guid(
-            GuidRepresentationMode defaultGuidRepresentationMode,
-            GuidRepresentation defaultGuidRepresentation,
-            GuidRepresentation idGuidRepresentation)
-        {
-            GuidMode.Set(defaultGuidRepresentationMode, defaultGuidRepresentation);
-
-            var subject = new BsonDocumentSerializer();
-            var guid = Guid.Parse("01020304-0506-0708-090a-0b0c0d0e0f10");
-            var document = new BsonDocument("_id", new BsonBinaryData(guid, idGuidRepresentation));
-
-            var result = subject.GetDocumentId(document, out var id, out var idNominalType, out var idGenerator);
-
-            result.Should().BeTrue();
-            id.Should().Be(document["_id"]);
-            idNominalType.Should().Be(typeof(BsonValue));
-            if (defaultGuidRepresentationMode == GuidRepresentationMode.V2 || idGuidRepresentation == GuidRepresentation.Standard)
-            {
-                var guidGenerator = idGenerator.Should().BeOfType<BsonBinaryDataGuidGenerator>().Subject;
-                guidGenerator.GuidRepresentation.Should().Be(idGuidRepresentation);
-            }
-            else
-            {
-                idGenerator.Should().BeNull();
-            }
         }
     }
 
@@ -1280,9 +1122,7 @@ namespace MongoDB.Bson.Tests.Serialization
         [Fact]
         public void TestNotNull()
         {
-#pragma warning disable 618
             var obj = new TestClass(new ObjectId(1, 2, 3, 4));
-#pragma warning restore 618
             var json = obj.ToJson();
             var expected = "{ 'B' : #, 'V' : # }".Replace("#", "ObjectId('000000010000020003000004')").Replace("'", "\"");
             Assert.Equal(expected, json);
@@ -1342,7 +1182,7 @@ namespace MongoDB.Bson.Tests.Serialization
         {
             var obj = new TestClass(new BsonRegularExpression("abc", "imxs"));
             var json = obj.ToJson();
-            var expected = "{ 'B' : #, 'V' : # }".Replace("#", "/abc/imsx").Replace("'", "\"");
+            var expected = "{ 'B' : #, 'V' : # }".Replace("#", "/abc/imxs").Replace("'", "\"");
             Assert.Equal(expected, json);
 
             var bson = obj.ToBson();
@@ -1542,7 +1382,7 @@ namespace MongoDB.Bson.Tests.Serialization
         {
             var obj = new TestClass(new BsonTimestamp(long.MinValue));
             var json = obj.ToJson();
-            var expected = "{ 'B' : #, 'V' : # }".Replace("#", "Timestamp(2147483648, 0)").Replace("'", "\"");
+            var expected = "{ 'B' : #, 'V' : # }".Replace("#", "Timestamp(-2147483648, 0)").Replace("'", "\"");
             Assert.Equal(expected, json);
 
             var bson = obj.ToBson();
@@ -1555,7 +1395,7 @@ namespace MongoDB.Bson.Tests.Serialization
         {
             var obj = new TestClass(new BsonTimestamp(-1));
             var json = obj.ToJson();
-            var expected = "{ 'B' : #, 'V' : # }".Replace("#", "Timestamp(4294967295, 4294967295)").Replace("'", "\"");
+            var expected = "{ 'B' : #, 'V' : # }".Replace("#", "Timestamp(-1, -1)").Replace("'", "\"");
             Assert.Equal(expected, json);
 
             var bson = obj.ToBson();
@@ -1607,7 +1447,7 @@ namespace MongoDB.Bson.Tests.Serialization
         {
             var obj = new TestClass(new BsonTimestamp(long.MaxValue));
             var json = obj.ToJson();
-            var expected = "{ 'B' : #, 'V' : # }".Replace("#", "Timestamp(2147483647, 4294967295)").Replace("'", "\"");
+            var expected = "{ 'B' : #, 'V' : # }".Replace("#", "Timestamp(2147483647, -1)").Replace("'", "\"");
             Assert.Equal(expected, json);
 
             var bson = obj.ToBson();

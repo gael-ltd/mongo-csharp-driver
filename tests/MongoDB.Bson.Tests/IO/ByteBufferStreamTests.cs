@@ -20,6 +20,7 @@ using System.Linq;
 using System.Reflection;
 using FluentAssertions;
 using MongoDB.Bson.IO;
+using MongoDB.Bson.TestHelpers;
 using MongoDB.Bson.TestHelpers.XunitExtensions;
 using Moq;
 using Xunit;
@@ -748,9 +749,9 @@ namespace MongoDB.Bson.Tests.IO
             var result = subject.ReadObjectId();
 
             result.Timestamp.Should().Be(0x01020304);
-            result._a().Should().Be(0x01020304);
-            result._b().Should().Be(0x05060708);
-            result._c().Should().Be(0x090a0b0c);
+            result.Machine.Should().Be(0x050607);
+            result.Pid.Should().Be(0x0809);
+            result.Increment.Should().Be(0x0a0b0c);
         }
 
         [Theory]
@@ -761,7 +762,7 @@ namespace MongoDB.Bson.Tests.IO
         {
             var bytes = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
             var subject = CreateSubject(bytes, numberOfChunks);
-            var expectedResult = ObjectIdReflector.Create(0x01020304, 0x0506070809, 0x0a0b0c);
+            var expectedResult = new ObjectId(0x01020304, 0x050607, 0x0809, 0x0a0b0c);
 
             var result = subject.ReadObjectId();
 

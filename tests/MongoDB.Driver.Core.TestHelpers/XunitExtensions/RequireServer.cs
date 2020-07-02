@@ -18,11 +18,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using MongoDB.Bson;
 using MongoDB.Bson.TestHelpers.XunitExtensions;
 using MongoDB.Driver.Core.Clusters;
 using MongoDB.Driver.Core.Misc;
-using Xunit;
 
 namespace MongoDB.Driver.Core.TestHelpers.XunitExtensions
 {
@@ -33,7 +31,7 @@ namespace MongoDB.Driver.Core.TestHelpers.XunitExtensions
         {
             if (Environment.GetEnvironmentVariable("SKIPTESTSTHATREQUIRESERVER") != null)
             {
-                throw new SkipException("Test skipped because it requires a server.");
+                throw new SkipTestException("Test skipped because it requires a server.");
             }
             return new RequireServer();
         }
@@ -53,7 +51,7 @@ namespace MongoDB.Driver.Core.TestHelpers.XunitExtensions
             {
                 return this;
             }
-            throw new SkipException($"Test skipped because authentication is {(actualAuthentication ? "on" : "off")}.");
+            throw new SkipTestException($"Test skipped because authentication is {(actualAuthentication ? "on" : "off")}.");
         }
 
         public RequireServer ClusterType(ClusterType clusterType)
@@ -63,7 +61,7 @@ namespace MongoDB.Driver.Core.TestHelpers.XunitExtensions
             {
                 return this;
             }
-            throw new SkipException($"Test skipped because cluster type is {actualClusterType} and not {clusterType}.");
+            throw new SkipTestException($"Test skipped because cluster type is {actualClusterType} and not {clusterType}.");
         }
 
         public RequireServer ClusterTypes(params ClusterType[] clusterTypes)
@@ -74,18 +72,7 @@ namespace MongoDB.Driver.Core.TestHelpers.XunitExtensions
                 return this;
             }
             var clusterTypesString = string.Join(", ", clusterTypes.Select(t => t.ToString()));
-            throw new SkipException($"Test skipped because cluster type is {actualClusterType} and not one of ({clusterTypesString}).");
-        }
-
-        public RequireServer RunOn(BsonArray requirements)
-        {
-            var cluster = CoreTestConfiguration.Cluster;
-            if (requirements.Any(requirement => CanRunOn(cluster, requirement.AsBsonDocument)))
-            {
-                return this;
-            }
-
-            throw new SkipException($"Test skipped because cluster does not meet runOn requirements: {requirements}.");
+            throw new SkipTestException($"Test skipped because cluster type is {actualClusterType} and not one of ({clusterTypesString}).");
         }
 
         public RequireServer Supports(Feature feature)
@@ -94,7 +81,7 @@ namespace MongoDB.Driver.Core.TestHelpers.XunitExtensions
             {
                 return this;
             }
-            throw new SkipException($"Test skipped because server version {_serverVersion} does not support the {feature.Name} feature.");
+            throw new SkipTestException($"Test skipped because server version {_serverVersion} does not support the {feature.Name} feature.");
         }
 
         public RequireServer Supports(params Feature[] features)
@@ -118,9 +105,9 @@ namespace MongoDB.Driver.Core.TestHelpers.XunitExtensions
             var clusterDescription = CoreTestConfiguration.Cluster.Description;
             if (clusterDescription.LogicalSessionTimeout != null)
             {
-                return this;
+               return this;
             }
-            throw new SkipException($"Test skipped because the cluster does not support sessions.");
+            throw new SkipTestException($"Test skipped because the cluster does not support sessions.");
         }
 
         public RequireServer DoesNotSupport(Feature feature)
@@ -129,7 +116,7 @@ namespace MongoDB.Driver.Core.TestHelpers.XunitExtensions
             {
                 return this;
             }
-            throw new SkipException($"Test skipped because server version {_serverVersion} does support the {feature.Name} feature.");
+            throw new SkipTestException($"Test skipped because server version {_serverVersion} does support the {feature.Name} feature.");
         }
 
         public RequireServer DoesNotSupport(params Feature[] features)
@@ -148,7 +135,7 @@ namespace MongoDB.Driver.Core.TestHelpers.XunitExtensions
             {
                 return this;
             }
-            throw new SkipException($"Test skipped because storage engine is \"{actualStorageEngine}\" and not \"{storageEngine}\".");
+            throw new SkipTestException($"Test skipped because storage engine is \"{actualStorageEngine}\" and not \"{storageEngine}\".");
         }
 
         public RequireServer StorageEngines(params string[] storageEngines)
@@ -159,19 +146,7 @@ namespace MongoDB.Driver.Core.TestHelpers.XunitExtensions
                 return this;
             }
             var storageEnginesString = string.Join(", ", storageEngines.Select(e => "\"" + e + "\""));
-            throw new SkipException($"Test skipped because storage engine is \"{actualStorageEngine}\" and not one of ({storageEnginesString}).");
-        }
-
-        public RequireServer Tls(bool required = true)
-        {
-            var usingTls = CoreTestConfiguration.ConnectionString.Tls;
-            if (usingTls == required)
-            {
-                return this;
-            }
-            throw new SkipException(
-                $"Test skipped because the connection string specifies TLS={usingTls} " +
-                $"and this test requires TLS={required}.");
+            throw new SkipTestException($"Test skipped because storage engine is \"{actualStorageEngine}\" and not one of ({storageEnginesString}).");
         }
 
         public RequireServer VersionGreaterThanOrEqualTo(SemanticVersion version)
@@ -181,7 +156,7 @@ namespace MongoDB.Driver.Core.TestHelpers.XunitExtensions
             {
                 return this;
             }
-            throw new SkipException($"Test skipped because server version {actualVersion} is not greater than or equal to {version}.");
+            throw new SkipTestException($"Test skipped because server version {actualVersion} is not greater than or equal to {version}.");
         }
 
         public RequireServer VersionGreaterThanOrEqualTo(string version)
@@ -196,7 +171,7 @@ namespace MongoDB.Driver.Core.TestHelpers.XunitExtensions
             {
                 return this;
             }
-            throw new SkipException($"Test skipped because server version {actualVersion} is not less than {version}.");
+            throw new SkipTestException($"Test skipped because server version {actualVersion} is not less than {version}.");
         }
 
         public RequireServer VersionLessThan(string version)
@@ -211,59 +186,12 @@ namespace MongoDB.Driver.Core.TestHelpers.XunitExtensions
             {
                 return this;
             }
-            throw new SkipException($"Test skipped because server version {actualVersion} is not less than or equal to {version}.");
+            throw new SkipTestException($"Test skipped because server version {actualVersion} is not less than or equal to {version}.");
         }
 
         public RequireServer VersionLessThanOrEqualTo(string version)
         {
             return VersionLessThanOrEqualTo(SemanticVersion.Parse(version));
-        }
-
-        // private methods
-        private bool CanRunOn(ICluster cluster, BsonDocument requirement)
-        {
-            if (requirement.TryGetValue("minServerVersion", out var minServerVersionBsonValue))
-            {
-                var actualVersion = CoreTestConfiguration.ServerVersion;
-                var minServerVersion = SemanticVersion.Parse(minServerVersionBsonValue.AsString);
-                if (actualVersion < minServerVersion)
-                {
-                    return false;
-                }
-            }
-
-            if (requirement.TryGetValue("maxServerVersion", out var maxServerVersionBsonValue))
-            {
-                var actualVersion = CoreTestConfiguration.ServerVersion;
-                var maxServerVersion = SemanticVersion.Parse(maxServerVersionBsonValue.AsString);
-                if (actualVersion > maxServerVersion)
-                {
-                    return false;
-                }
-            }
-
-            if (requirement.TryGetValue("topology", out var topologyBsonValue))
-            {
-                var actualClusterType = CoreTestConfiguration.Cluster.Description.Type;
-                var runOnClusterTypes = topologyBsonValue.AsBsonArray.Select(topology => MapTopologyToClusterType(topology.AsString)).ToList();
-                if (!runOnClusterTypes.Contains(actualClusterType))
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private ClusterType MapTopologyToClusterType(string topology)
-        {
-            switch (topology)
-            {
-                case "single": return Clusters.ClusterType.Standalone;
-                case "replicaset": return Clusters.ClusterType.ReplicaSet;
-                case "sharded": return Clusters.ClusterType.Sharded;
-                default: throw new ArgumentException($"Invalid topology: \"{topology}\".", nameof(topology));
-            }
         }
     }
 }

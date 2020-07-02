@@ -17,7 +17,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
-#if NET452
+#if NET45
 using System.Runtime.Serialization.Formatters.Binary;
 #endif
 using FluentAssertions;
@@ -92,11 +92,11 @@ namespace MongoDB.Driver.Tests
                 writeConcernError: new BulkWriteConcernError(11, "funny", new BsonDocument("c", 1)),
                 unprocessedRequests: new[] { new InsertRequest(new BsonDocument("a", 1)) { CorrelationId = 0 } });
 
-            var models = new[]
+            var models = new [] 
             {
                 new InsertOneModel<BsonDocument>(new BsonDocument("a", 1)),
                 new InsertOneModel<BsonDocument>(new BsonDocument("b", 1))
-            };
+            }; 
             var mapped = MongoBulkWriteException<BsonDocument>.FromCore(exception, models);
 
             mapped.Result.ProcessedRequests.Count.Should().Be(1);
@@ -138,7 +138,7 @@ namespace MongoDB.Driver.Tests
             ((InsertOneModel<BsonDocument>)mapped.UnprocessedRequests[0]).Document.Should().Be("{a:1}");
         }
 
-#if NET452
+#if NET45
         [Fact]
         public void Serialization_should_work()
         {

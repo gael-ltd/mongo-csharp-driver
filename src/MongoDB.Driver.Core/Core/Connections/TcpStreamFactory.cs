@@ -48,7 +48,7 @@ namespace MongoDB.Driver.Core.Connections
         // methods
         public Stream CreateStream(EndPoint endPoint, CancellationToken cancellationToken)
         {
-#if NETSTANDARD1_5 || NETSTANDARD2_0
+#if NETSTANDARD1_5 || NETSTANDARD1_6
             // ugh... I know... but there isn't a non-async version of dns resolution
             // in .NET Core
             var resolved = ResolveEndPointsAsync(endPoint).GetAwaiter().GetResult();
@@ -82,7 +82,7 @@ namespace MongoDB.Driver.Core.Connections
 
         public async Task<Stream> CreateStreamAsync(EndPoint endPoint, CancellationToken cancellationToken)
         {
-#if NETSTANDARD1_5 || NETSTANDARD2_0
+#if NETSTANDARD1_5 || NETSTANDARD1_6
             var resolved = await ResolveEndPointsAsync(endPoint).ConfigureAwait(false);
             for (int i = 0; i < resolved.Length; i++)
             {
@@ -124,10 +124,12 @@ namespace MongoDB.Driver.Core.Connections
 
         private void Connect(Socket socket, EndPoint endPoint, CancellationToken cancellationToken)
         {
-            var state = 1; // 1 == connecting, 2 == connected, 3 == timedout, 4 == cancelled
+            var connected = false;
+            var cancelled = false;
+            var timedOut = false;
 
-            using (new Timer(_ => ChangeState(3), null, _settings.ConnectTimeout, Timeout.InfiniteTimeSpan))
-            using (cancellationToken.Register(() => ChangeState(4)))
+            using (var registration = cancellationToken.Register(() => { if (!connected) { cancelled = true; try { socket.Dispose(); } catch { } } }))
+            using (var timer = new Timer(_ => { if (!connected) { timedOut = true; try { socket.Dispose(); } catch { } } }, null, _settings.ConnectTimeout, Timeout.InfiniteTimeSpan))
             {
                 try
                 {
@@ -141,48 +143,43 @@ namespace MongoDB.Driver.Core.Connections
                     {
                         socket.Connect(endPoint);
                     }
-                    ChangeState(2); // note: might not actually go to state 2 if already in state 3 or 4
+                    connected = true;
+                    return;
                 }
-                catch when (state == 1)
+                catch
                 {
-                    try { socket.Dispose(); } catch { }
-                    throw;
+                    if (!cancelled && !timedOut)
+                    {
+                        try { socket.Dispose(); } catch { }
+                        throw;
+                    }
                 }
-                catch when (state >= 3)
-                {
-                    // a timeout or operation cancelled exception will be thrown instead
-                }
-
-                if (state == 3)
-                {
-                    var message = string.Format("Timed out connecting to {0}. Timeout was {1}.", endPoint, _settings.ConnectTimeout);
-                    throw new TimeoutException(message);
-                }
-                if (state == 4) { throw new OperationCanceledException(); }
             }
 
-            void ChangeState(int to)
+            try { socket.Dispose(); } catch { }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            if (timedOut)
             {
-                var from = Interlocked.CompareExchange(ref state, to, 1);
-                if (from == 1 && to >= 3)
-                {
-                    try { socket.Dispose(); } catch { } // disposing the socket aborts the connection attempt
-                }
+                var message = string.Format("Timed out connecting to {0}. Timeout was {1}.", endPoint, _settings.ConnectTimeout);
+                throw new TimeoutException(message);
             }
         }
 
         private async Task ConnectAsync(Socket socket, EndPoint endPoint, CancellationToken cancellationToken)
         {
-            var state = 1; // 1 == connecting, 2 == connected, 3 == timedout, 4 == cancelled
+            var connected = false;
+            var cancelled = false;
+            var timedOut = false;
 
-            using (new Timer(_ => ChangeState(3), null, _settings.ConnectTimeout, Timeout.InfiniteTimeSpan))
-            using (cancellationToken.Register(() => ChangeState(4)))
+            using (var registration = cancellationToken.Register(() => { if (!connected) { cancelled = true; try { socket.Dispose(); } catch { } } }))
+            using (var timer = new Timer(_ => { if (!connected) { timedOut = true; try { socket.Dispose(); } catch { } } }, null, _settings.ConnectTimeout, Timeout.InfiniteTimeSpan))
             {
                 try
                 {
                     var dnsEndPoint = endPoint as DnsEndPoint;
-#if NETSTANDARD1_5 || NETSTANDARD2_0
-                    await socket.ConnectAsync(endPoint).ConfigureAwait(false);
+#if NETSTANDARD1_5 || NETSTANDARD1_6
+                    await Task.Run(() => socket.Connect(endPoint)); // TODO: honor cancellationToken
 #else
                     if (dnsEndPoint != null)
                     {
@@ -194,33 +191,26 @@ namespace MongoDB.Driver.Core.Connections
                         await Task.Factory.FromAsync(socket.BeginConnect(endPoint, null, null), socket.EndConnect).ConfigureAwait(false);
                     }
 #endif
-                    ChangeState(2); // note: might not actually go to state 2 if already in state 3 or 4
+                    connected = true;
+                    return;
                 }
-                catch when (state == 1)
+                catch
                 {
-                    try { socket.Dispose(); } catch { }
-                    throw;
+                    if (!cancelled && !timedOut)
+                    {
+                        try { socket.Dispose(); } catch { }
+                        throw;
+                    }
                 }
-                catch when (state >= 3)
-                {
-                    // a timeout or operation cancelled exception will be thrown instead
-                }
-
-                if (state == 3)
-                {
-                    var message = string.Format("Timed out connecting to {0}. Timeout was {1}.", endPoint, _settings.ConnectTimeout);
-                    throw new TimeoutException(message);
-                }
-                if (state == 4) { throw new OperationCanceledException(); }
             }
 
-            void ChangeState(int to)
+            try { socket.Dispose(); } catch { }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            if (timedOut)
             {
-                var from = Interlocked.CompareExchange(ref state, to, 1);
-                if (from == 1 && to >= 3)
-                {
-                    try { socket.Dispose(); } catch { } // disposing the socket aborts the connection attempt
-                }
+                var message = string.Format("Timed out connecting to {0}. Timeout was {1}.", endPoint, _settings.ConnectTimeout);
+                throw new TimeoutException(message);
             }
         }
 
@@ -259,33 +249,7 @@ namespace MongoDB.Driver.Core.Connections
                 addressFamily = _settings.AddressFamily;
             }
 
-            var socket = new Socket(addressFamily, SocketType.Stream, ProtocolType.Tcp);
-
-            // not all platforms support IOControl
-            try
-            {
-                var keepAliveValues = new KeepAliveValues
-                {
-                    OnOff = 1,
-                    KeepAliveTime = 120000, // 120 seconds in milliseconds
-                    KeepAliveInterval = 10000 // 10 seconds in milliseconds
-                };
-                socket.IOControl(IOControlCode.KeepAliveValues, keepAliveValues.ToBytes(), null);
-            }
-            catch (PlatformNotSupportedException)
-            {
-                // most platforms should support this call to SetSocketOption, but just in case call it in a try/catch also
-                try
-                {
-                    socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
-                }
-                catch (PlatformNotSupportedException)
-                {
-                    // ignore PlatformNotSupportedException
-                }
-            }
-
-            return socket;
+            return new Socket(addressFamily, SocketType.Stream, ProtocolType.Tcp);
         }
 
         private async Task<EndPoint[]> ResolveEndPointsAsync(EndPoint initial)

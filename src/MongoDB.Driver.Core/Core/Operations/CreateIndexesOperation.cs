@@ -16,9 +16,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver.Core.Bindings;
 using MongoDB.Driver.Core.Events;
 using MongoDB.Driver.Core.Misc;
@@ -33,7 +35,6 @@ namespace MongoDB.Driver.Core.Operations
     {
         // fields
         private readonly CollectionNamespace _collectionNamespace;
-        private CreateIndexCommitQuorum _commitQuorum;
         private TimeSpan? _maxTime;
         private readonly MessageEncoderSettings _messageEncoderSettings;
         private readonly IEnumerable<CreateIndexRequest> _requests;
@@ -66,15 +67,6 @@ namespace MongoDB.Driver.Core.Operations
         public CollectionNamespace CollectionNamespace
         {
             get { return _collectionNamespace; }
-        }
-
-        /// <summary>
-        /// Gets or sets the commit quorum.
-        /// </summary>
-        public CreateIndexCommitQuorum CommitQuorum
-        {
-            get => _commitQuorum;
-            set => _commitQuorum = value;
         }
 
         /// <summary>
@@ -132,7 +124,7 @@ namespace MongoDB.Driver.Core.Operations
             using (var channel = channelSource.GetChannel(cancellationToken))
             using (var channelBinding = new ChannelReadWriteBinding(channelSource.Server, channel, binding.Session.Fork()))
             {
-                var operation = CreateOperation();
+                var operation = CreateOperation(channel.ConnectionDescription.ServerVersion);
                 return operation.Execute(channelBinding, cancellationToken);
             }
         }
@@ -145,20 +137,26 @@ namespace MongoDB.Driver.Core.Operations
             using (var channel = await channelSource.GetChannelAsync(cancellationToken).ConfigureAwait(false))
             using (var channelBinding = new ChannelReadWriteBinding(channelSource.Server, channel, binding.Session.Fork()))
             {
-                var operation = CreateOperation();
+                var operation = CreateOperation(channel.ConnectionDescription.ServerVersion);
                 return await operation.ExecuteAsync(channelBinding, cancellationToken).ConfigureAwait(false);
             }
         }
 
-        // internal methods
-        internal IWriteOperation<BsonDocument> CreateOperation()
+        // private methods
+        internal IWriteOperation<BsonDocument> CreateOperation(SemanticVersion serverVersion)
         {
-            return new CreateIndexesUsingCommandOperation(_collectionNamespace, _requests, _messageEncoderSettings)
+            if (Feature.CreateIndexesCommand.IsSupported(serverVersion))
             {
-                CommitQuorum = _commitQuorum,
-                MaxTime = _maxTime,
-                WriteConcern = _writeConcern
-            };
+                return new CreateIndexesUsingCommandOperation(_collectionNamespace, _requests, _messageEncoderSettings)
+                {
+                    MaxTime = _maxTime,
+                    WriteConcern = _writeConcern
+                };
+            }
+            else
+            {
+                return new CreateIndexesUsingInsertOperation(_collectionNamespace, _requests, _messageEncoderSettings);
+            }
         }
-    }
+   }
 }

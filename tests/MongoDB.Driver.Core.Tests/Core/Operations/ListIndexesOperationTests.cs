@@ -48,7 +48,6 @@ namespace MongoDB.Driver.Core.Operations
 
             subject.CollectionNamespace.Should().BeSameAs(_collectionNamespace);
             subject.MessageEncoderSettings.Should().BeSameAs(_messageEncoderSettings);
-            subject.RetryRequested.Should().BeFalse();
         }
 
         [Fact]
@@ -57,19 +56,6 @@ namespace MongoDB.Driver.Core.Operations
             Action action = () => new ListIndexesOperation(null, _messageEncoderSettings);
 
             action.ShouldThrow<ArgumentNullException>().And.ParamName.Should().Be("collectionNamespace");
-        }
-
-        [Theory]
-        [ParameterAttributeData]
-        public void RetryRequested_get_should_return_expected_result(
-            [Values(false, true)] bool value)
-        {
-            var subject = new ListIndexesOperation(_collectionNamespace, _messageEncoderSettings);
-
-            subject.RetryRequested = value;
-            var result = subject.RetryRequested;
-
-            result.Should().Be(value);
         }
 
         [SkippableTheory]

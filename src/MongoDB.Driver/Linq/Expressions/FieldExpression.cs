@@ -20,13 +20,12 @@ using MongoDB.Driver.Core.Misc;
 
 namespace MongoDB.Driver.Linq.Expressions
 {
-    internal sealed class FieldExpression : SerializationExpression, IFieldExpression, IHasOutOfCurrentScopePrefix
+    internal sealed class FieldExpression : SerializationExpression, IFieldExpression
     {
         private readonly Expression _document;
         private readonly string _fieldName;
         private readonly Expression _original;
         private readonly IBsonSerializer _serializer;
-        private string _outOfCurrentScopePrefix;
 
         public FieldExpression(string fieldName, IBsonSerializer serializer)
             : this(null, fieldName, serializer, null)
@@ -69,12 +68,6 @@ namespace MongoDB.Driver.Linq.Expressions
         public Expression Original
         {
             get { return _original; }
-        }
-
-        public string OutOfCurrentScopePrefix
-        {
-            get { return _outOfCurrentScopePrefix; }
-            set { _outOfCurrentScopePrefix = value; }
         }
 
         public override IBsonSerializer Serializer

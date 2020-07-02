@@ -29,19 +29,18 @@ namespace MongoDB.Driver.Tests.JsonDrivenTests
         private FilterDefinition<BsonDocument> _filter;
         private UpdateOptions _options = new UpdateOptions();
         private UpdateResult _result;
-        private IClientSessionHandle _session;
         private UpdateDefinition<BsonDocument> _update;
 
         // public constructors
-        public JsonDrivenUpdateOneTest(IMongoCollection<BsonDocument> collection, Dictionary<string, object> objectMap)
-            : base(collection, objectMap)
+        public JsonDrivenUpdateOneTest(IMongoClient client, IMongoDatabase database, IMongoCollection<BsonDocument> collection, Dictionary<string, IClientSessionHandle> sessionMap)
+            : base(client, database, collection, sessionMap)
         {
         }
 
         // public methods
         public override void Arrange(BsonDocument document)
         {
-            JsonDrivenHelper.EnsureAllFieldsAreValid(document, "name", "object", "collectionOptions", "arguments", "result");
+            JsonDrivenHelper.EnsureAllFieldsAreValid(document, "name", "arguments", "result");
             base.Arrange(document);
         }
 
@@ -56,42 +55,30 @@ namespace MongoDB.Driver.Tests.JsonDrivenTests
 
         protected override void CallMethod(CancellationToken cancellationToken)
         {
-            if (_session == null)
-            {
-                _result = _collection.UpdateOne(_filter, _update, _options, cancellationToken);
-            }
-            else
-            {
-                _result = _collection.UpdateOne(_session, _filter, _update, _options, cancellationToken);
-            }
+            _result = _collection.UpdateOne(_filter, _update, _options, cancellationToken);
+        }
+
+        protected override void CallMethod(IClientSessionHandle session, CancellationToken cancellationToken)
+        {
+            _result = _collection.UpdateOne(session, _filter, _update, _options, cancellationToken);
         }
 
         protected override async Task CallMethodAsync(CancellationToken cancellationToken)
         {
-            if (_session == null)
-            {
-                _result = await _collection.UpdateOneAsync(_filter, _update, _options, cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                _result = await _collection.UpdateOneAsync(_session, _filter, _update, _options, cancellationToken).ConfigureAwait(false);
-            }
+            _result = await _collection.UpdateOneAsync(_filter, _update, _options, cancellationToken).ConfigureAwait(false);
+        }
+
+        protected override async Task CallMethodAsync(IClientSessionHandle session, CancellationToken cancellationToken)
+        {
+            _result = await _collection.UpdateOneAsync(session, _filter, _update, _options, cancellationToken).ConfigureAwait(false);
         }
 
         protected override void SetArgument(string name, BsonValue value)
         {
             switch (name)
             {
-                case "arrayFilters":
-                    _options.ArrayFilters = ParseArrayFilters(value.AsBsonArray);
-                    return;
-
                 case "filter":
                     _filter = new BsonDocumentFilterDefinition<BsonDocument>(value.AsBsonDocument);
-                    return;
-
-                case "session":
-                    _session = (IClientSessionHandle)_objectMap[value.AsString];
                     return;
 
                 case "update":
@@ -131,16 +118,6 @@ namespace MongoDB.Driver.Tests.JsonDrivenTests
                 default:
                     throw new FormatException($"Invalid UpdateOne result aspect: {name}.");
             }
-        }
-
-        private IEnumerable<ArrayFilterDefinition<BsonDocument>> ParseArrayFilters(BsonArray arrayFilters)
-        {
-            var arrayFilter = new List<ArrayFilterDefinition<BsonDocument>>();
-            foreach (var item in arrayFilters)
-            {
-                arrayFilter.Add(item.AsBsonDocument);
-            }
-            return arrayFilter;
         }
     }
 }

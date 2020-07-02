@@ -42,7 +42,6 @@ namespace MongoDB.Driver.Core.Operations
         private TimeSpan? _maxTime;
         private MessageEncoderSettings _messageEncoderSettings;
         private ReadConcern _readConcern = ReadConcern.Default;
-        private bool _retryRequested;
         private IBsonSerializer<TValue> _valueSerializer;
 
         // constructors
@@ -143,16 +142,6 @@ namespace MongoDB.Driver.Core.Operations
         }
 
         /// <summary>
-        /// Gets or sets a value indicating whether to retry.
-        /// </summary>
-        /// <value>Whether to retry.</value>
-        public bool RetryRequested
-        {
-            get => _retryRequested;
-            set => _retryRequested = value;
-        }
-
-        /// <summary>
         /// Gets the value serializer.
         /// </summary>
         /// <value>
@@ -168,11 +157,12 @@ namespace MongoDB.Driver.Core.Operations
         public IAsyncCursor<TValue> Execute(IReadBinding binding, CancellationToken cancellationToken)
         {
             Ensure.IsNotNull(binding, nameof(binding));
-
-            using (var context = RetryableReadContext.Create(binding, _retryRequested, cancellationToken))
+            using (var channelSource = binding.GetReadChannelSource(cancellationToken))
+            using (var channel = channelSource.GetChannel(cancellationToken))
+            using (var channelBinding = new ChannelReadBinding(channelSource.Server, channel, binding.ReadPreference, binding.Session.Fork()))
             {
-                var operation = CreateOperation(context);
-                var values = operation.Execute(context, cancellationToken);
+                var operation = CreateOperation(channel, channelBinding);
+                var values = operation.Execute(channelBinding, cancellationToken);
                 return new SingleBatchAsyncCursor<TValue>(values);
             }
         }
@@ -181,11 +171,12 @@ namespace MongoDB.Driver.Core.Operations
         public async Task<IAsyncCursor<TValue>> ExecuteAsync(IReadBinding binding, CancellationToken cancellationToken)
         {
             Ensure.IsNotNull(binding, nameof(binding));
-
-            using (var context = await RetryableReadContext.CreateAsync(binding, _retryRequested, cancellationToken).ConfigureAwait(false))
+            using (var channelSource = await binding.GetReadChannelSourceAsync(cancellationToken).ConfigureAwait(false))
+            using (var channel = await channelSource.GetChannelAsync(cancellationToken).ConfigureAwait(false))
+            using (var channelBinding = new ChannelReadBinding(channelSource.Server, channel, binding.ReadPreference, binding.Session.Fork()))
             {
-                var operation = CreateOperation(context);
-                var values = await operation.ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
+                var operation = CreateOperation(channel, channelBinding);
+                var values = await operation.ExecuteAsync(channelBinding, cancellationToken).ConfigureAwait(false);
                 return new SingleBatchAsyncCursor<TValue>(values);
             }
         }
@@ -208,15 +199,12 @@ namespace MongoDB.Driver.Core.Operations
             };
         }
 
-        private ReadCommandOperation<TValue[]> CreateOperation(RetryableReadContext context)
+        private ReadCommandOperation<TValue[]> CreateOperation(IChannel channel, IBinding binding)
         {
-            var command = CreateCommand(context.Channel.ConnectionDescription, context.Binding.Session);
+            var command = CreateCommand(channel.ConnectionDescription, binding.Session);
             var valueArraySerializer = new ArraySerializer<TValue>(_valueSerializer);
             var resultSerializer = new ElementDeserializer<TValue[]>("values", valueArraySerializer);
-            return new ReadCommandOperation<TValue[]>(_collectionNamespace.DatabaseNamespace, command, resultSerializer, _messageEncoderSettings)
-            {
-                RetryRequested = _retryRequested // might be overridden by retryable read context
-            };
+            return new ReadCommandOperation<TValue[]>(_collectionNamespace.DatabaseNamespace, command, resultSerializer, _messageEncoderSettings);
         }
     }
 }
